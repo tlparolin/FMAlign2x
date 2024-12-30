@@ -1,6 +1,6 @@
-CXX = g++
-CXXFLAGS = -Wall -std=c++11
-CC = g++
+CXX = mpic++
+CXXFLAGS = -Wall -std=c++20
+CC = mpicc
 CFLAGS = 
 
 SRCS = main.cpp src/utils.cpp src/mem_finder.cpp src/sequence_split_align.cpp ext/SW/ssw.cpp ext/SW/ssw_cpp.cpp
@@ -14,11 +14,12 @@ else
 endif
 
 ifeq ($(OS),Windows_NT)
-    CXXFLAGS +=  -fopenmp
+	CXXFLAGS += -fopenmp # Still include OpenMP for Windows if needed
 else
-	CXXFLAGS += -lpthread -pthread -lrt
-	SRCS += src/thread_pool.cpp src/thread_condition.cpp
+	CXXFLAGS += -lpthread -pthread -lrt # These are generally not needed with MPI
+	SRCS += src/thread_pool.cpp src/thread_condition.cpp # Keep these if you intend to use threads alongside MPI
 endif
+
 OBJS = $(SRCS:.cpp=.o)
 OBJS += src/gsacak.o
 
@@ -27,8 +28,12 @@ ifdef M64
 	CFLAGS += -DM64
 endif
 
+# Add MPI flags
+CXXFLAGS += $(shell mpic++ --showme:compile)
+LDFLAGS += $(shell mpic++ --showme:link)
+
 FMAlign2: $(OBJS)
-	$(CXX) $(CXXFLAGS) $(OBJS) -o FMAlign2
+	$(CXX) $(CXXFLAGS) $(OBJS) $(LDFLAGS) -o FMAlign2
 
 utils.o: src/utils.cpp include/utils.h include/common.h include/kseq.h
 	$(CXX) $(CXXFLAGS) -c src/utils.cpp -o $@
@@ -40,7 +45,7 @@ sequence_split_align.o: src/sequence_split_align.cpp include/common.h
 	$(CXX) $(CXXFLAGS) -c src/sequence_split_align.cpp -o $@
 
 gsacak.o: src/gsacak.c include/gsacak.h
-	$(C) $(CFLAGS)  -c src/gsacak.c -o $@
+	$(CC) $(CFLAGS) -c src/gsacak.c -o $@
 
 ifeq ($(OS),Windows_NT)
 else
@@ -56,7 +61,7 @@ ssw.o: ext/SW/ssw.cpp ext/SW/ssw.h
 
 ssw_cpp.o: ext/SW/ssw_cpp.cpp ext/SW/ssw_cpp.h ext/SW/ssw.h
 	$(CXX) $(CXXFLAGS) -c ext/SW/ssw_cpp.cpp -o $@
-	
+    
 main.o: main.cpp include/utils.h include/common.h include/mem_finder.h include/sequence_split_align.h
 	$(CXX) $(CXXFLAGS) -c main.cpp -o $@
 
@@ -66,4 +71,3 @@ ifeq ($(OS),Windows_NT)
 else
 	rm -f $(OBJS) FMAlign2
 endif
-	

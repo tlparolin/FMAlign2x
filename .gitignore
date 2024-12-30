@@ -35,3 +35,5 @@
 /src/gsacak.o
 *.o
 /bug
+FMAlign2
+output*
