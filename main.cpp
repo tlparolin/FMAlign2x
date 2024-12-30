@@ -28,14 +28,48 @@
 #include "include/thread_pool.h"
 #endif
 #include <thread>
+#include "mpi.h"
 
 GlobalArgs global_args;
 int main(int argc, char** argv) {
+
+   // MPI initialization
+    MPI_Init(&argc, &argv);
+
+    int rank, size;
+    char processor_name[MPI_MAX_PROCESSOR_NAME];
+    int name_len;
+
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    // Obter o nome do processador
+    MPI_Get_processor_name(processor_name, &name_len);
+
+    // Obter número de threads disponíveis no nó atual
+    int num_threads = std::thread::hardware_concurrency();
+
+    // Gera uma cor única por nó com base no nome do processador
+    int color = 0;
+    for (int i = 0; i < name_len; i++) {
+        color += processor_name[i];
+    }
+
+    // Dividir o comunicador por nó
+    MPI_Comm node_comm;
+    MPI_Comm_split(MPI_COMM_WORLD, color, rank, &node_comm);
+
+    // Descobrir quantos ranks estão no nó atual
+    int node_size;
+    MPI_Comm_size(node_comm, &node_size);
+
     // Create a Timer object to record the execution time.
     Timer timer;
+
     // Create an ArgParser object to parse command line arguments.
     ArgParser parser;
     std::string output = "";
+
     // Add command line arguments to the ArgParser object.
     parser.add_argument("i", true, "data/mt1x.fasta");
     parser.add_argument_help("i", "The path to the input file.");
@@ -65,7 +99,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         global_args.data_path = parser.get("i");
         std::string tmp_thread = parser.get("t");
         if (tmp_thread == "cpu_num") {
-            global_args.thread = std::thread::hardware_concurrency();
+            global_args.thread = num_threads;
         }
         else {
             global_args.thread = std::stoi(tmp_thread);
@@ -123,35 +157,44 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         parser.print_help();
         return 1;
     }
-    if (global_args.verbose) {
-        print_algorithm_info();
+
+    if (rank == 0) {
+        if (global_args.verbose) {
+            print_algorithm_info();
+        }
+
+        std::vector<std::string> data;
+        std::vector<std::string> name;
+
+        try {
+            // Read data from the input file and store in data and name vectors
+            read_data(global_args.data_path.c_str(), data, name, true);
+
+            // Find MEMs in the sequences and split the sequences into fragments for parallel alignment.
+            std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data);
+
+            split_and_parallel_align(data, name, split_points_on_sequence);
+        }
+        catch (const std::bad_alloc& e) { // Catch any bad allocations and print an error message.
+            print_table_bound();
+            std::cerr << "Error: " << e.what() << std::endl;
+            std::cout << "Program Exit!" << std::endl;
+            exit(1);
+        }
+
+        double total_time = timer.elapsed_time();
+        std::stringstream s;
+        s << std::fixed << std::setprecision(2) << total_time;
+        if (global_args.verbose) {
+            output = "FMAlign2 total time: " + s.str() + " seconds.";
+            print_table_line(output);
+            print_table_bound();
+        }
     }
 
-    std::vector<std::string> data;
-    std::vector<std::string> name;
-
-    try {
-        // Read data from the input file and store in data and name vectors
-        read_data(global_args.data_path.c_str(), data, name, true);
-        // Find MEMs in the sequences and split the sequences into fragments for parallel alignment.
-        std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data);
-        split_and_parallel_align(data, name, split_points_on_sequence);
-    }
-    catch (const std::bad_alloc& e) { // Catch any bad allocations and print an error message.
-        print_table_bound();
-        std::cerr << "Error: " << e.what() << std::endl;
-        std::cout << "Program Exit!" << std::endl;
-        exit(1);
-    }
-
-    double total_time = timer.elapsed_time();
-    std::stringstream s;
-    s << std::fixed << std::setprecision(2) << total_time;
-    if (global_args.verbose) {
-        output = "FMAlign2 total time: " + s.str() + " seconds.";
-        print_table_line(output);
-        print_table_bound();
-    }
+    // Finalizar MPI
+    MPI_Comm_free(&node_comm);
+    MPI_Finalize();
 
     return 0;
 }
