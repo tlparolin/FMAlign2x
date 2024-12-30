@@ -36,32 +36,10 @@ int main(int argc, char** argv) {
    // MPI initialization
     MPI_Init(&argc, &argv);
 
-    int rank, size;
-    char processor_name[MPI_MAX_PROCESSOR_NAME];
-    int name_len;
+    int world_rank, world_size;
 
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-
-    // Obter o nome do processador
-    MPI_Get_processor_name(processor_name, &name_len);
-
-    // Obter número de threads disponíveis no nó atual
-    int num_threads = std::thread::hardware_concurrency();
-
-    // Gera uma cor única por nó com base no nome do processador
-    int color = 0;
-    for (int i = 0; i < name_len; i++) {
-        color += processor_name[i];
-    }
-
-    // Dividir o comunicador por nó
-    MPI_Comm node_comm;
-    MPI_Comm_split(MPI_COMM_WORLD, color, rank, &node_comm);
-
-    // Descobrir quantos ranks estão no nó atual
-    int node_size;
-    MPI_Comm_size(node_comm, &node_size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
     // Create a Timer object to record the execution time.
     Timer timer;
@@ -99,7 +77,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         global_args.data_path = parser.get("i");
         std::string tmp_thread = parser.get("t");
         if (tmp_thread == "cpu_num") {
-            global_args.thread = num_threads;
+            global_args.thread = world_size;
         }
         else {
             global_args.thread = std::stoi(tmp_thread);
@@ -158,9 +136,9 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         return 1;
     }
 
-    if (rank == 0) {
+    if (world_rank == 0) {
         if (global_args.verbose) {
-            print_algorithm_info();
+            print_algorithm_info(world_size);
         }
 
         std::vector<std::string> data;
@@ -193,7 +171,6 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
     }
 
     // Finalizar MPI
-    MPI_Comm_free(&node_comm);
     MPI_Finalize();
 
     return 0;

@@ -235,7 +235,7 @@ void ArgParser::parse_args(int argc, char** argv) {
     }
     for (auto& p : args_) {
         if (p.second.required && p.second.value == "") {
-            throw std::invalid_argument("Missing required argument: -" + p.first);  // ÐÞ¸ÄÕâÀï£¬¸ÄÎªµ¥¸öÆÆÕÛºÅ
+            throw std::invalid_argument("Missing required argument: -" + p.first);  // ï¿½Þ¸ï¿½ï¿½ï¿½ï¿½ï£¬ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ûºï¿½
         }
         if (p.second.required == false && p.second.value == "") {
             p.second.value = p.second.default_value;
@@ -266,7 +266,7 @@ bool ArgParser::has(const std::string& name) const {
 * sequence coverage, and parallel align method.
 * @return void
 */
-void print_algorithm_info() {
+void print_algorithm_info(int total_threads) {
     print_table_bound();
     std::cout << "#               FMAlign2 algorithm info                     #" << std::endl;
     print_table_divider();
@@ -277,7 +277,7 @@ void print_algorithm_info() {
     std::string output = "Mode: 32 bit";
     print_table_line(output);
 #endif
-    std::string thread_output = "Thread: " + std::to_string(global_args.thread);
+    std::string thread_output = "Ranks: " + std::to_string(total_threads);
     print_table_line(thread_output);
 
     std::string l_output;
