@@ -167,11 +167,10 @@ void split_and_parallel_align(
         local_parallel_params[i].parallel_range = local_align_range.begin() + i;
         local_parallel_params[i].task_index = i + start; // Ajuste para índice global
         local_parallel_params[i].result_store = local_parallel_string.begin() + i;
-
         // Executa alinhamento localmente
         parallel_align(&local_parallel_params[i]);
     }
-std::cout << "oi" << std::endl;
+
     // Cada rank remove seus arquivos temporários
     delete_tmp_folder(local_parallel_num);
 
@@ -676,53 +675,67 @@ std::vector<std::pair<int_t, int_t>> get_parallel_align_range(
 void* parallel_align(void* arg) {
     // Cast the input parameters to the correct struct type
     ParallelAlignParams* ptr = static_cast<ParallelAlignParams*>(arg);
+
     // Get data, chain, and chain_index from the input parameters
-    const std::vector<std::string> data = *(ptr->data);
-    std::vector<std::pair<int_t, int_t>> parallel_range = *(ptr->parallel_range);
+    const std::vector<std::string>& data = *(ptr->data); // Use referência para evitar cópias
+    const std::vector<std::pair<int_t, int_t>>& parallel_range = *(ptr->parallel_range);
     const uint_t task_index = ptr->task_index;
-    // Get the number of sequences in the data vector and the number of chains in the current chain
+
+    // Get the number of sequences in the data vector
     uint_t seq_num = data.size();
-    std::string file_name = TMP_FOLDER + "task-" + std::to_string(task_index)+"_"+ random_file_end + ".fasta";
-    std::ofstream file;
-    file.open(file_name);
+
+    // Temporary file setup
+    std::string file_name = TMP_FOLDER + "task-" + std::to_string(task_index) + "_" + random_file_end + ".fasta";
+    std::ofstream file(file_name);
 
     if (!file.is_open()) {
-        std::cerr << file_name << " fail to open!" << std::endl;
-        exit(1);
+        std::cerr << "Error: Could not open file " << file_name << " for writing!" << std::endl;
+        return nullptr;
     }
 
     std::vector<uint_t> aligned_seq_index;
-    for (uint_t i = 0; i < seq_num; i++) {  
+
+    // Write sequences to the file based on the alignment range
+    std::cout << "seq_num: " << seq_num << std::endl;
+    for (uint_t i = 0; i < seq_num; i++) {
         if (parallel_range[i].first >= 0) {
-            // Get a subset of the sequence to align
-            std::string seq_content = data[i].substr(parallel_range[i].first, parallel_range[i].second);
-            std::stringstream sstreasm;
-            sstreasm << ">SEQENCE" << i << "\n" << seq_content << "\n";
-            file << sstreasm.str();
+            // Limit the end position to the sequence length to avoid out-of-bounds access
+            uint_t end_pos = std::min(parallel_range[i].second, static_cast<int>(data[i].size()));
+            std::string seq_content = data[i].substr(parallel_range[i].first, end_pos - parallel_range[i].first);
+            file << ">SEQUENCE" << i << "\n" << seq_content << "\n";
             aligned_seq_index.push_back(i);
-        }       
+        }
     }
+
     file.close();
-    // Call the align_fasta function to align the sequences in the file
+
+    // Call the alignment tool on the generated file
     std::string res_file_name = align_fasta(file_name);
 
-
+    // Read the alignment result
     std::vector<std::string> aligned_seq;
     std::vector<std::string> aligned_name;
     read_data(res_file_name.c_str(), aligned_seq, aligned_name, false);
+
+    // Ensure aligned sequences match the original indices
+    if (aligned_seq.size() != aligned_seq_index.size()) {
+        std::cerr << "Error: Mismatch between aligned sequences and original indices!" << std::endl;
+        return nullptr;
+    }
+
     std::vector<std::string> final_aligned_seq(seq_num, "");
-    // Map the aligned sequences back to their original indices in the input data vector
-    for (uint_t i = 0; i < aligned_seq_index.size(); i++) {
+
+    // Map aligned sequences back to their original indices
+    for (size_t i = 0; i < aligned_seq_index.size(); ++i) {
         final_aligned_seq[aligned_seq_index[i]] = aligned_seq[i];
     }
-    for (uint_t i = 0; i < aligned_seq_index.size(); i++) {
-        final_aligned_seq[aligned_seq_index[i]] = aligned_seq[i];
-    }
+
     // Store the aligned sequences in the result storage
     *(ptr->result_store) = final_aligned_seq;
 
-    return NULL;
+    return nullptr;
 }
+
 /**
 * @brief Align sequences in a FASTA file using either halign or mafft package.
 * @param file_name The name of the FASTA file to align.
