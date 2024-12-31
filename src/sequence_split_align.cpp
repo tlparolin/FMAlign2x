@@ -88,7 +88,7 @@ void split_and_parallel_align(
     random_file_end = generateRandomString(10);
     std::string output = "";
 
-    Timer timer;
+    double start_mtime = MPI_Wtime();
     
     uint_t chain_num = chain[0].size();
     uint_t seq_num = data.size();
@@ -119,15 +119,15 @@ void split_and_parallel_align(
     params.clear();
  
     // Calculate SW expand time and print status message
-    double SW_time = timer.elapsed_time();
+    double SW_time = MPI_Wtime() - start_mtime;
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << SW_time;
-    if (global_args.verbose) {
+    if (world_rank == 0 && global_args.verbose) {
         output = "SW expand time: " + s.str() + " seconds.";
         print_table_line(output);
     }
-    
-    timer.reset();
+
+    Timer timer;
 
     // Create temporary file folder (if it doesn't already exist)
     if (0 != access(TMP_FOLDER.c_str(), 0))
