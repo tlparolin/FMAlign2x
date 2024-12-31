@@ -121,10 +121,14 @@ void split_and_parallel_align(
  
     // Calculate SW expand time and print status message
     double SW_time = MPI_Wtime() - start_mtime;
+    double SW_time_max;
+    MPI_Reduce(&SW_time, &SW_time_max, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
     std::stringstream s;
-    s << std::fixed << std::setprecision(2) << SW_time;
+
     if (world_rank == 0 && global_args.verbose) {
-        output = "SW expand time: " + s.str() + " seconds.";
+        s << std::fixed << std::setprecision(2) << SW_time_max;
+        output = "SW expand time (max across ranks): " + s.str() + " seconds.";
         print_table_line(output);
     }
 
@@ -168,11 +172,14 @@ void split_and_parallel_align(
     MPI_Barrier(MPI_COMM_WORLD);
 
     // Calculate the time taken for parallel alignment and print the output
-    double parallel_align_time = MPI_Wtime - start_mtime;
-    s.str("");
-    s << std::fixed << std::setprecision(2) << parallel_align_time;
+    double parallel_align_time = MPI_Wtime() - start_mtime;
+    double parallel_align_time_max;
+    MPI_Reduce(&parallel_align_time, &parallel_align_time_max, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
     if (world_rank == 0 && global_args.verbose) {
-        output = "Parallel align time: " + s.str() + " seconds.";
+        s.str("");
+        s << std::fixed << std::setprecision(2) << parallel_align_time;
+        output = "Parallel align time (max across ranks): " + s.str() + " seconds.";
         print_table_line(output);
     }
     
@@ -188,7 +195,7 @@ void split_and_parallel_align(
     std::vector<uint_t> fragment_len = get_first_nonzero_lengths(concat_string);
 
     seq2profile(concat_string, data, concat_range, fragment_len);
-    double seq2profile_time = timer.elapsed_time();
+    double seq2profile_time = MPI_Wtime() - start_mtime;
 
     concat_alignment(concat_string, name);
 
