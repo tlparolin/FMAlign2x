@@ -140,25 +140,92 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         if (global_args.verbose) {
             print_algorithm_info(world_size);
         }
+    }
 
-        std::vector<std::string> data;
-        std::vector<std::string> name;
+    std::vector<std::string> data;
+    std::vector<std::string> name;
+    std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence;
 
-        try {
+    try {
+        if (world_rank == 0){
             // Read data from the input file and store in data and name vectors
             read_data(global_args.data_path.c_str(), data, name, true);
 
             // Find MEMs in the sequences and split the sequences into fragments for parallel alignment.
-            std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data);
+            split_points_on_sequence = find_mem(data);
+        }
 
-            split_and_parallel_align(data, name, split_points_on_sequence);
+        // Broadcast data size
+        size_t data_size = data.size();
+        MPI_Bcast(&data_size, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+
+        // Resize data vector for other ranks
+        if (world_rank != 0) {
+            data.resize(data_size);
         }
-        catch (const std::bad_alloc& e) { // Catch any bad allocations and print an error message.
-            print_table_bound();
-            std::cerr << "Error: " << e.what() << std::endl;
-            std::cout << "Program Exit!" << std::endl;
-            exit(1);
+
+        // Broadcast each string in the data vector
+        for (size_t i = 0; i < data_size; ++i) {
+            size_t str_size = data[i].size();
+            MPI_Bcast(&str_size, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+
+            if (world_rank != 0) {
+                data[i].resize(str_size);
+            }
+
+            MPI_Bcast(data[i].data(), str_size, MPI_CHAR, 0, MPI_COMM_WORLD);
         }
+
+        // Broadcast name size
+        size_t name_size = name.size();
+        MPI_Bcast(&name_size, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+
+        // Resize name vector for other ranks
+        if (world_rank != 0) {
+            name.resize(name_size);
+        }
+
+        // Broadcast name strings
+        for (size_t i = 0; i < name_size; ++i) {
+            size_t str_size = name[i].size();
+            MPI_Bcast(&str_size, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+
+            if (world_rank != 0) {
+                name[i].resize(str_size);
+            }
+
+            MPI_Bcast(name[i].data(), str_size, MPI_CHAR, 0, MPI_COMM_WORLD);
+        }
+
+        // Broadcast split_points_on_sequence size
+        size_t split_size = split_points_on_sequence.size();
+        MPI_Bcast(&split_size, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+
+        // Resize split_points_on_sequence for other ranks
+        if (world_rank != 0) {
+            split_points_on_sequence.resize(split_size);
+        }
+
+        for (size_t i = 0; i < split_size; ++i) {
+            size_t pair_count = split_points_on_sequence[i].size();
+            MPI_Bcast(&pair_count, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+
+            if (world_rank != 0) {
+                split_points_on_sequence[i].resize(pair_count);
+            }
+
+            MPI_Bcast(split_points_on_sequence[i].data(), pair_count * sizeof(std::pair<int_t, int_t>), MPI_BYTE, 0, MPI_COMM_WORLD);
+        }
+
+        // All nodes execute split_and_parallel_align
+        split_and_parallel_align(data, name, split_points_on_sequence, world_rank, world_size); 
+    }
+    catch (const std::bad_alloc& e) { // Catch any bad allocations and print an error message.
+        print_table_bound();
+        std::cerr << "Error: " << e.what() << std::endl;
+        std::cout << "Program Exit!" << std::endl;
+        exit(1);
+    }
 
         double total_time = timer.elapsed_time();
         std::stringstream s;
@@ -168,7 +235,6 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
             print_table_line(output);
             print_table_bound();
         }
-    }
 
     // Finalizar MPI
     MPI_Finalize();

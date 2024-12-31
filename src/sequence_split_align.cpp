@@ -74,48 +74,47 @@ std::string generateRandomString(int length) {
 */
 std::string random_file_end;
 
-void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> chain){
+void split_and_parallel_align(
+                            std::vector<std::string> data, 
+                            std::vector<std::string> name, 
+                            std::vector<std::vector<std::pair<int_t, int_t>>> chain,
+                            int world_rank, int world_size) {
     // Print status message
-    if (global_args.verbose) {
+    if (world_rank == 0 && global_args.verbose) {
         std::cout << "#                Parallel Aligning...                       #" << std::endl;
         print_table_divider();
     }
 
     random_file_end = generateRandomString(10);
     std::string output = "";
+
     Timer timer;
+    
     uint_t chain_num = chain[0].size();
     uint_t seq_num = data.size();
+    
     std::vector<std::vector<std::string>> chain_string(chain_num); // chain_num * seq_num
+    
+    // Split tasks to ranks
+    uint_t tasks_per_rank = chain_num / world_size;
+    uint_t extra_tasks = chain_num % world_size;
+
+    uint_t start = world_rank * tasks_per_rank + std::min((uint_t)world_rank, extra_tasks);
+    uint_t end = start + tasks_per_rank + (static_cast<uint_t>(world_rank) < extra_tasks ? 1 : 0);
+
     // Initialize ExpandChainParams structure for each chain pair
-    std::vector<ExpandChainParams> params(chain_num);
-    for (uint_t i = 0; i < chain_num; i++) {
-        params[i].data = &data;
-        params[i].chain = &chain;
-        params[i].chain_index = i;
-        params[i].result_store = chain_string.begin() + i;
-    }
-    // Expand each chain pair and store the resulting aligned sequences
-    if (global_args.min_seq_coverage == 1) {
-#if (defined(__linux__))
-        threadpool pool;
-        threadpool_init(&pool, global_args.thread);
-        for (uint_t i = 0; i < chain_num; i++) {
-            threadpool_add_task(&pool, expand_chain, &params[i]);
-        }
-        threadpool_destroy(&pool);
-#else // Otherwise, use OpenMP for parallel execution
-#pragma omp parallel for num_threads(global_args.thread)
-        for (uint_t i = 0; i < chain_num; i++) {
-            expand_chain(&params[i]);
-        }
-#endif
-    } else {
-        for (uint_t i = 0; i < chain_num; i++) {
-            expand_chain(&params[i]);
-        }
+    std::vector<ExpandChainParams> params(end - start);
+    for (uint_t i = start; i < end; i++) {
+        params[i - start].data = &data;
+        params[i - start].chain = &chain;
+        params[i - start].chain_index = i;
+        params[i - start].result_store = chain_string.begin() + i;
+        // Expand each chain pair and store the resulting aligned sequences
+        expand_chain(&params[i - start]);
     }
     
+    // Sync nodes
+    MPI_Barrier(MPI_COMM_WORLD);
 
     params.clear();
  
@@ -1107,7 +1106,7 @@ void refinement(std::vector<std::string>& data1, std::vector<std::string>& data2
             ++spaceCount1;
         }
         // Count the number of leading spaces in str2.
-        while (spaceCount2 < str2.size() && str2[spaceCount2] == '-') {
+        while (static_cast<std::size_t>(spaceCount2) < str2.size() && str2[spaceCount2] == '-') {
             ++spaceCount2;
         }
 
