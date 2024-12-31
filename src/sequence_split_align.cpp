@@ -61,6 +61,7 @@ std::string generateRandomString(int length) {
     return ss.str();
 #endif
 }
+
 /**
 * @brief Split and parallel align multiple sequences using a vector of chain pairs.
 * This function takes in three parameters: a vector of input sequences (data), a vector of sequence names (name),
@@ -127,7 +128,10 @@ void split_and_parallel_align(
         print_table_line(output);
     }
 
-    Timer timer;
+    // Sync nodes
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    start_mtime = MPI_Wtime();
 
     // Create temporary file folder (if it doesn't already exist)
     if (0 != access(TMP_FOLDER.c_str(), 0))
@@ -142,25 +146,13 @@ void split_and_parallel_align(
         }
 #endif
     }
+
     // Calculate parallel alignment ranges and perform parallel alignment for each range
     std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range = get_parallel_align_range(data, chain);
     uint_t parallel_num = parallel_align_range.size();
     std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
-    // If the system is Linux, initialize a thread pool and add tasks to it for parallel execution
-#if (defined(__linux__))
-    threadpool pool;
-    threadpool_init(&pool, global_args.thread);
-    for (uint_t i = 0; i < parallel_num; i++) {
-        parallel_params[i].data = &data;
-        parallel_params[i].parallel_range = parallel_align_range.begin()+i;
-        parallel_params[i].task_index = i;
-        parallel_params[i].result_store = parallel_string.begin() + i;
-        threadpool_add_task(&pool, parallel_align, &parallel_params[i]);
-    }
-    threadpool_destroy(&pool);
-#else // Otherwise, use OpenMP for parallel execution
-#pragma omp parallel for num_threads(global_args.thread)
+
     for (uint_t i = 0; i < parallel_num; i++) {
         parallel_params[i].data = &data;
         parallel_params[i].parallel_range = parallel_align_range.begin() + i;
@@ -168,19 +160,27 @@ void split_and_parallel_align(
         parallel_params[i].result_store = parallel_string.begin() + i;
         parallel_align(&parallel_params[i]);
     }
-#endif
+
     // Remove temporary files created during parallel execution
     delete_tmp_folder(parallel_num);
+
+    // Sync nodes
+    MPI_Barrier(MPI_COMM_WORLD);
+
     // Calculate the time taken for parallel alignment and print the output
-    double parallel_align_time = timer.elapsed_time();
+    double parallel_align_time = MPI_Wtime - start_mtime;
     s.str("");
     s << std::fixed << std::setprecision(2) << parallel_align_time;
-    if (global_args.verbose) {
+    if (world_rank == 0 && global_args.verbose) {
         output = "Parallel align time: " + s.str() + " seconds.";
         print_table_line(output);
     }
     
-    timer.reset();
+    // Sync nodes
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    start_mtime = MPI_Wtime();
+
     // Concatenate the chains and parallel ranges
     std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
     // Concatenate the chain strings and parallel strings
