@@ -151,22 +151,29 @@ void split_and_parallel_align(
 #endif
     }
 
-    // Calculate parallel alignment ranges and perform parallel alignment for each range
-    std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range = get_parallel_align_range(data, chain);
-    uint_t parallel_num = parallel_align_range.size();
-    std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
-    std::vector<ParallelAlignParams> parallel_params(parallel_num);
-
-    for (uint_t i = 0; i < parallel_num; i++) {
-        parallel_params[i].data = &data;
-        parallel_params[i].parallel_range = parallel_align_range.begin() + i;
-        parallel_params[i].task_index = i;
-        parallel_params[i].result_store = parallel_string.begin() + i;
-        parallel_align(&parallel_params[i]);
+    // Cada rank processa somente suas tarefas locais para parallel_align
+    std::vector<std::vector<std::pair<int_t, int_t>>> local_align_range; 
+    for (uint_t i = start; i < end; i++) {
+        // Calcular faixas de alinhamento somente para os dados locais
+        auto range = get_parallel_align_range(data, chain[i]);
+        local_align_range.push_back(range);
     }
 
-    // Remove temporary files created during parallel execution
-    delete_tmp_folder(parallel_num);
+    uint_t local_parallel_num = local_align_range.size();
+    std::vector<std::vector<std::string>> local_parallel_string(local_parallel_num, std::vector<std::string>(seq_num));
+    std::vector<ParallelAlignParams> local_parallel_params(local_parallel_num);
+    for (uint_t i = 0; i < local_parallel_num; i++) {
+        local_parallel_params[i].data = &data;
+        local_parallel_params[i].parallel_range = local_align_range.begin() + i;
+        local_parallel_params[i].task_index = i + start; // Ajuste para índice global
+        local_parallel_params[i].result_store = local_parallel_string.begin() + i;
+
+        // Executa alinhamento localmente
+        parallel_align(&local_parallel_params[i]);
+    }
+std::cout << "oi" << std::endl;
+    // Cada rank remove seus arquivos temporários
+    delete_tmp_folder(local_parallel_num);
 
     // Sync nodes
     MPI_Barrier(MPI_COMM_WORLD);
@@ -178,7 +185,7 @@ void split_and_parallel_align(
 
     if (world_rank == 0 && global_args.verbose) {
         s.str("");
-        s << std::fixed << std::setprecision(2) << parallel_align_time;
+        s << std::fixed << std::setprecision(2) << parallel_align_time_max;
         output = "Parallel align time (max across ranks): " + s.str() + " seconds.";
         print_table_line(output);
     }
@@ -188,25 +195,80 @@ void split_and_parallel_align(
 
     start_mtime = MPI_Wtime();
 
-    // Concatenate the chains and parallel ranges
-    std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
-    // Concatenate the chain strings and parallel strings
-    std::vector<std::vector<std::string>> concat_string = concat_chain_and_parallel(chain_string, parallel_string);
-    std::vector<uint_t> fragment_len = get_first_nonzero_lengths(concat_string);
-
-    seq2profile(concat_string, data, concat_range, fragment_len);
-    double seq2profile_time = MPI_Wtime() - start_mtime;
-
-    concat_alignment(concat_string, name);
-
-    s.str("");
-    s << std::fixed << std::setprecision(2) << seq2profile_time;
-    if (global_args.verbose) {
-        output = "Seq-profile time: " + s.str() + " seconds.";
-        print_table_line(output);
-        print_table_divider();
+    // Serialize local range
+    std::vector<std::pair<int_t, int_t>> serialized_local_range;
+    for (const auto& range : local_align_range) {
+        serialized_local_range.insert(serialized_local_range.end(), range.begin(), range.end());
     }
+
+    // Get sizes of serialized local range
+    int local_size = static_cast<int>(serialized_local_range.size());
+    std::vector<int> sizes(world_size);
+    MPI_Gather(&local_size, 1, MPI_INT, sizes.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    // Get displacements for Gatherv
+    std::vector<int> displs(world_size, 0);
+    if (world_rank == 0) {
+        for (int i = 1; i < world_size; ++i) {
+            displs[i] = displs[i - 1] + sizes[i - 1];
+        }
+    }
+
+    // Unite global serialized range
+    std::vector<std::pair<int_t, int_t>> global_serialized_range(world_rank == 0 ? std::accumulate(sizes.begin(), sizes.end(), 0) : 0);
+    MPI_Gatherv(serialized_local_range.data(), local_size, MPI_2INT,
+                global_serialized_range.data(), sizes.data(), displs.data(), MPI_2INT,
+                0, MPI_COMM_WORLD);
+    
+    // Build the chain and parallel align range at 0 node
+    std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range;
+    if (world_rank == 0) {
+        parallel_align_range.resize(chain.size());
+        uint_t idx = 0;
+        for (uint_t i = 0; i < chain.size(); ++i) {
+            for (uint_t j = 0; j < seq_num; ++j) {
+                parallel_align_range[i].push_back(global_serialized_range[idx++]);
+            }
+        }
+    }
+
+    // Calculate the time taken for parallel alignment and print the output
+    double parallel_align_gather_time = MPI_Wtime() - start_mtime;
+    double parallel_align_gather_time_max;
+    MPI_Reduce(&parallel_align_gather_time, &parallel_align_gather_time_max, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
+    if (world_rank == 0 && global_args.verbose) {
+        s.str("");
+        s << std::fixed << std::setprecision(2) << parallel_align_gather_time_max;
+        output = "Parallel align Gather time: " + s.str() + " seconds.";
+        print_table_line(output);
+    }
+
+    // Concatenate the chains and parallel ranges
+    if (world_rank == 0) {
+        std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
+        // Concatenate the chain strings and parallel strings
+        std::vector<std::vector<std::string>> concat_string = concat_chain_and_parallel(chain_string, local_parallel_string);
+        std::vector<uint_t> fragment_len = get_first_nonzero_lengths(concat_string);
+    
+        start_mtime = MPI_Wtime();
+
+        seq2profile(concat_string, data, concat_range, fragment_len);
+        double seq2profile_time = MPI_Wtime() - start_mtime;
+
+        concat_alignment(concat_string, name);
+
+        s.str("");
+        s << std::fixed << std::setprecision(2) << seq2profile_time;
+        if (global_args.verbose) {
+            output = "Seq-profile time: " + s.str() + " seconds.";
+            print_table_line(output);
+            print_table_divider();
+        }
+    }
+
     return;
+
 }
 
 /**
@@ -560,60 +622,48 @@ std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment align
  * @param chain The vector of chains representing the alignment
  * @return The vector of ranges for each sequence in the alignment
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(std::vector<std::string> data, std::vector<std::vector<std::pair<int_t, int_t>>> chain) {
-    // Get the number of sequences and chains
+std::vector<std::pair<int_t, int_t>> get_parallel_align_range(
+                                                            const std::vector<std::string>& data, 
+                                                            const std::vector<std::pair<int_t, int_t>>& single_chain) {
+    // Sequence number
     uint_t seq_num = data.size();
-    uint_t chain_num = chain[0].size();
-    // Initialize the vector to store the ranges
-    std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range(seq_num);
 
-    // Iterate through each sequence
+    // Init to store the parallel align range
+    std::vector<std::pair<int_t, int_t>> parallel_align_range(seq_num);
+
+    // Iterate over each sequence
     for (uint_t i = 0; i < seq_num; i++) {
-        // Initialize the last position as 0 and a temporary vector to store the ranges
         int_t last_pos = 0;
-        std::vector<std::pair<int_t, int_t>> tmp_range;
-        // Iterate through each chain for the current sequence
-        for (uint_t j = 0; j < chain_num; j++) {
-            // Get the begin position for the current chain
-            int_t begin_pos = chain[i][j].first;
-            // If the chain cannot be aligned, add (-1,-1) to the range and set the last position as -1
-            if (begin_pos == -1) {
-                tmp_range.push_back(std::make_pair(-1, -1));
-                last_pos = -1;
+
+        // Get the begin position of the current chain
+        int_t begin_pos = single_chain[i].first;
+
+        if (begin_pos == -1) {
+            // Chain not aligned
+            parallel_align_range[i] = std::make_pair(-1, -1);
+            last_pos = -1;
+        } else {
+            if (last_pos == -1) {
+                // Last chain not aligned
+                parallel_align_range[i] = std::make_pair(-1, -1);
+            } else {
+                // Add the interval between the last chain and the current chain
+                parallel_align_range[i] = std::make_pair(last_pos, begin_pos - last_pos);
             }
-            else {
-                // If the last chain could not be aligned, add (-1,-1) to the range
-                if (last_pos == -1) {
-                    tmp_range.push_back(std::make_pair(-1, -1));
-                }
-                else {
-                    // Add the range between the last position and the current chain's begin position
-                    tmp_range.push_back(std::make_pair(last_pos, begin_pos - last_pos));
-                }
-                // Update the last position to the end of the current chain
-                last_pos = begin_pos + chain[i][j].second;
-            }
+            // Update the last position
+            last_pos = begin_pos + single_chain[i].second;
         }
-        // If the last chain could not be aligned, add (-1,-1) to the range
+
+        // Check if the last chain is the last chain
         if (last_pos == -1) {
-            tmp_range.push_back(std::make_pair(-1, -1));
-        }
-        else {
-            // Add the range between the last position and the end of the sequence
-            tmp_range.push_back(std::make_pair(last_pos, data[i].length() - last_pos));
-        }
-        // Add the ranges for the current sequence to the vector of ranges
-        parallel_align_range[i] = tmp_range;
-    }
-    std::vector<std::vector<std::pair<int_t, int_t>>> transpose_res(parallel_align_range[0].size(), std::vector<std::pair<int_t, int_t>>(seq_num));
-    for (uint_t i = 0; i < seq_num; i++) {
-        for (uint_t j = 0; j < parallel_align_range[0].size(); j++) {
-            transpose_res[j][i] = parallel_align_range[i][j];
+            parallel_align_range[i] = std::make_pair(-1, -1);
+        } else {
+            parallel_align_range[i] = std::make_pair(last_pos, data[i].length() - last_pos);
         }
     }
-    parallel_align_range.clear();
-    // Return the vector of ranges
-    return transpose_res;
+
+    // Return the parallel align range
+    return parallel_align_range;
 }
 
 /**

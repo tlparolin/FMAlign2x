@@ -34,6 +34,7 @@
 #endif
 #include <random>
 #include <climits>
+#include <numeric> 
 #include <mpi.h>
 
 const std::string TMP_FOLDER = "./temp/";
@@ -131,7 +132,9 @@ std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment align
  * @param chain The vector of chains representing the alignment
  * @return The vector of ranges for each sequence in the alignment
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(std::vector<std::string> data, std::vector<std::vector<std::pair<int_t, int_t>>> chain);
+std::vector<std::pair<int_t, int_t>> get_parallel_align_range(
+                                                            const std::vector<std::string>& data, 
+                                                            const std::vector<std::pair<int_t, int_t>>& single_chain);
 
 /**
 * @brief Function for parallel alignment of sequences.
