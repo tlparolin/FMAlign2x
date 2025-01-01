@@ -640,11 +640,10 @@ std::vector<std::pair<int_t, int_t>> get_parallel_align_range(
         if (begin_pos == -1) {
             // Chain not aligned
             parallel_align_range[i] = std::make_pair(-1, -1);
-            last_pos = -1;
         } else {
             if (last_pos == -1) {
-                // Last chain not aligned
-                parallel_align_range[i] = std::make_pair(-1, -1);
+                // First chain in the sequence
+                parallel_align_range[i] = std::make_pair(0, begin_pos); 
             } else {
                 // Add the interval between the last chain and the current chain
                 parallel_align_range[i] = std::make_pair(last_pos, begin_pos - last_pos);
@@ -653,11 +652,15 @@ std::vector<std::pair<int_t, int_t>> get_parallel_align_range(
             last_pos = begin_pos + single_chain[i].second;
         }
 
-        // Check if the last chain is the last chain
-        if (last_pos == -1) {
-            parallel_align_range[i] = std::make_pair(-1, -1);
+        // Calculate the length of the region after the last chain
+        int_t remaining_length = data[i].length() - last_pos;
+
+        // Check if there is any region after the last chain
+        if (remaining_length > 0) {
+            parallel_align_range[i] = std::make_pair(last_pos, remaining_length); 
         } else {
-            parallel_align_range[i] = std::make_pair(last_pos, data[i].length() - last_pos);
+            // No region after the last chain
+            parallel_align_range[i] = std::make_pair(-1, -1); 
         }
     }
 
@@ -696,7 +699,6 @@ void* parallel_align(void* arg) {
     std::vector<uint_t> aligned_seq_index;
 
     // Write sequences to the file based on the alignment range
-    std::cout << "seq_num: " << seq_num << std::endl;
     for (uint_t i = 0; i < seq_num; i++) {
         if (parallel_range[i].first >= 0) {
             // Limit the end position to the sequence length to avoid out-of-bounds access
