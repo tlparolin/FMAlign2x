@@ -18,6 +18,10 @@
 // Contact: zpl010720@gmail.com
 // Created: 2023-02-24
 
+// MPI Version: Thiago Luiz Parolin
+// Contact: thiago.parolin@unesp.br
+// Date: 2025-01-01
+
 // This header file defines utility functions for reading and outputting data and so on.
 // These utility functions are designed to be reusable across different parts of the project and can be easily included in other source files.
 #ifndef UTILS_H
@@ -43,7 +47,8 @@
 #include <iomanip>
 #include <sstream>
 
-#define TABLE_LEN 80
+#define TABLE_LEN 60
+
 /**
  * @brief A timer class that measures elapsed time. 
  * This class uses C++11 chrono library to measure elapsed time in seconds with double precision. 

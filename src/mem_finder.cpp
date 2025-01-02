@@ -18,6 +18,10 @@
 // Contact: zpl010720@gmail.com
 // Created: 2023-02-25
 
+// MPI Version: Thiago Luiz Parolin
+// Contact: thiago.parolin@unesp.br
+// Date: 2025-01-01
+
 #include "../include/mem_finder.h"
 
 void* find_optimal_chain(void* arg) {

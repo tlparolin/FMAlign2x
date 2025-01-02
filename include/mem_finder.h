@@ -18,6 +18,10 @@
 // Contact: zpl010720@gmail.com
 // Created: 2023-02-25
 
+// MPI Version: Thiago Luiz Parolin
+// Contact: thiago.parolin@unesp.br
+// Date: 2025-01-01
+
 #ifndef MEM_FINDER_H
 #define MEM_FINDER_H
 

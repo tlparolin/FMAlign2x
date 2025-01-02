@@ -18,7 +18,12 @@
 // Contact: zpl010720@gmail.com
 // Created: 2023-02-25
 
+// MPI Version: Thiago Luiz Parolin
+// Contact: thiago.parolin@unesp.br
+// Date: 2025-01-01
+
 #include "../include/sequence_split_align.h"
+
 /**
 * @brief Generates a random string of the specified length.
 * This function generates a random string of the specified length. The generated string
@@ -75,18 +80,15 @@ std::string generateRandomString(int length) {
 std::string random_file_end;
 
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> chain, int world_rank, int world_size) {
-    // Print status message
-    if (global_args.verbose) {
-        std::cout << "#                Parallel Aligning...                       #" << std::endl;
-        print_table_divider();
-    }
-
     random_file_end = generateRandomString(10);
     std::string output = "";
-    Timer timer;
+
+    double start_mtime = MPI_Wtime();
+
     uint_t chain_num = chain[0].size();
     uint_t seq_num = data.size();
     std::vector<std::vector<std::string>> chain_string(chain_num); // chain_num * seq_num
+
     // Initialize ExpandChainParams structure for each chain pair
     std::vector<ExpandChainParams> params(chain_num);
     for (uint_t i = 0; i < chain_num; i++) {
@@ -120,15 +122,23 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     params.clear();
  
     // Calculate SW expand time and print status message
-    double SW_time = timer.elapsed_time();
+    double SW_time = MPI_Wtime() - start_mtime;
+    double max_sw_time = 0.0;
+
+    // Reduce to get the max time
+    MPI_Reduce(&SW_time, &max_sw_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
     std::stringstream s;
-    s << std::fixed << std::setprecision(2) << SW_time;
-    if (global_args.verbose) {
+    s << std::fixed << std::setprecision(2) << max_sw_time;
+    if (world_rank == 0 && global_args.verbose) {
         output = "SW expand time: " + s.str() + " seconds.";
         print_table_line(output);
     }
     
-    timer.reset();
+    // Sync Nodes
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    start_mtime = MPI_Wtime();
 
     // Create temporary file folder (if it doesn't already exist)
     if (0 != access(TMP_FOLDER.c_str(), 0))
@@ -170,18 +180,29 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         parallel_align(&parallel_params[i]);
     }
 #endif
+
     // Remove temporary files created during parallel execution
     delete_tmp_folder(parallel_num);
+
     // Calculate the time taken for parallel alignment and print the output
-    double parallel_align_time = timer.elapsed_time();
+    double parallel_align_time = MPI_Wtime() - start_mtime;
+    double max_parallel_align_time = 0.0;
+
+    // Reduce to get the max time
+    MPI_Reduce(&parallel_align_time, &max_parallel_align_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
     s.str("");
-    s << std::fixed << std::setprecision(2) << parallel_align_time;
+    s << std::fixed << std::setprecision(2) << max_parallel_align_time;
     if (global_args.verbose) {
         output = "Parallel align time: " + s.str() + " seconds.";
         print_table_line(output);
     }
     
-    timer.reset();
+    // Node Sync
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    start_mtime = MPI_Wtime();
+
     // Concatenate the chains and parallel ranges
     std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
     // Concatenate the chain strings and parallel strings
@@ -189,17 +210,24 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     std::vector<uint_t> fragment_len = get_first_nonzero_lengths(concat_string);
 
     seq2profile(concat_string, data, concat_range, fragment_len, world_rank, world_size);
-    double seq2profile_time = timer.elapsed_time();
+    
+    // Calculate the time taken for sequence-to-profile alignment and print the output
+    double seq2profile_time = MPI_Wtime() - start_mtime;
+    double max_seq2profile_time = 0.0;
 
-    concat_alignment(concat_string, name);
+    // Reduce to get the max time
+    MPI_Reduce(&seq2profile_time, &max_seq2profile_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
     s.str("");
-    s << std::fixed << std::setprecision(2) << seq2profile_time;
-    if (global_args.verbose) {
+    s << std::fixed << std::setprecision(2) << max_seq2profile_time;
+    if (world_rank == 0 && global_args.verbose) {
         output = "Seq-profile time: " + s.str() + " seconds.";
         print_table_line(output);
         print_table_divider();
     }
+
+    concat_alignment(concat_string, name);
+
     return;
 }
 

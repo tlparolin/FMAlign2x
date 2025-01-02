@@ -18,6 +18,10 @@
 // Contact: zpl010720@gmail.com
 // Created: 2023-02-25
 
+// MPI Version: Thiago Luiz Parolin
+// Contact: thiago.parolin@unesp.br
+// Date: 2025-01-01
+
 // The main function is the entry point of the program. It is where the program starts executing. 
 // the program starts executing. 
 #include "include/common.h"
@@ -159,6 +163,11 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
 
         MPI_Barrier(MPI_COMM_WORLD);
         if (global_args.verbose && world_rank == 0) {
+            print_table_divider();
+        }
+
+        if (world_rank == 0 && global_args.verbose) {
+            std::cout << "#                Parallel Aligning...                       #" << std::endl;
             print_table_divider();
         }
 
