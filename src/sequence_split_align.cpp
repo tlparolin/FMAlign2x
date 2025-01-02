@@ -193,7 +193,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 
     s.str("");
     s << std::fixed << std::setprecision(2) << max_parallel_align_time;
-    if (global_args.verbose) {
+    if (world_rank == 0 && global_args.verbose) {
         output = "Parallel align time: " + s.str() + " seconds.";
         print_table_line(output);
     }
@@ -669,7 +669,7 @@ void* parallel_align(void* arg) {
             // Get a subset of the sequence to align
             std::string seq_content = data[i].substr(parallel_range[i].first, parallel_range[i].second);
             std::stringstream sstreasm;
-            sstreasm << ">SEQENCE" << i << "\n" << seq_content << "\n";
+            sstreasm << ">SEQUENCE" << i << "\n" << seq_content << "\n";
             file << sstreasm.str();
             aligned_seq_index.push_back(i);
         }       

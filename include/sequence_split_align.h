@@ -38,6 +38,7 @@
 #endif
 #include <random>
 #include <climits>
+#include <mpi.h>
 
 const std::string TMP_FOLDER = "./temp/";
 
