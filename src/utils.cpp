@@ -188,7 +188,7 @@ void read_data_mpi(const char* data_path,
     if (verbose && global_args.verbose) {
         std::stringstream s;
         std::string output;
-        s << "Rank " << world_rank << data.size() << " sequences"
+        s << "Rank " << world_rank << " - " << data.size() << " sequences"
           << ", Data Memory Usage: " << std::fixed << std::setprecision(2)
           << merged_length / (M64 ? pow(2, 30) : pow(2, 20)) << (M64 ? " GB" : " MB");
         output = s.str();

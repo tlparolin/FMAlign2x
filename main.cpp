@@ -41,8 +41,8 @@ int main(int argc, char** argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
-    // Create a Timer object to record the execution time.
-    Timer timer;
+    // Get parallel time
+    double start_mtime = MPI_Wtime();
 
     // Create an ArgParser object to parse command line arguments.
     ArgParser parser;
@@ -154,11 +154,15 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
             print_table_divider();
         }
 
-
         // Find MEMs in the sequences and split the sequences into fragments for parallel alignment.
-        // std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data);
+        std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data, world_rank);
 
-        // split_and_parallel_align(data, name, split_points_on_sequence, world_rank, world_size);
+        MPI_Barrier(MPI_COMM_WORLD);
+        if (global_args.verbose && world_rank == 0) {
+            print_table_divider();
+        }
+
+        split_and_parallel_align(data, name, split_points_on_sequence, world_rank, world_size);
     }
     catch (const std::bad_alloc& e) { // Catch any bad allocations and print an error message.
         print_table_bound();
@@ -167,10 +171,18 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         exit(1);
     }
 
+    // Sync Nodes
+    MPI_Barrier(MPI_COMM_WORLD);
+        
+    double local_time = MPI_Wtime() - start_mtime;
+    double max_time = 0.0;
+
+    // Reduce to get the max time
+    MPI_Reduce(&local_time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
     if (world_rank == 0) {
-        double total_time = timer.elapsed_time();
         std::stringstream s;
-        s << std::fixed << std::setprecision(2) << total_time;
+        s << std::fixed << std::setprecision(2) << max_time;
         if (global_args.verbose) {
             output = "FMAlign2 total time: " + s.str() + " seconds.";
             print_table_line(output);
@@ -178,7 +190,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         }
     }
 
-    // Finalizar MPI
+    // MPI Finalization
     MPI_Finalize();
 
     return 0;
