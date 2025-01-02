@@ -20,6 +20,7 @@
 
 
 #include "../include/utils.h"
+#include <mpi.h>
 
 KSEQ_INIT(int, read)
 
@@ -49,7 +50,10 @@ double Timer::elapsed_time() const {
  * @param name store sequence name
  * @return multiple sequence stored in vector 
 */
-void read_data(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, bool verbose = true){
+void read_data(const char* data_path, 
+               std::vector<std::string>& data, 
+               std::vector<std::string>& name, 
+               bool verbose) {
     if (verbose && global_args.verbose) {
         std::cout << "#                   Reading Data...                         #" << std::endl;
         print_table_divider();
@@ -117,6 +121,78 @@ void read_data(const char* data_path, std::vector<std::string>& data, std::vecto
         output = "Sequence Number: " + std::to_string(data.size());
         print_table_line(output);
         print_table_divider();
+    }
+    return;
+}
+
+void read_data_mpi(const char* data_path, 
+                   std::vector<std::string>& data, 
+                   std::vector<std::string>& name, 
+                   int world_rank, 
+                   int world_size, 
+                   bool verbose) {
+    if (global_args.verbose && world_rank == 0) {
+        std::cout << "#                   Reading Data...                         #" << std::endl;
+        print_table_divider();
+    }
+
+    // Verifica se o arquivo pode ser acessado por cada rank
+    if (!access_file(data_path)) {
+        if (verbose) {
+            std::cerr << "Error: Rank " << world_rank << " cannot access file: " << data_path << std::endl;
+        }
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
+    // Abre o arquivo e começa a leitura
+    FILE* f_pointer = fopen(data_path, "r");
+    kseq_t* file_t = kseq_init(fileno(f_pointer));
+
+    // Calcula o número total de sequências
+    size_t total_sequences = 0;
+    while (kseq_read(file_t) >= 0) {
+        total_sequences++;
+    }
+
+    // Calcula a faixa de sequências que este rank deve processar
+    size_t chunk_size = (total_sequences + world_size - 1) / world_size;
+    size_t start_seq = world_rank * chunk_size;
+    size_t end_seq = std::min(start_seq + chunk_size, total_sequences);
+
+    // Reabre o arquivo para ler as sequências correspondentes a este rank
+    fseek(f_pointer, 0, SEEK_SET);  // Reseta a leitura para o início
+    kseq_t* file_t2 = kseq_init(fileno(f_pointer));
+    size_t current_seq = 0;
+    uint64_t merged_length = 0;
+
+    // Lê o arquivo e processa apenas as sequências dentro do intervalo deste rank
+    while (kseq_read(file_t2) >= 0) {
+        if (current_seq >= start_seq && current_seq < end_seq) {
+            std::string tmp_data = clean_sequence(file_t2->seq.s);
+            std::string tmp_name = file_t2->name.s;
+            if (file_t2->comment.s) tmp_name += file_t2->comment.s;
+            data.push_back(tmp_data);
+            name.push_back(tmp_name);
+            merged_length += tmp_data.size();
+        }
+        current_seq++;
+        if (current_seq >= end_seq) {
+            break; // Já leu a parte que precisava
+        }
+    }
+
+    kseq_destroy(file_t2);
+    fclose(f_pointer);
+
+    // Exibe informações de uso de memória
+    if (verbose && global_args.verbose) {
+        std::stringstream s;
+        std::string output;
+        s << "Rank " << world_rank << data.size() << " sequences"
+          << ", Data Memory Usage: " << std::fixed << std::setprecision(2)
+          << merged_length / (M64 ? pow(2, 30) : pow(2, 20)) << (M64 ? " GB" : " MB");
+        output = s.str();
+        print_table_line(output);
     }
     return;
 }

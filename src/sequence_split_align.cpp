@@ -74,7 +74,7 @@ std::string generateRandomString(int length) {
 */
 std::string random_file_end;
 
-void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> chain){
+void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> chain, int world_rank, int world_size) {
     // Print status message
     if (global_args.verbose) {
         std::cout << "#                Parallel Aligning...                       #" << std::endl;
@@ -188,7 +188,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     std::vector<std::vector<std::string>> concat_string = concat_chain_and_parallel(chain_string, parallel_string);
     std::vector<uint_t> fragment_len = get_first_nonzero_lengths(concat_string);
 
-    seq2profile(concat_string, data, concat_range, fragment_len);
+    seq2profile(concat_string, data, concat_range, fragment_len, world_rank, world_size);
     double seq2profile_time = timer.elapsed_time();
 
     concat_alignment(concat_string, name);
@@ -827,7 +827,8 @@ bool cmp(const std::pair<uint_t, uint_t>& a, const std::pair<uint_t, uint_t>& b)
 * @return None.
 */
 void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vector<std::string> &data, 
-    std::vector<std::vector<std::pair<int_t, int_t>>> &concat_range, std::vector<uint_t> &fragment_len) {
+    std::vector<std::vector<std::pair<int_t, int_t>>> &concat_range, std::vector<uint_t> &fragment_len,
+    int world_rank, int world_size) {
     // Count the number of missing fragments for each sequence and store them in a vector of pairs.
     uint_t seq_num = data.size();
     uint_t fragment_num = fragment_len.size();
@@ -875,12 +876,12 @@ void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vect
                 }
             } else if (if_start) {
                 right_it = cur_it - 1;
-                cur_it = seq2profile_align(seq_index,left_it-concat_string.begin(), right_it - concat_string.begin(), concat_string, data, concat_range, fragment_len);
+                cur_it = seq2profile_align(seq_index,left_it-concat_string.begin(), right_it - concat_string.begin(), concat_string, data, concat_range, fragment_len, world_rank, world_size);
                 if_start = false;
             }
             if (if_start && cur_it + 1 == concat_string.end()) {
                 right_it = cur_it;
-                seq2profile_align(seq_index, left_it - concat_string.begin(), right_it - concat_string.begin(), concat_string, data, concat_range, fragment_len);
+                seq2profile_align(seq_index, left_it - concat_string.begin(), right_it - concat_string.begin(), concat_string, data, concat_range, fragment_len, world_rank, world_size);
                 break;
             }          
         }
@@ -902,7 +903,7 @@ void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vect
 * @param fragment_len: Vector of unsigned integers representing the length of each fragment.
 * @return std::vector<std::vectorstd::string>::iterator: Iterator pointing to the next position in the 2D vector of strings.
 */
-std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_index, uint_t left_index, uint_t right_index, std::vector<std::vector<std::string>>& concat_string, std::vector<std::string>& data, std::vector<std::vector<std::pair<int_t, int_t>>>& concat_range, std::vector<uint_t>& fragment_len) {
+std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_index, uint_t left_index, uint_t right_index, std::vector<std::vector<std::string>>& concat_string, std::vector<std::string>& data, std::vector<std::vector<std::pair<int_t, int_t>>>& concat_range, std::vector<uint_t>& fragment_len, int world_rank, int world_size) {
     int_t seq_begin = 0;
     // determine the start position of the sequence, if there is a sequence on the left side, take the end of the last one.
     if (left_index >= 1) {
@@ -1107,7 +1108,7 @@ void refinement(std::vector<std::string>& data1, std::vector<std::string>& data2
             ++spaceCount1;
         }
         // Count the number of leading spaces in str2.
-        while (spaceCount2 < str2.size() && str2[spaceCount2] == '-') {
+        while (static_cast<size_t>(spaceCount2) < str2.size() && str2[spaceCount2] == '-') {
             ++spaceCount2;
         }
 

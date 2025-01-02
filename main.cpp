@@ -140,26 +140,34 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         if (global_args.verbose) {
             print_algorithm_info(world_size);
         }
+    }
 
-        std::vector<std::string> data;
-        std::vector<std::string> name;
+    std::vector<std::string> data;
+    std::vector<std::string> name;
 
-        try {
-            // Read data from the input file and store in data and name vectors
-            read_data(global_args.data_path.c_str(), data, name, true);
-
-            // Find MEMs in the sequences and split the sequences into fragments for parallel alignment.
-            std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data);
-
-            split_and_parallel_align(data, name, split_points_on_sequence);
-        }
-        catch (const std::bad_alloc& e) { // Catch any bad allocations and print an error message.
-            print_table_bound();
-            std::cerr << "Error: " << e.what() << std::endl;
-            std::cout << "Program Exit!" << std::endl;
-            exit(1);
+    try {
+        // Read data from the input file and store in data and name vectors
+        read_data_mpi(global_args.data_path.c_str(), data, name, world_rank, world_size, true);
+        
+        MPI_Barrier(MPI_COMM_WORLD);
+        if (global_args.verbose && world_rank == 0) {
+            print_table_divider();
         }
 
+
+        // Find MEMs in the sequences and split the sequences into fragments for parallel alignment.
+        // std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data);
+
+        // split_and_parallel_align(data, name, split_points_on_sequence, world_rank, world_size);
+    }
+    catch (const std::bad_alloc& e) { // Catch any bad allocations and print an error message.
+        print_table_bound();
+        std::cerr << "Error: " << e.what() << std::endl;
+        std::cout << "Program Exit!" << std::endl;
+        exit(1);
+    }
+
+    if (world_rank == 0) {
         double total_time = timer.elapsed_time();
         std::stringstream s;
         s << std::fixed << std::setprecision(2) << total_time;
