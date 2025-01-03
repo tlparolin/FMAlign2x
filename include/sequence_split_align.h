@@ -159,7 +159,8 @@ void delete_tmp_folder(uint_t task_count);
 * @param concat_string A 2D vector of strings containing the aligned sequences to concatenate.
 * @param name A vector of strings containing the names of the sequences.
 */
-void concat_alignment(std::vector<std::vector<std::string>>&concat_string, std::vector<std::string> &name);
+void concat_alignment(std::vector<std::vector<std::string>> &concat_string, std::vector<std::string> &name, int world_rank, int world_size);
+
 
 /**
 * @brief Convert sequence fragments into profile by aligning missing fragments with existing ones.

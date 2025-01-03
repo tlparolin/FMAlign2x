@@ -226,7 +226,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         print_table_divider();
     }
 
-    concat_alignment(concat_string, name);
+    concat_alignment(concat_string, name, world_rank, world_size);
 
     return;
 }
@@ -817,29 +817,63 @@ void delete_tmp_folder(uint_t task_count) {
 * @param concat_string A 2D vector of strings containing the aligned sequences to concatenate.
 * @param name A vector of strings containing the names of the sequences.
 */
-void concat_alignment(std::vector<std::vector<std::string>> &concat_string, std::vector<std::string> &name) {
-    std::string output_path = global_args.output_path;
-    std::vector<std::string> concated_data(name.size(), "");
+void concat_alignment(std::vector<std::vector<std::string>> &concat_string, std::vector<std::string> &name, int world_rank, int world_size) {
     // Concatenate the sequences
+    std::vector<std::string> concated_data(name.size(), "");
     for (uint_t i = 0; i < name.size(); i++) {
         for (uint_t j = 0; j < concat_string.size(); j++) {
             concated_data[i] += concat_string[j][i];          
         }
     }
-    // Write the concatenated sequences to the output file
-    std::ofstream output_file;
-    output_file.open(output_path);
-    if (!output_file.is_open()) {
-        std::cerr << "Error opening output file " << output_path << std::endl;
-        exit(1);
+    
+    // Write the concatenated sequences to an output file
+    std::string temp_output_path = TMP_FOLDER + "/rank_" + std::to_string(world_rank) + "_output.txt";
+    std::ofstream temp_output_file(temp_output_path);
+    if (!temp_output_file.is_open()) {
+        std::cerr << "Error opening temporary output file " << temp_output_path << std::endl;
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
     for (uint_t i = 0; i < concated_data.size(); i++) {
         std::stringstream ss;
         ss << ">" << name[i] << "\n" << concated_data[i] << "\n";
-        output_file << ss.str();
+        temp_output_file << ss.str();
     }
-    output_file.close();
+    temp_output_file.close();
+
+    // Sincronizar os ranks antes da próxima etapa
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Apenas o rank 0 junta todos os arquivos temporários em um único arquivo de saída
+    if (world_rank == 0) {
+        std::ofstream output_file(global_args.output_path);
+        if (!output_file.is_open()) {
+            std::cerr << "Error opening final output file " << global_args.output_path << std::endl;
+            MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+
+        for (int rank = 0; rank < world_size; rank++) {
+            std::string rank_file_path = TMP_FOLDER + "/rank_" + std::to_string(rank) + "_output.txt";
+            std::ifstream rank_file(rank_file_path);
+            if (!rank_file.is_open()) {
+                std::cerr << "Error opening rank file " << rank_file_path << std::endl;
+                MPI_Abort(MPI_COMM_WORLD, 1);
+            }
+
+            output_file << rank_file.rdbuf(); // Copia o conteúdo do arquivo do rank para o arquivo final
+            rank_file.close();
+
+            // Remove o arquivo temporário após sua utilização
+            if (std::remove(rank_file_path.c_str()) != 0) {
+                std::cerr << "Error deleting temporary file " << rank_file_path << std::endl;
+            }
+        }
+
+        output_file.close();
+    }
+
+    // Sincronizar os ranks após a junção dos arquivos
+    MPI_Barrier(MPI_COMM_WORLD);
 }
 
 bool cmp(const std::pair<uint_t, uint_t>& a, const std::pair<uint_t, uint_t>& b) {
