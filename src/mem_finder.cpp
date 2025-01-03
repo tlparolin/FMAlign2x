@@ -300,13 +300,14 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<me
  * @param data A vector of strings representing the sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data, int world_rank) {
-    if (world_rank == 0 && global_args.verbose) {
+std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data){
+    if (global_args.verbose) {
         std::cout << "#                    Finding MEM...                         #" << std::endl;
         print_table_divider();
     }
     
     std::string output = "";
+    Timer timer;
     uint_t n = 0;
 
     unsigned char* concat_data = concat_strings(data, n); 
@@ -319,7 +320,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         global_args.min_mem_length = l;
         
     }
-    if (world_rank == 0 && global_args.verbose) {
+    if (global_args.verbose) {
         output = "Minimal MEM length is set to " + std::to_string(global_args.min_mem_length);
         print_table_line(output);
     }
@@ -334,7 +335,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         
     }
 
-    if (world_rank == 0 && global_args.verbose) {
+    if (global_args.verbose) {
         output = "Filter mode is set to " + global_args.filter_mode;
         print_table_line(output);
     }
@@ -348,7 +349,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         }
        
     }
-    if (world_rank == 0 && global_args.verbose) {
+    if (global_args.verbose) {
         output = "Minimal sequence coverage is set to " + std::to_string(global_args.min_seq_coverage);
         print_table_line(output);
     }
@@ -364,33 +365,18 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     output = "Suffix is constructing...\n";
     print_table_line(output);
 #endif
-
-    // Sync Nodes
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    // Get parallel time
-    double start_mtime = MPI_Wtime();
-
-    // Get SA, LCP, DA, n
+    timer.reset();
     gsacak((unsigned char *)concat_data, (uint_t*)SA, LCP, DA, n);
-
-    // Local time
-    double suffix_construction_time = MPI_Wtime() - start_mtime;
-    double max_suffix_time = 0.0;
-
-    // Reduce to get the max time
-    MPI_Reduce(&suffix_construction_time, &max_suffix_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-
+    double suffix_construction_time = timer.elapsed_time();
     std::stringstream s;
-    s << std::fixed << std::setprecision(2) << max_suffix_time;
-    if (world_rank == 0 && global_args.verbose) {
-        output = "Suffix construction time: " + s.str() + " seconds";
-        print_table_line(output);
+    s << std::fixed << std::setprecision(2) << suffix_construction_time;
+    if (global_args.verbose) {
+    output = "Suffix construction time: " + s.str() + " seconds";
+    print_table_line(output);
     }
     
-    // Start counting MEM process time
-    start_mtime = MPI_Wtime();
 
+    timer.reset();
     int_t min_mem_length = global_args.min_mem_length;
     int_t min_cross_sequence = ceil(global_args.min_seq_coverage * data.size());
     std::vector<uint_t> joined_sequence_bound;
@@ -399,9 +385,8 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         joined_sequence_bound.push_back(total_length);
         total_length += data[i].length() + 1;
     }
-
     // Find all intervals with an LCP >= min_mem_length and <= min_cross_sequence
-    std::vector<std::pair<uint_t, uint_t>> intervals = get_lcp_intervals(LCP, min_mem_length, min_cross_sequence, n, world_rank);
+    std::vector<std::pair<uint_t, uint_t>> intervals = get_lcp_intervals(LCP, min_mem_length, min_cross_sequence, n);
 
     free(LCP);
 
@@ -409,7 +394,6 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
 
     std::vector<mem> mems;
     mems.resize(interval_size);
-    
     // Convert each interval to a MEM in parallel
     IntervalToMemConversionParams* params = new IntervalToMemConversionParams[interval_size];
 #if (defined(__linux__))
@@ -444,6 +428,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     if (mems.size() <= 0 && global_args.verbose) {
         output = "Warning: There is no MEMs, please adjust your paramters.";
         print_table_line(output);
+       
     }
 
     // Sort the MEMs based on their average positions and assign their indices
@@ -464,31 +449,17 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     }
     
     global_args.avg_file_size = (n / (split_point_on_sequence[0].size() + 1)) / pow(2, 20);
-
-    // Sync Nodes
-    MPI_Barrier(MPI_COMM_WORLD);
-
+    double mem_process_time = timer.elapsed_time();
     if (global_args.verbose) {
-        output = "Rank: " + std::to_string(world_rank) + " - Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1);
+        output = "Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1);
         print_table_line(output);
         s.str("");
-    }
-
-    // Sync Nodes
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    // Local time
-    double mem_process_time = MPI_Wtime() - start_mtime;
-    double max_mem_time = 0.0;
-
-    // Reduce to get the max time
-    MPI_Reduce(&mem_process_time, &max_mem_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-
-    if (world_rank == 0 && global_args.verbose) {
-        s << std::fixed << std::setprecision(3) << max_mem_time;
+        s << std::fixed << std::setprecision(3) << mem_process_time;
         output = "MEM process time: " + s.str() + " seconds.";
         print_table_line(output);
+        print_table_divider();
     }
+   
 
     return split_point_on_sequence;
 }
@@ -545,10 +516,10 @@ unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n
  * @param min_cross_sequence the min number of crossed sequence
  * @return  The output vector of pairs representing the LCP intervals
 */
-std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* lcp_array, int_t threshold, int_t min_cross_sequence, uint_t n, int world_rank) {
+std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* lcp_array, int_t threshold, int_t min_cross_sequence, uint_t n) {
 
     std::vector<std::pair<uint_t, uint_t>> intervals;
-    if (world_rank == 0 && global_args.verbose) {
+    if (global_args.verbose) {
         std::string output = "Minimal cross sequence number: " + std::to_string(min_cross_sequence);
         print_table_line(output);
     }
