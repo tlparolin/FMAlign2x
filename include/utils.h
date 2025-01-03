@@ -149,7 +149,8 @@ private:
 */
 void read_data(const char* data_path, 
                std::vector<std::string>& data, 
-               std::vector<std::string>& name, 
+               std::vector<std::string>& name,
+               int world_rank,
                bool verbose = true); 
 
 void read_data_mpi(const char* data_path, 

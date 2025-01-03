@@ -80,6 +80,10 @@ std::string generateRandomString(int length) {
 std::string random_file_end;
 
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> chain, int world_rank, int world_size) {
+    if (world_rank == 0 && global_args.verbose) {
+        std::cout << "#                Parallel Aligning...                       #" << std::endl;
+        print_table_divider();
+    }
     random_file_end = generateRandomString(10);
     std::string output = "";
 
@@ -681,7 +685,7 @@ void* parallel_align(void* arg) {
 
     std::vector<std::string> aligned_seq;
     std::vector<std::string> aligned_name;
-    read_data(res_file_name.c_str(), aligned_seq, aligned_name, false);
+    read_data(res_file_name.c_str(), aligned_seq, aligned_name, 0, false);
     std::vector<std::string> final_aligned_seq(seq_num, "");
     // Map the aligned sequences back to their original indices in the input data vector
     for (uint_t i = 0; i < aligned_seq_index.size(); i++) {

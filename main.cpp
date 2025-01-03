@@ -146,47 +146,37 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         }
     }
 
+    MPI_Barrier(MPI_COMM_WORLD);
+
     std::vector<std::string> data;
     std::vector<std::string> name;
 
     try {
         // Read data from the input file and store in data and name vectors
-        read_data(global_args.data_path.c_str(), data, name, true);
+        read_data(global_args.data_path.c_str(), data, name, world_rank, true);
         
         MPI_Barrier(MPI_COMM_WORLD);
-        if (global_args.verbose && world_rank == 0) {
-            print_table_divider();
-        }
 
         // Find MEMs in the sequences and split the sequences into fragments for parallel alignment.
-        std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data);
+        std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data, world_rank);
 
         MPI_Barrier(MPI_COMM_WORLD);
-        if (global_args.verbose && world_rank == 0) {
-            print_table_divider();
-        }
 
-        if (world_rank == 0 && global_args.verbose) {
-            std::cout << "#                Parallel Aligning...                       #" << std::endl;
-            print_table_divider();
-        }
-
-        // Calcule a faixa de dados que este rank vai processar
+        // Calculate the range for each rank
         int chunk_size = data.size() / world_size;
         int start_idx = world_rank * chunk_size;
         int end_idx = (world_rank + 1) * chunk_size;
         
         if (world_rank == world_size - 1) {
-            end_idx = data.size();  // Último rank pega o resto dos dados
+            end_idx = data.size();  // last rank gets the remaining data
         }
 
-        // Processar apenas sua faixa de dados
+        // Each rank will work on its own range
         std::vector<std::string> local_data(data.begin() + start_idx, data.begin() + end_idx);
         std::vector<std::string> local_name(name.begin() + start_idx, name.begin() + end_idx);
         std::vector<std::vector<std::pair<int_t, int_t>>> local_split_points;
 
-        // Considerando que split_points são calculados para todo o conjunto, cada rank
-        // pode filtrar ou trabalhar com sua parte dos pontos de divisão
+        // Consider only the split points that are within the range of the current rank
         for (const auto& split : split_points_on_sequence) {
             std::vector<std::pair<int_t, int_t>> local_split;
             for (const auto& point : split) {
@@ -197,7 +187,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
             local_split_points.push_back(local_split);
         }
 
-        // Agora, execute o processamento paralelo na faixa local
+        // Parallel align the sequences
         split_and_parallel_align(local_data, local_name, local_split_points, world_rank, world_size);
     }
     catch (const std::bad_alloc& e) { // Catch any bad allocations and print an error message.
