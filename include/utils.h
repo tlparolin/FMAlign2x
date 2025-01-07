@@ -41,6 +41,7 @@
 #include <stdexcept>
 #include <iomanip>
 #include <sstream>
+#include <iostream>
 #include <hpx/chrono.hpp>
 
 #define TABLE_LEN 60

@@ -62,7 +62,7 @@ endif()
 add_executable(FMAlign2 ${SOURCES} ${ADDITIONAL_SOURCES})
 
 # Link libraries
-target_link_libraries(FMAlign2 PUBLIC HPX::hpx)
+target_link_libraries(FMAlign2 PUBLIC HPX::hpx HPX::wrap_main HPX::iostreams_component)
 
 
 # Clean all

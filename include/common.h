@@ -24,7 +24,6 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <hpx/iostream.hpp>
 #include <string>
 #include <vector>
 #if (defined(__linux__))
