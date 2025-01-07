@@ -30,16 +30,14 @@ KSEQ_INIT(int, read)
  * The elapsed time can be obtained by calling elapsed_time() method. 
  * The timer is based on std::chrono::steady_clock, which is a monotonic clock that is not subject to system clock adjustments.
 */
-Timer::Timer() {
-    start_time_ = std::chrono::steady_clock::now();
-}
+Timer::Timer() : timer_() {}
+
 void Timer::reset() {
-    start_time_ = std::chrono::steady_clock::now();
+    timer_.restart();  // Reset the timer
 }
 
 double Timer::elapsed_time() const {
-    std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start_time_;
-    return elapsed.count();
+    return timer_.elapsed();  // Returns the elapsed time in seconds
 }
 
 /**
@@ -235,7 +233,7 @@ void ArgParser::parse_args(int argc, char** argv) {
     }
     for (auto& p : args_) {
         if (p.second.required && p.second.value == "") {
-            throw std::invalid_argument("Missing required argument: -" + p.first);  // ÐÞ¸ÄÕâÀï£¬¸ÄÎªµ¥¸öÆÆÕÛºÅ
+            throw std::invalid_argument("Missing required argument: -" + p.first);  // ï¿½Þ¸ï¿½ï¿½ï¿½ï¿½ï£¬ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ûºï¿½
         }
         if (p.second.required == false && p.second.value == "") {
             p.second.value = p.second.default_value;

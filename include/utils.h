@@ -27,7 +27,6 @@
 #include "kseq.h"
 #include <fstream>
 #include <iomanip> 
-#include <chrono> 
 #include <math.h>
 #include <algorithm>
 #if (defined(__linux__))
@@ -42,6 +41,7 @@
 #include <stdexcept>
 #include <iomanip>
 #include <sstream>
+#include <hpx/chrono.hpp>
 
 #define TABLE_LEN 60
 /**
@@ -57,7 +57,7 @@ public:
     void reset();
     double elapsed_time() const;
 private:
-    std::chrono::time_point<std::chrono::steady_clock> start_time_;
+    hpx::chrono::high_resolution_timer timer_;
 };
 
 /**

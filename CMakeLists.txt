@@ -1,8 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
+cmake_policy(SET CMP0144 NEW)
+cmake_policy(SET CMP0167 NEW)
 project(FMAlign2)
 
 # General configuration
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 
@@ -48,8 +50,20 @@ endif()
 # Add additional sources
 set(ADDITIONAL_SOURCES src/gsacak.c)
 
+# Find HPX
+find_package(HPX REQUIRED)
+if(HPX_FOUND)
+    message(STATUS "HPX found: ${HPX_INCLUDE_DIRS}")
+else()
+    message(FATAL_ERROR "HPX not found")
+endif()
+
 # Add executable
 add_executable(FMAlign2 ${SOURCES} ${ADDITIONAL_SOURCES})
+
+# Link libraries
+target_link_libraries(FMAlign2 PUBLIC HPX::hpx)
+
 
 # Clean all
 add_custom_target(clean-all
