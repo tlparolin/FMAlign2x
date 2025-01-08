@@ -635,7 +635,7 @@ void* parallel_align(void* arg) {
             // Get a subset of the sequence to align
             std::string seq_content = data[i].substr(parallel_range[i].first, parallel_range[i].second);
             std::stringstream sstreasm;
-            sstreasm << ">SEQENCE" << i << "\n" << seq_content << "\n";
+            sstreasm << ">SEQUENCE" << i << "\n" << seq_content << "\n";
             file << sstreasm.str();
             aligned_seq_index.push_back(i);
         }       
@@ -658,6 +658,7 @@ void* parallel_align(void* arg) {
 
     return NULL;
 }
+
 /**
 * @brief Align sequences in a FASTA file using either halign or mafft package.
 * @param file_name The name of the FASTA file to align.
