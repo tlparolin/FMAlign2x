@@ -34,6 +34,10 @@
 #endif
 #include <random>
 #include <climits>
+#include <functional> // To std::cref
+#include <hpx/algorithm.hpp>
+#include <hpx/future.hpp>
+#include <hpx/barrier.hpp>
 
 const std::string TMP_FOLDER = "./temp/";
 

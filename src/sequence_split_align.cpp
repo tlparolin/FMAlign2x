@@ -81,42 +81,36 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         print_table_divider();
     }
 
-    random_file_end = generateRandomString(10);
+    // Generate a random string to append to temporary file names
+    // Execute asynchronously to improve performance
+    hpx::future<std::string> random_future = hpx::async(generateRandomString, 10);
+    random_file_end = random_future.get();
+
     std::string output = "";
     Timer timer;
     uint_t chain_num = chain[0].size();
     uint_t seq_num = data.size();
     std::vector<std::vector<std::string>> chain_string(chain_num); // chain_num * seq_num
+
     // Initialize ExpandChainParams structure for each chain pair
     std::vector<ExpandChainParams> params(chain_num);
-    for (uint_t i = 0; i < chain_num; i++) {
-        params[i].data = &data;
-        params[i].chain = &chain;
-        params[i].chain_index = i;
-        params[i].result_store = chain_string.begin() + i;
-    }
+
     // Expand each chain pair and store the resulting aligned sequences
     if (global_args.min_seq_coverage == 1) {
-#if (defined(__linux__))
-        threadpool pool;
-        threadpool_init(&pool, global_args.thread);
-        for (uint_t i = 0; i < chain_num; i++) {
-            threadpool_add_task(&pool, expand_chain, &params[i]);
-        }
-        threadpool_destroy(&pool);
-#else // Otherwise, use OpenMP for parallel execution
-#pragma omp parallel for num_threads(global_args.thread)
-        for (uint_t i = 0; i < chain_num; i++) {
+        hpx::experimental::for_loop(hpx::execution::par, 0, chain_num, [&](int i) {
+            params[i].data = &data;
+            params[i].chain = &chain;
+            params[i].chain_index = i;
+            params[i].result_store = chain_string.begin() + i;
             expand_chain(&params[i]);
-        }
-#endif
-    } else {
+        });
+    }
+    else {
         for (uint_t i = 0; i < chain_num; i++) {
             expand_chain(&params[i]);
         }
     }
     
-
     params.clear();
  
     // Calculate SW expand time and print status message
@@ -131,53 +125,55 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     timer.reset();
 
     // Create temporary file folder (if it doesn't already exist)
-    if (0 != access(TMP_FOLDER.c_str(), 0))
-    {
+    hpx::post([]() {
+        if (0 != access(TMP_FOLDER.c_str(), 0))
+        {
 #ifdef __linux__
-        if (0 != mkdir(TMP_FOLDER.c_str(), 0755)) {
-            std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
-    }
+            if (0 != mkdir(TMP_FOLDER.c_str(), 0755)) {
+                std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
+            }
 #else
-        if (0 != mkdir(TMP_FOLDER.c_str())) {
-            std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
-        }
+            if (0 != mkdir(TMP_FOLDER.c_str())) {
+                std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
+            }
 #endif
-    }
+        }
+    });
+
     // Calculate parallel alignment ranges and perform parallel alignment for each range
     std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range = get_parallel_align_range(data, chain);
     uint_t parallel_num = parallel_align_range.size();
     std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
-    // If the system is Linux, initialize a thread pool and add tasks to it for parallel execution
-#if (defined(__linux__))
-    threadpool pool;
-    threadpool_init(&pool, global_args.thread);
-    for (uint_t i = 0; i < parallel_num; i++) {
-        parallel_params[i].data = &data;
-        parallel_params[i].parallel_range = parallel_align_range.begin()+i;
-        parallel_params[i].task_index = i;
-        parallel_params[i].result_store = parallel_string.begin() + i;
-        threadpool_add_task(&pool, parallel_align, &parallel_params[i]);
+
+    // Initialize ParallelAlignParams structure for each parallel range
+    std::vector<hpx::future<void>> tasks;
+    tasks.reserve(parallel_num);
+
+    for (int i = 0; i < parallel_num; ++i) {
+        tasks.push_back(hpx::async([&, i]() {
+            parallel_params[i].data = &data;
+            parallel_params[i].parallel_range = parallel_align_range.begin() + i;
+            parallel_params[i].task_index = i;
+            parallel_params[i].result_store = parallel_string.begin() + i;
+            parallel_align(&parallel_params[i]);
+        }));
     }
-    threadpool_destroy(&pool);
-#else // Otherwise, use OpenMP for parallel execution
-#pragma omp parallel for num_threads(global_args.thread)
-    for (uint_t i = 0; i < parallel_num; i++) {
-        parallel_params[i].data = &data;
-        parallel_params[i].parallel_range = parallel_align_range.begin() + i;
-        parallel_params[i].task_index = i;
-        parallel_params[i].result_store = parallel_string.begin() + i;
-        parallel_align(&parallel_params[i]);
-    }
-#endif
+
+    // Sync tasks
+    hpx::wait_all(tasks);
+
     // Remove temporary files created during parallel execution
-    delete_tmp_folder(parallel_num);
+    hpx::future<void> delete_tmp_folder_task = hpx::async(delete_tmp_folder, parallel_num);
+
     // Calculate the time taken for parallel alignment and print the output
     double parallel_align_time = timer.elapsed_time();
     s.str("");
     s << std::fixed << std::setprecision(2) << parallel_align_time;
     if (global_args.verbose) {
         output = "Parallel align time: " + s.str() + " seconds.";
+        print_table_line(output);
+        output = "Total threads used: " + std::to_string(hpx::get_num_worker_threads());
         print_table_line(output);
     }
     
@@ -1107,7 +1103,7 @@ void refinement(std::vector<std::string>& data1, std::vector<std::string>& data2
             ++spaceCount1;
         }
         // Count the number of leading spaces in str2.
-        while (spaceCount2 < str2.size() && str2[spaceCount2] == '-') {
+        while (static_cast<size_t>(spaceCount2) < str2.size() && str2[spaceCount2] == '-') {
             ++spaceCount2;
         }
 

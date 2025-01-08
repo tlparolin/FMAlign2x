@@ -68,7 +68,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         global_args.data_path = parser.get("i");
         std::string tmp_thread = parser.get("t");
         if (tmp_thread == "cpu_num") {
-            global_args.thread = hpx::get_os_thread_count();
+            global_args.thread = hpx::threads::hardware_concurrency();
         }
         else {
             global_args.thread = std::stoi(tmp_thread);
@@ -159,5 +159,5 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         print_table_bound();
     }
 
-    return 0;
+    return hpx::finalize(); // Finalize the HPX runtime system
 }
