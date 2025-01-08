@@ -82,9 +82,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     }
 
     // Generate a random string to append to temporary file names
-    // Execute asynchronously to improve performance
-    hpx::future<std::string> random_future = hpx::async(generateRandomString, 10);
-    random_file_end = random_future.get();
+    random_file_end = generateRandomString(10);
 
     std::string output = "";
     Timer timer;
@@ -164,7 +162,9 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     hpx::wait_all(tasks);
 
     // Remove temporary files created during parallel execution
-    hpx::future<void> delete_tmp_folder_task = hpx::async(delete_tmp_folder, parallel_num);
+    hpx::post([parallel_num]() { 
+        delete_tmp_folder(parallel_num); 
+    });
 
     // Calculate the time taken for parallel alignment and print the output
     double parallel_align_time = timer.elapsed_time();
@@ -172,8 +172,6 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     s << std::fixed << std::setprecision(2) << parallel_align_time;
     if (global_args.verbose) {
         output = "Parallel align time: " + s.str() + " seconds.";
-        print_table_line(output);
-        output = "Total threads used: " + std::to_string(hpx::get_num_worker_threads());
         print_table_line(output);
     }
     
@@ -652,9 +650,6 @@ void* parallel_align(void* arg) {
     read_data(res_file_name.c_str(), aligned_seq, aligned_name, false);
     std::vector<std::string> final_aligned_seq(seq_num, "");
     // Map the aligned sequences back to their original indices in the input data vector
-    for (uint_t i = 0; i < aligned_seq_index.size(); i++) {
-        final_aligned_seq[aligned_seq_index[i]] = aligned_seq[i];
-    }
     for (uint_t i = 0; i < aligned_seq_index.size(); i++) {
         final_aligned_seq[aligned_seq_index[i]] = aligned_seq[i];
     }
