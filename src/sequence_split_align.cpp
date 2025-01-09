@@ -19,6 +19,7 @@
 // Created: 2023-02-25
 
 #include "../include/sequence_split_align.h"
+
 /**
 * @brief Generates a random string of the specified length.
 * This function generates a random string of the specified length. The generated string
@@ -94,20 +95,13 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     std::vector<ExpandChainParams> params(chain_num);
 
     // Expand each chain pair and store the resulting aligned sequences
-    if (global_args.min_seq_coverage == 1) {
-        hpx::experimental::for_loop(hpx::execution::par, 0, chain_num, [&](int i) {
-            params[i].data = &data;
-            params[i].chain = &chain;
-            params[i].chain_index = i;
-            params[i].result_store = chain_string.begin() + i;
-            expand_chain(&params[i]);
-        });
-    }
-    else {
-        for (uint_t i = 0; i < chain_num; i++) {
-            expand_chain(&params[i]);
-        }
-    }
+    hpx::experimental::for_loop(hpx::execution::par, 0, chain_num, [&](int i) {
+        params[i].data = &data;
+        params[i].chain = &chain;
+        params[i].chain_index = i;
+        params[i].result_store = chain_string.begin() + i;
+        expand_chain(&params[i]);
+    });
     
     params.clear();
  
@@ -145,21 +139,19 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
 
     // Initialize ParallelAlignParams structure for each parallel range
-    std::vector<hpx::future<void>> tasks;
-    tasks.reserve(parallel_num);
+    std::vector<hpx::future<void>> futures;
 
-    for (int i = 0; i < parallel_num; ++i) {
-        tasks.push_back(hpx::async([&, i]() {
-            parallel_params[i].data = &data;
-            parallel_params[i].parallel_range = parallel_align_range.begin() + i;
-            parallel_params[i].task_index = i;
-            parallel_params[i].result_store = parallel_string.begin() + i;
-            parallel_align(&parallel_params[i]);
-        }));
-    }
+    for (uint_t i = 0; i < parallel_num; ++i) {
+        parallel_params[i].data = &data;
+        parallel_params[i].parallel_range = parallel_align_range.begin() + i;
+        parallel_params[i].task_index = i;
+        parallel_params[i].result_store = parallel_string.begin() + i;
+        // create tasks
+        futures.push_back(hpx::async(parallel_align, &parallel_params[i]));
+}
 
     // Sync tasks
-    hpx::wait_all(tasks);
+    hpx::wait_all(futures);
 
     // Remove temporary files created during parallel execution
     hpx::post([parallel_num]() { 
@@ -194,6 +186,8 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         print_table_line(output);
         print_table_divider();
     }
+
+    hpx::distributed::barrier::synchronize();
     return;
 }
 
@@ -614,50 +608,76 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(std::
 void* parallel_align(void* arg) {
     // Cast the input parameters to the correct struct type
     ParallelAlignParams* ptr = static_cast<ParallelAlignParams*>(arg);
-    // Get data, chain, and chain_index from the input parameters
+
+    // Extract parameters from the input structure
     const std::vector<std::string> data = *(ptr->data);
     std::vector<std::pair<int_t, int_t>> parallel_range = *(ptr->parallel_range);
     const uint_t task_index = ptr->task_index;
-    // Get the number of sequences in the data vector and the number of chains in the current chain
-    uint_t seq_num = data.size();
-    std::string file_name = TMP_FOLDER + "task-" + std::to_string(task_index)+"_"+ random_file_end + ".fasta";
-    std::ofstream file;
-    file.open(file_name);
 
+    uint_t seq_num = data.size();
+    std::string file_name = TMP_FOLDER + "task-" + std::to_string(task_index) + "_" + random_file_end + ".fasta";
+
+    std::ofstream file(file_name);
     if (!file.is_open()) {
-        std::cerr << file_name << " fail to open!" << std::endl;
+        std::cerr << file_name << " failed to open!" << std::endl;
         exit(1);
     }
 
     std::vector<uint_t> aligned_seq_index;
-    for (uint_t i = 0; i < seq_num; i++) {  
+    for (uint_t i = 0; i < seq_num; i++) {
         if (parallel_range[i].first >= 0) {
-            // Get a subset of the sequence to align
+            // Write sequence to the FASTA file
             std::string seq_content = data[i].substr(parallel_range[i].first, parallel_range[i].second);
-            std::stringstream sstreasm;
-            sstreasm << ">SEQUENCE" << i << "\n" << seq_content << "\n";
-            file << sstreasm.str();
+            file << ">SEQUENCE" << i << "\n" << seq_content << "\n";
             aligned_seq_index.push_back(i);
-        }       
+        }
     }
     file.close();
-    // Call the align_fasta function to align the sequences in the file
-    std::string res_file_name = align_fasta(file_name);
 
+    // Get a list of all available localities
+    std::vector<hpx::id_type> localities = hpx::find_all_localities();
 
-    std::vector<std::string> aligned_seq;
-    std::vector<std::string> aligned_name;
-    read_data(res_file_name.c_str(), aligned_seq, aligned_name, false);
-    std::vector<std::string> final_aligned_seq(seq_num, "");
-    // Map the aligned sequences back to their original indices in the input data vector
-    for (uint_t i = 0; i < aligned_seq_index.size(); i++) {
-        final_aligned_seq[aligned_seq_index[i]] = aligned_seq[i];
+    // Prepare futures for alignment tasks
+    std::vector<hpx::future<std::string>> align_futures;
+    align_futures.reserve(localities.size());
+
+    // Divide tasks among localities
+    for (hpx::id_type const& node : localities) {
+        std::string local_task_file = file_name + "_node" + std::to_string(node);
+        
+        // Distribute task to each node using align_fasta_action
+        typedef align_fasta_action action_type;
+        align_futures.push_back(hpx::async<action_type>(node));
     }
+
+    // Wait for all alignments to complete
+    hpx::wait_all(align_futures);
+
+    // Collect results from all futures
+    std::vector<std::string> aligned_seq;
+    for (auto& f : align_futures) {
+        aligned_seq.push_back(f.get());  // Each future contains the result file path
+    }
+
+    // Process results
+    std::vector<std::string> final_aligned_seq(seq_num, "");
+    for (const auto& result_file : aligned_seq) {
+        std::vector<std::string> aligned_seq_content, aligned_names;
+        read_data(result_file.c_str(), aligned_seq_content, aligned_names, false);
+
+        for (size_t i = 0; i < aligned_seq_index.size(); ++i) {
+            final_aligned_seq[aligned_seq_index[i]] = aligned_seq_content[i];
+        }
+    }
+
     // Store the aligned sequences in the result storage
     *(ptr->result_store) = final_aligned_seq;
 
     return NULL;
 }
+
+// Define the boilerplate code necessary for the function 'align_fasta' to be invoked as an HPX action.
+HPX_PLAIN_ACTION(align_fasta, align_fasta_action)
 
 /**
 * @brief Align sequences in a FASTA file using either halign or mafft package.
