@@ -38,6 +38,13 @@
 #include <hpx/algorithm.hpp>
 #include <hpx/future.hpp>
 #include <hpx/barrier.hpp>
+#include <hpx/include/actions.hpp>
+#include <hpx/include/components.hpp>
+#include <hpx/include/lcos.hpp>
+#include <hpx/include/parallel_executors.hpp>
+#include <hpx/include/runtime.hpp>
+#include <hpx/include/util.hpp>
+#include <hpx/iostream.hpp>
 
 const std::string TMP_FOLDER = "./temp/";
 

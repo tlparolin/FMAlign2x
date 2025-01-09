@@ -141,17 +141,13 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     // Initialize ParallelAlignParams structure for each parallel range
     std::vector<hpx::future<void>> futures;
 
-    for (uint_t i = 0; i < parallel_num; ++i) {
+    hpx::experimental::for_loop(hpx::execution::par, 0, parallel_num, [&](int i) {
         parallel_params[i].data = &data;
         parallel_params[i].parallel_range = parallel_align_range.begin() + i;
         parallel_params[i].task_index = i;
         parallel_params[i].result_store = parallel_string.begin() + i;
-        // create tasks
-        futures.push_back(hpx::async(parallel_align, &parallel_params[i]));
-}
-
-    // Sync tasks
-    hpx::wait_all(futures);
+        parallel_align(&parallel_params[i]);
+    });
 
     // Remove temporary files created during parallel execution
     hpx::post([parallel_num]() { 
@@ -605,6 +601,9 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(std::
 * the index of the current task, and a pointer to the storage for the aligned sequences.
 * @return NULL
 */
+// Define the boilerplate code necessary for the function 'align_fasta' to be invoked as an HPX action.
+HPX_PLAIN_ACTION(align_fasta, align_fasta_action)
+
 void* parallel_align(void* arg) {
     // Cast the input parameters to the correct struct type
     ParallelAlignParams* ptr = static_cast<ParallelAlignParams*>(arg);
@@ -643,11 +642,9 @@ void* parallel_align(void* arg) {
 
     // Divide tasks among localities
     for (hpx::id_type const& node : localities) {
-        std::string local_task_file = file_name + "_node" + std::to_string(node);
-        
         // Distribute task to each node using align_fasta_action
         typedef align_fasta_action action_type;
-        align_futures.push_back(hpx::async<action_type>(node));
+        align_futures.push_back(hpx::async<action_type>(node, file_name));
     }
 
     // Wait for all alignments to complete
@@ -675,9 +672,6 @@ void* parallel_align(void* arg) {
 
     return NULL;
 }
-
-// Define the boilerplate code necessary for the function 'align_fasta' to be invoked as an HPX action.
-HPX_PLAIN_ACTION(align_fasta, align_fasta_action)
 
 /**
 * @brief Align sequences in a FASTA file using either halign or mafft package.
