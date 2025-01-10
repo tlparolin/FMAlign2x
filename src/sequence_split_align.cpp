@@ -264,7 +264,7 @@ std::vector<int_t> select_columns(std::vector<std::vector<std::pair<int_t, int_t
         }
     }
     // Sort the columns based on the number of effect columns.
-    std::sort(effect_col_num.begin(), effect_col_num.end(), [](const std::pair<uint_t, uint_t>& a, const std::pair<uint_t, uint_t>& b) { return a.first > b.first; });
+    hpx::sort(effect_col_num.begin(), effect_col_num.end(), [](const std::pair<uint_t, uint_t>& a, const std::pair<uint_t, uint_t>& b) { return a.first > b.first; });
     
     for (uint_t i = 0; i < col_num; i++) {
         if (count <= 0) {
@@ -851,7 +851,7 @@ void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vect
 
 
     // Sort the vector of pairs by the number of missing fragments in ascending order.
-    std::sort(missing_fragment_count.begin(), missing_fragment_count.end(), cmp);
+    hpx::sort(missing_fragment_count.begin(), missing_fragment_count.end(), cmp);
 #if DEBUG
     for (int_t i = 0; i < missing_fragment_count.size(); i++) {
         std::cout << missing_fragment_count[i].first << " "  << missing_fragment_count[i].second << std::endl;

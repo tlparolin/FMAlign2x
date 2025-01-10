@@ -114,22 +114,11 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vecto
     }
 
     std::vector<FindOptimalChainParams> find_optimal_chain_params(sequence_num);
-#if (defined(__linux__))
-    threadpool pool;
-    threadpool_init(&pool, global_args.thread);
-    for (uint_t i = 0; i < sequence_num; i++) {
-        find_optimal_chain_params[i].chains = split_point_on_sequence.begin() + i;
-        threadpool_add_task(&pool, find_optimal_chain, &find_optimal_chain_params[i]);
-    }
-    threadpool_destroy(&pool);
-#else // Otherwise, use OpenMP for parallel execution
-#pragma omp parallel for num_threads(global_args.thread)
-    for (uint_t i = 0; i < sequence_num; i++) {
+
+    hpx::experimental::for_loop(hpx::execution::par, 0, sequence_num, [&](int i) {
         find_optimal_chain_params[i].chains = split_point_on_sequence.begin() + i;
         find_optimal_chain(&find_optimal_chain_params[i]);
-    }
-#endif
-
+    });
 
     // remove column that too much -1
     std::vector<int_t> selected_cols;
@@ -392,24 +381,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     mems.resize(interval_size);
     // Convert each interval to a MEM in parallel
     IntervalToMemConversionParams* params = new IntervalToMemConversionParams[interval_size];
-#if (defined(__linux__))
-    threadpool pool;
-    threadpool_init(&pool, global_args.thread);
-    for (uint_t i = 0; i < interval_size; i++) {
-        params[i].SA = SA;
-        params[i].DA = DA;
-        params[i].interval = intervals[i];
-        params[i].concat_data = concat_data;
-        params[i].result_store = mems.begin() + i;
-        params[i].min_mem_length = min_mem_length;
-        params[i].joined_sequence_bound = joined_sequence_bound;
-
-        threadpool_add_task(&pool, interval2mem, params+i);
-    }
-    threadpool_destroy(&pool);
-#else
-#pragma omp parallel for num_threads(global_args.thread)
-    for (uint_t i = 0; i < interval_size; i++) {
+    hpx::experimental::for_loop(hpx::execution::par, 0, interval_size, [&](int i) {
         params[i].SA = SA;
         params[i].DA = DA;
         params[i].interval = intervals[i];
@@ -418,8 +390,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         params[i].min_mem_length = min_mem_length;
         params[i].joined_sequence_bound = joined_sequence_bound;
         interval2mem(params + i);
-    }
-#endif
+    });
 
     if (mems.size() <= 0 && global_args.verbose) {
         output = "Warning: There is no MEMs, please adjust your paramters.";
@@ -714,7 +685,7 @@ void sort_mem(std::vector<mem> &mems, std::vector<std::string> data) {
         compute_mem_avg_pos(m);
     }
     // sort mems by average position
-    std::sort(mems.begin(), mems.end(), [](const mem& m1, const mem& m2) {
+    hpx::sort(mems.begin(), mems.end(), [](const mem& m1, const mem& m2) {
         return m1.avg_pos < m2.avg_pos;
         });
     // assign mem_index based on position in sorted vector

@@ -22,13 +22,6 @@ if(M64)
     add_compile_definitions(M64)
 endif()
 
-# OpenMP, pthreads and other flags 
-if(WIN32)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
-else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lpthread -pthread -lrt")
-endif()
-
 # Include directories
 include_directories(include ext/SW)
 
@@ -41,11 +34,6 @@ set(SOURCES
     ext/SW/ssw.cpp
     ext/SW/ssw_cpp.cpp
 )
-
-# Add thread pool and condition
-if(NOT WIN32)
-    list(APPEND SOURCES src/thread_pool.cpp src/thread_condition.cpp)
-endif()
 
 # Add additional sources
 set(ADDITIONAL_SOURCES src/gsacak.c)
@@ -68,5 +56,5 @@ target_link_libraries(FMAlign2 PUBLIC HPX::hpx HPX::wrap_main HPX::iostreams_com
 # Clean all
 add_custom_target(clean-all
     COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/FMAlign2 ${CMAKE_BINARY_DIR}/*.o
-    COMMENT "Limpando arquivos gerados..."
+    COMMENT "Cleaning..."
 )

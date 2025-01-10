@@ -37,6 +37,10 @@
 #include <vector>
 #include <unordered_map>
 #include <sstream>
+#include <hpx/algorithm.hpp>
+#include <hpx/execution.hpp>
+#include <hpx/include/parallel_for_loop.hpp>
+
 struct sub_string {
     int_t sequence_index; // the sequence index that substring in
     uint_t position; // the begin position in the seqence
