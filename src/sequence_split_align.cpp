@@ -74,7 +74,7 @@ std::string generateRandomString(int length) {
 */
 std::string random_file_end;
 
-void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> chain){
+void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> chain, int world_rank, int world_size) {
     // Print status message
     if (global_args.verbose) {
         std::cout << "#                Parallel Aligning...                       #" << std::endl;

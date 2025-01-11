@@ -31,15 +31,13 @@ KSEQ_INIT(int, read)
  * The timer is based on std::chrono::steady_clock, which is a monotonic clock that is not subject to system clock adjustments.
 */
 Timer::Timer() {
-    start_time_ = std::chrono::steady_clock::now();
+    reset();
 }
 void Timer::reset() {
-    start_time_ = std::chrono::steady_clock::now();
+    start_time_ = MPI_Wtime();
 }
-
 double Timer::elapsed_time() const {
-    std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start_time_;
-    return elapsed.count();
+    return MPI_Wtime() - start_time_;
 }
 
 /**
@@ -49,7 +47,79 @@ double Timer::elapsed_time() const {
  * @param name store sequence name
  * @return multiple sequence stored in vector 
 */
-void read_data(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, bool verbose = true){
+void read_data(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, bool verbose){
+    if (verbose && global_args.verbose) {
+        std::cout << "#                   Reading Data...                         #" << std::endl;
+        print_table_divider();
+    }
+    std::string output = "";
+    std::string str_data_path = data_path;
+    // check weather the input path could be accessed 
+
+    if (access_file(data_path)) {
+        if (verbose && global_args.verbose) {
+            output = str_data_path + " could be accessed";
+            print_table_line(output);
+        }
+    }
+    else {
+        print_table_bound();
+        output = "Error:" + str_data_path + " could not be accessed, Please check if the path of the input data is correct or if the data exists!";
+        std::cerr << output << std::endl;
+        std::cerr << "Program Exit!" << std::endl;
+        exit(1);
+    }
+    
+
+    FILE* f_pointer = fopen(data_path, "r");
+    kseq_t* file_t = kseq_init(fileno(f_pointer));
+    
+    uint64_t merged_length = 0;
+    int64_t tmp_length = 0; 
+    // stop loop when tmp_length equals -1
+    while ((tmp_length = kseq_read(file_t)) >= 0) // Read one sequence in each iteration of the loop
+    {
+        std::string tmp_data = clean_sequence(file_t -> seq.s);
+        std::string tmp_name = file_t -> name.s;
+        if(file_t->comment.s) tmp_name += file_t->comment.s;
+        data.push_back(tmp_data);
+        name.push_back(tmp_name);
+        merged_length += tmp_length;
+    }
+    kseq_destroy(file_t);
+    fclose(f_pointer);
+
+    if(verbose&& global_args.verbose && merged_length + data.size() > UINT32_MAX && M64 == 0){
+        print_table_bound();
+        std::cerr << "Error: The input data is too large and the 32-bit program may not produce correct results. Please compile a 64-bit program using the M64 parameter." << std::endl;
+        std::cerr << "Program Exit!" << std::endl;
+        exit(1);
+    }
+    #if M64
+    if (verbose && global_args.verbose) {
+        std::stringstream s;
+        s << std::fixed << std::setprecision(2) << merged_length / pow(2, 30);
+        output = "Data Memory Usage: " + s.str() + " GB";
+        print_table_line(output);
+    }
+    
+    #else
+    if (verbose && global_args.verbose) {
+        std::stringstream s;
+        s << std::fixed << std::setprecision(2) << merged_length / pow(2, 20);
+        output = "Data Memory Usage: " + s.str() + " MB";
+        print_table_line(output);
+    }
+    #endif
+    if (verbose && global_args.verbose) {
+        output = "Sequence Number: " + std::to_string(data.size());
+        print_table_line(output);
+        print_table_divider();
+    }
+    return;
+}
+
+void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, int world_rank, int world_size, bool verbose){
     if (verbose && global_args.verbose) {
         std::cout << "#                   Reading Data...                         #" << std::endl;
         print_table_divider();
