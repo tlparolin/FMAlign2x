@@ -76,7 +76,7 @@ std::string random_file_end;
 
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> chain, int world_rank, int world_size) {
     // Print status message
-    if (global_args.verbose) {
+    if (world_rank == 0 && global_args.verbose) {
         std::cout << "#                Parallel Aligning...                       #" << std::endl;
         print_table_divider();
     }
@@ -95,27 +95,36 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         params[i].chain_index = i;
         params[i].result_store = chain_string.begin() + i;
     }
-    // Expand each chain pair and store the resulting aligned sequences
-    if (global_args.min_seq_coverage == 1) {
-#if (defined(__linux__))
-        threadpool pool;
-        threadpool_init(&pool, global_args.thread);
-        for (uint_t i = 0; i < chain_num; i++) {
-            threadpool_add_task(&pool, expand_chain, &params[i]);
-        }
-        threadpool_destroy(&pool);
-#else // Otherwise, use OpenMP for parallel execution
-#pragma omp parallel for num_threads(global_args.thread)
-        for (uint_t i = 0; i < chain_num; i++) {
-            expand_chain(&params[i]);
-        }
-#endif
-    } else {
-        for (uint_t i = 0; i < chain_num; i++) {
-            expand_chain(&params[i]);
-        }
-    }
     
+    // To expand each chain pair and store the resulting aligned sequences
+    // we will divide the chain pairs to different mpi ranks
+    uint_t chain_num_per_rank = chain_num / world_size;
+    uint_t chain_num_remain = chain_num % world_size;
+    uint_t chain_num_start = world_rank * chain_num_per_rank;
+    uint_t chain_num_end = (world_rank + 1) * chain_num_per_rank;
+
+    // If the chain number cannot be divided evenly by the number of ranks, 
+    // the last rank will handle the remaining chain pairs
+    if (world_rank == world_size - 1 && chain_num_remain != 0) {
+        chain_num_end += chain_num_remain;
+    }
+
+    // Store local results (aligned fragments)
+    std::vector<std::vector<std::string>> local_results(chain_num_end - chain_num_start);
+
+    // Expand each chain pair
+    for (uint_t i = chain_num_start; i < chain_num_end; i++) {
+        std::vector<std::string>* aligned_fragment = static_cast<std::vector<std::string>*>(expand_chain(&params[i]));
+        local_results[i - chain_num_start] = *aligned_fragment;
+        delete aligned_fragment;  // delete the allocated memory
+    }
+
+    
+    ////////////////////////////////////////////////////////////////////////////////
+    // tem que remontar o resultado de expand_chain para prosseguir com a execução
+    ////////////////////////////////////////////////////////////////////////////////
+
+
 
     params.clear();
  
@@ -123,7 +132,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     double SW_time = timer.elapsed_time();
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << SW_time;
-    if (global_args.verbose) {
+    if (world_rank == 0 && global_args.verbose) {
         output = "SW expand time: " + s.str() + " seconds.";
         print_table_line(output);
     }
@@ -330,12 +339,10 @@ Finally, the function stores the aligned fragments in the result_store vector.
 void* expand_chain(void* arg) {
     // Cast the input parameters to the correct struct type
     ExpandChainParams* ptr = static_cast<ExpandChainParams*>(arg);
-    // Get data, chain, and chain_index from the input parameters
     const std::vector<std::string> data = *(ptr->data);
     std::vector<std::vector<std::pair<int_t, int_t>>> chain = *(ptr->chain);
     const uint_t chain_index = ptr->chain_index;
-    // std::cout << "in" << chain_index << '\n';
-    // Get the number of sequences in the data vector and the number of chains in the current chain
+    
     uint_t seq_num = data.size();
     uint_t chain_num = chain[0].size();
     
@@ -370,6 +377,7 @@ void* expand_chain(void* arg) {
             int_t maskLen = query_length / 2;
             maskLen = maskLen < 15 ? 15 : maskLen;
 
+            // Find the beginning and end positions of the unaligned subsequence
             for (; tmp_index > 0 && chain[i][tmp_index - 1].first == -1; --tmp_index);
 
             ref_begin_pos = tmp_index <= 0 ? 0 : chain[i][tmp_index-1].first + chain[i][tmp_index - 1].second;
