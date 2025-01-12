@@ -96,22 +96,32 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         params[i].result_store = chain_string.begin() + i;
     }
     
-    // To expand each chain pair and store the resulting aligned sequences
-    // we will divide the chain pairs to different mpi ranks
-    uint_t chain_num_per_rank = chain_num / world_size;
-    uint_t chain_num_remain = chain_num % world_size;
-    uint_t chain_num_start = world_rank * chain_num_per_rank;
-    uint_t chain_num_end = (world_rank + 1) * chain_num_per_rank;
+    // Determine the necessary number of ranks to process chain_num
+    uint_t effective_world_size = std::min(static_cast<uint_t>(world_size), chain_num);
 
-    // If the chain number cannot be divided evenly by the number of ranks, 
-    // the last rank will handle the remaining chain pairs
-    if (world_rank == world_size - 1 && chain_num_remain != 0) {
-        chain_num_end += chain_num_remain;
+    // Number os tasks by rank
+    uint_t chain_num_per_rank = chain_num / effective_world_size;
+    uint_t chain_num_remain = chain_num % effective_world_size;
+
+    // Setting range
+    uint_t chain_num_start = 0;
+    uint_t chain_num_end = 0;
+
+    if (static_cast<uint_t>(world_rank) < effective_world_size) {
+        chain_num_start = world_rank * chain_num_per_rank;
+        chain_num_end = (world_rank + 1) * chain_num_per_rank;
+
+        // The last rank get all remaining
+        if (static_cast<uint_t>(world_rank) == effective_world_size - 1) {
+            chain_num_end += chain_num_remain;
+        }
     }
 
-    // Expand each chain pair
-    for (uint_t i = chain_num_start; i < chain_num_end; i++) {
-        expand_chain(&params[i]);
+    // Only active ranks will run
+    if (static_cast<uint_t>(world_rank) < effective_world_size) {
+        for (uint_t i = chain_num_start; i < chain_num_end; i++) {
+            expand_chain(&params[i]);
+        }
     }
 
     params.clear();
@@ -646,7 +656,8 @@ void* parallel_align(void* arg, uint_t parallel_num_start, uint_t parallel_num_e
     }
 
     // Write the sequences to the file
-    for (uint_t i = 0; i < seq_num; i++) {
+    // for (uint_t i = 0; i < seq_num; i++) {
+    for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
         if (parallel_range[i].first >= 0) {
             // Get the sequence content from the data vector
             std::string seq_content = data[i].substr(parallel_range[i].first, parallel_range[i].second);
