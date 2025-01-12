@@ -148,7 +148,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         read_data_mpi(global_args.data_path.c_str(), data, name, world_rank, world_size, global_args.verbose);
 
         // Find MEMs in the sequences and split the sequences into fragments for parallel alignment.
-        std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data);
+        std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data, world_rank, world_size);
 
         split_and_parallel_align(data, name, split_points_on_sequence, world_rank, world_size);
     }
@@ -159,9 +159,16 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         exit(1);
     }
 
+    MPI_Barrier(MPI_COMM_WORLD);
+    
     double total_time = timer.elapsed_time();
+    double max_time = 0.0;
+
+    // Reduce to get the max time
+    MPI_Reduce(&total_time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
     std::stringstream s;
-    s << std::fixed << std::setprecision(2) << total_time;
+    s << std::fixed << std::setprecision(2) << max_time;
     if (world_rank == 0 && global_args.verbose) {
         output = "FMAlign2 total time: " + s.str() + " seconds.";
         print_table_line(output);
