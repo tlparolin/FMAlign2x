@@ -109,9 +109,6 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         chain_num_end += chain_num_remain;
     }
 
-    // Store local results (aligned fragments)
-    std::vector<std::vector<std::string>> local_results(chain_num_end - chain_num_start);
-
     // Expand each chain pair
     for (uint_t i = chain_num_start; i < chain_num_end; i++) {
         expand_chain(&params[i]);
@@ -152,35 +149,41 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     uint_t parallel_num = parallel_align_range.size();
     std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
-    // If the system is Linux, initialize a thread pool and add tasks to it for parallel execution
-#if (defined(__linux__))
-    threadpool pool;
-    threadpool_init(&pool, global_args.thread);
-    for (uint_t i = 0; i < parallel_num; i++) {
-        parallel_params[i].data = &data;
-        parallel_params[i].parallel_range = parallel_align_range.begin()+i;
-        parallel_params[i].task_index = i;
-        parallel_params[i].result_store = parallel_string.begin() + i;
-        threadpool_add_task(&pool, parallel_align, &parallel_params[i]);
+
+    // Divide the parallel_num into different mpi ranks
+    uint_t parallel_num_per_rank = parallel_num / world_size;
+    uint_t parallel_num_remain = parallel_num % world_size;
+
+    uint_t parallel_num_start = world_rank * parallel_num_per_rank;
+    uint_t parallel_num_end = (world_rank + 1) * parallel_num_per_rank;
+
+    // If the parallel number cannot be divided evenly by the number of ranks,
+    // the last rank will handle the remaining parallel ranges
+    if (world_rank == world_size - 1 && parallel_num_remain != 0) {
+        parallel_num_end += parallel_num_remain;
     }
-    threadpool_destroy(&pool);
-#else // Otherwise, use OpenMP for parallel execution
-#pragma omp parallel for num_threads(global_args.thread)
-    for (uint_t i = 0; i < parallel_num; i++) {
+
+    for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
         parallel_params[i].data = &data;
         parallel_params[i].parallel_range = parallel_align_range.begin() + i;
         parallel_params[i].task_index = i;
         parallel_params[i].result_store = parallel_string.begin() + i;
-        parallel_align(&parallel_params[i]);
+        parallel_align(&parallel_params[i], world_rank, world_size);
     }
-#endif
+
     // Remove temporary files created during parallel execution
-    delete_tmp_folder(parallel_num);
+    MPI_Barrier(MPI_COMM_WORLD);
+    delete_tmp_folder(parallel_num_end - parallel_num_start);
+
     // Calculate the time taken for parallel alignment and print the output
     double parallel_align_time = timer.elapsed_time();
+    double max_parallel_time = 0.0;
+
+    // Reduce to get the max time
+    MPI_Reduce(&parallel_align_time, &max_parallel_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     s.str("");
     s << std::fixed << std::setprecision(2) << parallel_align_time;
-    if (global_args.verbose) {
+    if (world_rank == 0 && global_args.verbose) {
         output = "Parallel align time: " + s.str() + " seconds.";
         print_table_line(output);
     }
@@ -620,42 +623,64 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(std::
 * the index of the current task, and a pointer to the storage for the aligned sequences.
 * @return NULL
 */
-void* parallel_align(void* arg) {
+void* parallel_align(void* arg, int world_rank, int world_size) {
     // Cast the input parameters to the correct struct type
     ParallelAlignParams* ptr = static_cast<ParallelAlignParams*>(arg);
-    // Get data, chain, and chain_index from the input parameters
+    // Get data, chain, chain_index, world_rank and world_size from the input parameters
     const std::vector<std::string> data = *(ptr->data);
     std::vector<std::pair<int_t, int_t>> parallel_range = *(ptr->parallel_range);
     const uint_t task_index = ptr->task_index;
     // Get the number of sequences in the data vector and the number of chains in the current chain
     uint_t seq_num = data.size();
-    std::string file_name = TMP_FOLDER + "task-" + std::to_string(task_index)+"_"+ random_file_end + ".fasta";
-    std::ofstream file;
-    file.open(file_name);
+    std::string file_name = TMP_FOLDER + "task-" + std::to_string(task_index) + "_" + random_file_end + ".fasta";
 
+    // Rank 0 will create the file
+    if (world_rank == 0) {
+        std::ofstream file(file_name, std::ios::out | std::ios::trunc);
+        if (!file.is_open()) {
+            std::cerr << "Rank 0: Failed to create file: " << file_name << std::endl;
+            MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+        file.close();
+    }
+
+    // Sync to ensure the file is created before other ranks try to access it
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Each rank will open the file in append mode
+    std::ofstream file(file_name, std::ios::out | std::ios::app);
     if (!file.is_open()) {
-        std::cerr << file_name << " fail to open!" << std::endl;
-        exit(1);
+        std::cerr << "Rank " << world_rank << ": Failed to open file: " << file_name << std::endl;
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    std::vector<uint_t> aligned_seq_index;
-    for (uint_t i = 0; i < seq_num; i++) {  
+    // Calculate the start and end indices for the current task
+    uint_t seq_num_per_rank = seq_num / world_size;
+    uint_t seq_num_remain = seq_num % world_size;
+    uint_t start_index = world_rank * seq_num_per_rank + std::min<uint_t>(world_rank, seq_num_remain);
+    uint_t end_index = start_index + seq_num_per_rank + (world_rank < static_cast<int>(seq_num_remain) ? 1 : 0);
+
+    // Write the sequences to the file
+    for (uint_t i = start_index; i < end_index; i++) {
         if (parallel_range[i].first >= 0) {
-            // Get a subset of the sequence to align
+            // Get the sequence content from the data vector
             std::string seq_content = data[i].substr(parallel_range[i].first, parallel_range[i].second);
-            std::stringstream sstreasm;
-            sstreasm << ">SEQENCE" << i << "\n" << seq_content << "\n";
-            file << sstreasm.str();
-            aligned_seq_index.push_back(i);
-        }       
+            std::stringstream sstream;
+            sstream << ">SEQUENCE" << i << "\n" << seq_content << "\n";
+            file << sstream.str();
+        }
     }
+
     file.close();
+
     // Call the align_fasta function to align the sequences in the file
     std::string res_file_name = align_fasta(file_name);
 
 
     std::vector<std::string> aligned_seq;
     std::vector<std::string> aligned_name;
+    std::vector<uint_t> aligned_seq_index;
+
     read_data(res_file_name.c_str(), aligned_seq, aligned_name, false);
     std::vector<std::string> final_aligned_seq(seq_num, "");
     // Map the aligned sequences back to their original indices in the input data vector
@@ -670,6 +695,7 @@ void* parallel_align(void* arg) {
 
     return NULL;
 }
+
 /**
 * @brief Align sequences in a FASTA file using either halign or mafft package.
 * @param file_name The name of the FASTA file to align.
