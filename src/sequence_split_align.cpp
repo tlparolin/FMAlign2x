@@ -141,44 +141,57 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     
     timer.reset();
 
-    // Create temporary file folder (if it doesn't already exist)
-    if (0 != access(TMP_FOLDER.c_str(), 0))
-    {
+    if (world_rank == 0) {
+        // Create temporary file folder (if it doesn't already exist)
+        if (0 != access(TMP_FOLDER.c_str(), 0)) {
 #ifdef __linux__
-        if (0 != mkdir(TMP_FOLDER.c_str(), 0755)) {
-            std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
-    }
+            if (0 != mkdir(TMP_FOLDER.c_str(), 0755)) {
+                std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
+            }
 #else
-        if (0 != mkdir(TMP_FOLDER.c_str())) {
-            std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
-        }
+            if (0 != mkdir(TMP_FOLDER.c_str())) {
+                std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
+            }
 #endif
+        }
     }
+    
     // Calculate parallel alignment ranges and perform parallel alignment for each range
     std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range = get_parallel_align_range(data, chain);
     uint_t parallel_num = parallel_align_range.size();
     std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
 
-    // Divide the parallel_num into different mpi ranks
-    uint_t parallel_num_per_rank = parallel_num / world_size;
-    uint_t parallel_num_remain = parallel_num % world_size;
+    // Determine the effective number of ranks required
+    uint_t effective_world_size = std::min(world_size, parallel_num);
 
-    uint_t parallel_num_start = world_rank * parallel_num_per_rank;
-    uint_t parallel_num_end = (world_rank + 1) * parallel_num_per_rank;
+    // Calculate the number of tasks per active rank
+    uint_t parallel_num_per_rank = parallel_num / effective_world_size;
+    uint_t parallel_num_remain = parallel_num % effective_world_size;
 
-    // If the parallel number cannot be divided evenly by the number of ranks,
-    // the last rank will handle the remaining parallel ranges
-    if (world_rank == world_size - 1 && parallel_num_remain != 0) {
-        parallel_num_end += parallel_num_remain;
+    // Adjust indexes for each rank
+    uint_t parallel_num_start = 0;
+    uint_t parallel_num_end = 0;
+
+    if (world_rank < effective_world_size) {
+        parallel_num_start = world_rank * parallel_num_per_rank;
+        parallel_num_end = (world_rank + 1) * parallel_num_per_rank;
+
+        // The last active rank handles the remaining tasks
+        if (world_rank == effective_world_size - 1) {
+            parallel_num_end += parallel_num_remain;
+        }
     }
 
-    for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
-        parallel_params[i].data = &data;
-        parallel_params[i].parallel_range = parallel_align_range.begin() + i;
-        parallel_params[i].task_index = i;
-        parallel_params[i].result_store = parallel_string.begin() + i;
-        parallel_align(&parallel_params[i], parallel_num_start, parallel_num_end, world_rank);
+    // Only active ranks should process tasks
+    if (world_rank < effective_world_size) {
+        for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
+            parallel_params[i].data = &data;
+            parallel_params[i].parallel_range = parallel_align_range.begin() + i;
+            parallel_params[i].task_index = i;
+            parallel_params[i].result_store = parallel_string.begin() + i;
+            parallel_align(&parallel_params[i], parallel_num_start, parallel_num_end, world_rank);
+        }
     }
 
     // Remove temporary files created during parallel execution
