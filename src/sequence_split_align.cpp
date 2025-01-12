@@ -114,24 +114,19 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 
     // Expand each chain pair
     for (uint_t i = chain_num_start; i < chain_num_end; i++) {
-        std::vector<std::string>* aligned_fragment = static_cast<std::vector<std::string>*>(expand_chain(&params[i]));
-        local_results[i - chain_num_start] = *aligned_fragment;
-        delete aligned_fragment;  // delete the allocated memory
+        expand_chain(&params[i]);
     }
-
-    
-    ////////////////////////////////////////////////////////////////////////////////
-    // tem que remontar o resultado de expand_chain para prosseguir com a execução
-    ////////////////////////////////////////////////////////////////////////////////
-
-
 
     params.clear();
  
     // Calculate SW expand time and print status message
     double SW_time = timer.elapsed_time();
+    double max_expand_time = 0.0;
+
+    // Reduce to get the max time
+    MPI_Reduce(&SW_time, &max_expand_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     std::stringstream s;
-    s << std::fixed << std::setprecision(2) << SW_time;
+    s << std::fixed << std::setprecision(2) << max_expand_time;
     if (world_rank == 0 && global_args.verbose) {
         output = "SW expand time: " + s.str() + " seconds.";
         print_table_line(output);
