@@ -211,7 +211,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     // Reduce to get the max time
     MPI_Reduce(&parallel_align_time, &max_parallel_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     s.str("");
-    s << std::fixed << std::setprecision(2) << parallel_align_time;
+    s << std::fixed << std::setprecision(2) << max_parallel_time;
     if (world_rank == 0 && global_args.verbose) {
         output = "Parallel align time: " + s.str() + " seconds.";
         print_table_line(output);
