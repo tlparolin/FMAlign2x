@@ -72,7 +72,7 @@ std::string generateRandomString(int length);
 * @param chain A vector of chain pairs representing initial pairwise alignments between sequences
 * @return void
 */
-void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence, int world_rank, int world_size);
+void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence, int world_rank_, int world_size_);
 /**
 * @brief Selects columns from a sequence of split points to enable multi thread.
 * @param split_points_on_sequence A vector of vectors of pairs, where each pair represents the start and mem length
@@ -147,7 +147,7 @@ std::string align_fasta(std::string file_name);
 * @brief Deletes temporary files generated during sequence alignment tasks.
 * @param task_count The number of tasks for which temporary files were created.
 */
-void delete_tmp_folder(uint_t task_count);
+void delete_tmp_folder(uint_t idx_start, uint_t idx_end);
 
 /**
 * @brief Concatenate multiple sequence alignments into a single alignment and write the result to an output file.

@@ -74,7 +74,10 @@ std::string generateRandomString(int length) {
 */
 std::string random_file_end;
 
-void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> chain, int world_rank, int world_size) {
+void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> chain, int world_rank_, int world_size_) {
+    uint_t world_rank = static_cast<uint_t>(world_rank_);
+    uint_t world_size = static_cast<uint_t>(world_size_);
+
     // Print status message
     if (world_rank == 0 && global_args.verbose) {
         std::cout << "#                Parallel Aligning...                       #" << std::endl;
@@ -87,6 +90,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     uint_t chain_num = chain[0].size();
     uint_t seq_num = data.size();
     std::vector<std::vector<std::string>> chain_string(chain_num); // chain_num * seq_num
+
     // Initialize ExpandChainParams structure for each chain pair
     std::vector<ExpandChainParams> params(chain_num);
     for (uint_t i = 0; i < chain_num; i++) {
@@ -107,18 +111,18 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     uint_t chain_num_start = 0;
     uint_t chain_num_end = 0;
 
-    if (static_cast<uint_t>(world_rank) < effective_world_size) {
+    if (world_rank < effective_world_size) {
         chain_num_start = world_rank * chain_num_per_rank;
         chain_num_end = (world_rank + 1) * chain_num_per_rank;
 
         // The last rank get all remaining
-        if (static_cast<uint_t>(world_rank) == effective_world_size - 1) {
+        if (world_rank == effective_world_size - 1) {
             chain_num_end += chain_num_remain;
         }
     }
 
     // Only active ranks will run
-    if (static_cast<uint_t>(world_rank) < effective_world_size) {
+    if (world_rank < effective_world_size) {
         for (uint_t i = chain_num_start; i < chain_num_end; i++) {
             expand_chain(&params[i]);
         }
@@ -155,7 +159,10 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 #endif
         }
     }
-    
+
+    // Rank 0 needs to finish creating directory    
+    MPI_Barrier(MPI_COMM_WORLD);
+
     // Calculate parallel alignment ranges and perform parallel alignment for each range
     std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range = get_parallel_align_range(data, chain);
     uint_t parallel_num = parallel_align_range.size();
@@ -163,7 +170,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
 
     // Determine the effective number of ranks required
-    uint_t effective_world_size = std::min(world_size, parallel_num);
+    effective_world_size = std::min(world_size, parallel_num);
 
     // Calculate the number of tasks per active rank
     uint_t parallel_num_per_rank = parallel_num / effective_world_size;
@@ -182,7 +189,6 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
             parallel_num_end += parallel_num_remain;
         }
     }
-
     // Only active ranks should process tasks
     if (world_rank < effective_world_size) {
         for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
@@ -196,9 +202,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 
     // Remove temporary files created during parallel execution
     MPI_Barrier(MPI_COMM_WORLD);
-    if (world_rank == 0) {
-        delete_tmp_folder(parallel_num);
-    }
+    delete_tmp_folder(parallel_num_start, parallel_num_end);
 
     // Calculate the time taken for parallel alignment and print the output
     double parallel_align_time = timer.elapsed_time();
@@ -651,46 +655,38 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(std::
 void* parallel_align(void* arg, uint_t parallel_num_start, uint_t parallel_num_end, int world_rank) {
     // Cast the input parameters to the correct struct type
     ParallelAlignParams* ptr = static_cast<ParallelAlignParams*>(arg);
-
-    // Get data, chain, chain_index, world_rank and world_size from the input parameters
+    // Get data, chain, and chain_index from the input parameters
     const std::vector<std::string> data = *(ptr->data);
     std::vector<std::pair<int_t, int_t>> parallel_range = *(ptr->parallel_range);
     const uint_t task_index = ptr->task_index;
-    
     // Get the number of sequences in the data vector and the number of chains in the current chain
     uint_t seq_num = data.size();
-    std::string file_name;
+    std::string file_name = TMP_FOLDER + "task-" + std::to_string(task_index)+"_"+ random_file_end + ".fasta";
+    std::ofstream file;
+    file.open(file_name);
 
-    file_name = TMP_FOLDER + "task-" + std::to_string(task_index) + "_" + random_file_end + "_" + std::to_string(world_rank) + ".fasta";
-    std::ofstream file(file_name, std::ios::out | std::ios::trunc);
     if (!file.is_open()) {
-        std::cerr << "Rank " << world_rank << " - Failed to create file: " << file_name << std::endl;
-        MPI_Abort(MPI_COMM_WORLD, 1);
+        std::cerr << file_name << " fail to open!" << std::endl;
+        exit(1);
     }
 
-    // Write the sequences to the file
-    // for (uint_t i = 0; i < seq_num; i++) {
-    for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
+    std::vector<uint_t> aligned_seq_index;
+    for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {  
         if (parallel_range[i].first >= 0) {
-            // Get the sequence content from the data vector
+            // Get a subset of the sequence to align
             std::string seq_content = data[i].substr(parallel_range[i].first, parallel_range[i].second);
-            std::stringstream sstream;
-            sstream << ">SEQUENCE" << i << "\n" << seq_content << "\n";
-            file << sstream.str();
-        }
+            std::stringstream sstreams;
+            sstreams << ">SEQUENCE" << i << "\n" << seq_content << "\n";
+            file << sstreams.str();
+            aligned_seq_index.push_back(i);
+        }       
     }
-
     file.close();
-
-    MPI_Barrier(MPI_COMM_WORLD);
-
     // Call the align_fasta function to align the sequences in the file
     std::string res_file_name = align_fasta(file_name);
 
     std::vector<std::string> aligned_seq;
     std::vector<std::string> aligned_name;
-    std::vector<uint_t> aligned_seq_index;
-
     read_data(res_file_name.c_str(), aligned_seq, aligned_name, false);
     std::vector<std::string> final_aligned_seq(seq_num, "");
     // Map the aligned sequences back to their original indices in the input data vector
@@ -810,8 +806,8 @@ std::string align_fasta(std::string file_name) {
 * @brief Deletes temporary files generated during sequence alignment tasks.
 * @param task_count The number of tasks for which temporary files were created.
 */
-void delete_tmp_folder(uint_t task_count) {
-    for (uint_t i = 0; i < task_count; i++) {
+void delete_tmp_folder(uint_t idx_start, uint_t idx_end) {
+    for (uint_t i = idx_start; i < idx_end; i++) {
         std::string file_name = TMP_FOLDER +"task-" + std::to_string(i) + "_" + random_file_end + ".fasta";
         std::string res_file_name = TMP_FOLDER + "task-" + std::to_string(i) + "_" + random_file_end + ".aligned.fasta";
         if (remove(file_name.c_str()) != 0) {
