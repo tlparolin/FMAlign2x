@@ -134,7 +134,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(std::
 * the index of the current task, and a pointer to the storage for the aligned sequences.
 * @return NULL
 */
-void* parallel_align(void* arg, uint_t parallel_num_start, uint_t parallel_num_end, int world_rank);
+void* parallel_align(void* arg);
 
 /**
 * @brief Align sequences in a FASTA file using either halign or mafft package.

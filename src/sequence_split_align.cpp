@@ -160,14 +160,13 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         }
     }
 
-    // Rank 0 needs to finish creating directory    
-    MPI_Barrier(MPI_COMM_WORLD);
-
     // Calculate parallel alignment ranges and perform parallel alignment for each range
     std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range = get_parallel_align_range(data, chain);
     uint_t parallel_num = parallel_align_range.size();
     std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
+
+    MPI_Barrier(MPI_COMM_WORLD);
 
     // Determine the effective number of ranks required
     effective_world_size = std::min(world_size, parallel_num);
@@ -192,11 +191,14 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     // Only active ranks should process tasks
     if (world_rank < effective_world_size) {
         for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
+            if (i >= parallel_align_range.size()) {
+                break;
+            }
             parallel_params[i].data = &data;
             parallel_params[i].parallel_range = parallel_align_range.begin() + i;
             parallel_params[i].task_index = i;
             parallel_params[i].result_store = parallel_string.begin() + i;
-            parallel_align(&parallel_params[i], parallel_num_start, parallel_num_end, world_rank);
+            parallel_align(&parallel_params[i]);
         }
     }
 
@@ -218,23 +220,28 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     }
 
     timer.reset();
-    // Concatenate the chains and parallel ranges
-    std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
-    // Concatenate the chain strings and parallel strings
-    std::vector<std::vector<std::string>> concat_string = concat_chain_and_parallel(chain_string, parallel_string);
-    std::vector<uint_t> fragment_len = get_first_nonzero_lengths(concat_string);
 
-    seq2profile(concat_string, data, concat_range, fragment_len);
-    double seq2profile_time = timer.elapsed_time();
+    if (world_rank == 0){
+        // Concatenate the chains and parallel ranges
+        std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
+        // Concatenate the chain strings and parallel strings
+        std::vector<std::vector<std::string>> concat_string = concat_chain_and_parallel(chain_string, parallel_string);
+std::cout << "Rank " << world_rank << " executou: " << "concat_chain_and_parallel" << std::endl;
 
-    concat_alignment(concat_string, name);
+        std::vector<uint_t> fragment_len = get_first_nonzero_lengths(concat_string);
 
-    s.str("");
-    s << std::fixed << std::setprecision(2) << seq2profile_time;
-    if (global_args.verbose) {
-        output = "Seq-profile time: " + s.str() + " seconds.";
-        print_table_line(output);
-        print_table_divider();
+        seq2profile(concat_string, data, concat_range, fragment_len);
+        double seq2profile_time = timer.elapsed_time();
+
+        concat_alignment(concat_string, name);
+
+        s.str("");
+        s << std::fixed << std::setprecision(2) << seq2profile_time;
+        if (global_args.verbose) {
+            output = "Seq-profile time: " + s.str() + " seconds.";
+            print_table_line(output);
+            print_table_divider();
+        }
     }
     return;
 }
@@ -652,7 +659,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(std::
 * the index of the current task, and a pointer to the storage for the aligned sequences.
 * @return NULL
 */
-void* parallel_align(void* arg, uint_t parallel_num_start, uint_t parallel_num_end, int world_rank) {
+void* parallel_align(void* arg) {
     // Cast the input parameters to the correct struct type
     ParallelAlignParams* ptr = static_cast<ParallelAlignParams*>(arg);
     // Get data, chain, and chain_index from the input parameters
@@ -671,7 +678,7 @@ void* parallel_align(void* arg, uint_t parallel_num_start, uint_t parallel_num_e
     }
 
     std::vector<uint_t> aligned_seq_index;
-    for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {  
+    for (uint_t i = 0; i < seq_num; i++) {  
         if (parallel_range[i].first >= 0) {
             // Get a subset of the sequence to align
             std::string seq_content = data[i].substr(parallel_range[i].first, parallel_range[i].second);
@@ -693,9 +700,7 @@ void* parallel_align(void* arg, uint_t parallel_num_start, uint_t parallel_num_e
     for (uint_t i = 0; i < aligned_seq_index.size(); i++) {
         final_aligned_seq[aligned_seq_index[i]] = aligned_seq[i];
     }
-    for (uint_t i = 0; i < aligned_seq_index.size(); i++) {
-        final_aligned_seq[aligned_seq_index[i]] = aligned_seq[i];
-    }
+
     // Store the aligned sequences in the result storage
     *(ptr->result_store) = final_aligned_seq;
 
@@ -709,28 +714,28 @@ void* parallel_align(void* arg, uint_t parallel_num_start, uint_t parallel_num_e
 */
 std::string align_fasta(std::string file_name) {
 
-    std::ifstream file(file_name, std::ios::binary | std::ios::ate);
-    int_t size = file.tellg() / (1024 * 1024);
-    file.close();
-    int_t t_int = 1;
-    if (ceil(size / global_args.avg_file_size) + 1 < global_args.thread) {
-        t_int = (int_t)(ceil(size / global_args.avg_file_size) + 1);
-    }
-    else {
-        t_int = global_args.thread;
-    }
-    std::string t = std::to_string(t_int);
+    // std::ifstream file(file_name, std::ios::binary | std::ios::ate);
+    // int_t size = file.tellg() / (1024 * 1024);
+    // file.close();
+    // int_t t_int = 1;
+    // if (ceil(size / global_args.avg_file_size) + 1 < global_args.thread) {
+    //     t_int = (int_t)(ceil(size / global_args.avg_file_size) + 1);
+    // }
+    // else {
+    //     t_int = global_args.thread;
+    // }
+    // std::string t = std::to_string(t_int);
     // std::cout << size << " "<< global_args.avg_file_size <<" " << t <<std::endl;
     // Construct command string based on selected alignment package and operating system
     std::string cmnd = "";
     std::string res_file_name = file_name.substr(0, file_name.find(".fasta")) + ".aligned.fasta";
     if (global_args.package == "halign3") {
-         cmnd.append("java -jar ./ext/halign3/share/halign-stmsa.jar ")
-             .append("-t ").append(t).append(" -o ").append(res_file_name).append(" ").append(file_name);
+        cmnd.append("java -jar ./ext/halign3/share/halign-stmsa.jar ")
+            .append(" -o ").append(res_file_name).append(" ").append(file_name);
 #if (defined(__linux__))
-         cmnd.append(" > /dev/null");
+        cmnd.append(" > /dev/null");
 #else 
-         cmnd.append(" > NUL");
+        cmnd.append(" > NUL");
 #endif
     } else if (global_args.package == "halign2") {
         cmnd.append("java -jar ./ext/halign2/HAlign2.1.jar ")
@@ -746,15 +751,15 @@ std::string align_fasta(std::string file_name) {
         
 #if (defined(__linux__))
         cmnd.append("./ext/mafft/linux/usr/libexec/mafft/disttbfast ")
-            .append("-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C ")
-            .append(t).append(" -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -i ")
+            .append("-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O")
+            .append(" -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -i ")
             .append(file_name).append(" > ")
             .append(res_file_name);
         cmnd.append(" 2> /dev/null");
 #else
         cmnd.append(".\\ext\\mafft\\win\\usr\\lib\\mafft\\disttbfast.exe ")
-            .append("-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C ")
-            .append(t).append(" -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -i ")
+            .append("-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O ")
+            .append(" -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -i ")
             .append(file_name).append(" > ")
             .append(res_file_name);
         cmnd.append(" 2> NUL");   
@@ -770,20 +775,18 @@ std::string align_fasta(std::string file_name) {
             print_table_line(out);
             cmnd = "";
 #if (defined(__linux__))
-            cmnd.append("./FMAlign2 ")
+            cmnd.append("mpirun ./FMAlign2 ")
                 .append("-i ").append(file_name)
                 .append(" -o ").append(res_file_name)
                 .append(" -p ").append(global_args.package)
-                .append(" -t ").append(t)
                 .append(" -v 0")
                 .append(" -d ").append(std::to_string(global_args.degree+1));
             cmnd.append(" &> /dev/null");
 #else
-            cmnd.append("./FMAlign2.exe ")
+            cmnd.append("mpirun ./FMAlign2.exe ")
                 .append("-i ").append(file_name)
                 .append(" -o ").append(res_file_name)
                 .append(" -p ").append(global_args.package)
-                .append(" -t ").append(t)
                 .append(" -v 0")
                 .append(" -d ").append(std::to_string(global_args.degree+1));
             cmnd.append(" &> NUL");
@@ -1182,6 +1185,7 @@ void refinement(std::vector<std::string>& data1, std::vector<std::string>& data2
 * @return std::vector<std::vectorstd::string> A vector of vectors containing the concatenated sequence data.
 */
 std::vector<std::vector<std::string>> concat_chain_and_parallel(std::vector<std::vector<std::string>>& chain_string, std::vector<std::vector<std::string>>& parallel_string) {
+std::cout << "iniciou" << std::endl;
     // Determine the number of sequences in each set of data.
     uint_t seq_num = parallel_string[0].size();
     // Determine the number of sets of chain and parallel data.
