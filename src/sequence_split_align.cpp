@@ -139,7 +139,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
 
     // Initialize ParallelAlignParams structure for each parallel range
-    std::vector<hpx::future<void>> futures;
+    // std::vector<hpx::future<void>> futures;
 
     hpx::experimental::for_loop(hpx::execution::par, 0, parallel_num, [&](int i) {
         parallel_params[i].data = &data;
@@ -173,7 +173,9 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     seq2profile(concat_string, data, concat_range, fragment_len);
     double seq2profile_time = timer.elapsed_time();
 
-    concat_alignment(concat_string, name);
+    hpx::future<void> alignment_future = hpx::async([&]() {
+        concat_alignment(concat_string, name);
+    });
 
     s.str("");
     s << std::fixed << std::setprecision(2) << seq2profile_time;
@@ -182,6 +184,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         print_table_line(output);
         print_table_divider();
     }
+    alignment_future.get();
 
     hpx::distributed::barrier::synchronize();
     return;
