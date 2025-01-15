@@ -128,6 +128,42 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         }
     }
 
+    // Linearize chain_string para um buffer contíguo
+std::string linear_chain_string;
+for (const auto& chain : chain_string) {
+    for (const auto& str : chain) {
+        linear_chain_string += str; // Concatena todas as strings
+    }
+}
+
+// Determine o tamanho local e envie os tamanhos para todos os processos
+uint_t local_size = linear_chain_string.size();
+std::vector<int> sizes(world_size);
+MPI_Allgather(&local_size, 1, MPI_UNSIGNED, sizes.data(), 1, MPI_UNSIGNED, MPI_COMM_WORLD);
+
+// Calcula os deslocamentos (offsets) para os dados recebidos
+std::vector<int> displs(world_size, 0);
+for (uint_t i = 1; i < world_size; ++i) {
+    displs[i] = displs[i - 1] + sizes[i - 1];
+}
+uint_t total_size = displs.back() + sizes.back();
+
+// Aloca espaço para receber todos os dados linearizados
+std::vector<char> gathered_chain_string(total_size);
+
+// Realiza a operação de MPI_Allgatherv
+MPI_Allgatherv(linear_chain_string.data(), local_size, MPI_CHAR,
+               gathered_chain_string.data(), sizes.data(), displs.data(), MPI_CHAR, MPI_COMM_WORLD);
+
+// Reconstrói chain_string a partir dos dados recebidos
+chain_string.clear();
+chain_string.resize(chain_num);
+for (uint_t i = 0, idx = 0; i < chain_num; ++i) {
+    for (uint_t j = 0; j < seq_num; ++j) {
+        chain_string[i].push_back(std::string(1, gathered_chain_string[idx++]));
+    }
+}
+
     params.clear();
  
     // Calculate SW expand time and print status message
