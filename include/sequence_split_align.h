@@ -60,16 +60,7 @@ struct ParallelAlignParams {
 	std::vector<std::vector<std::pair<int_t, int_t>>>::iterator parallel_range;
 	uint_t task_index;
 	std::vector<std::vector<std::string>>::iterator result_store;
-
-    // To create an hpx action
-    void operator()() const
-    {
-        parallel_align(&parallel_params[task_index]);
-    }
 };
-
-// Define an action for the parallel task
-using parallel_task_action = hpx::actions<decltype(&parallel_task::operator()), &parallel_task::operator()>;
 
 /**
 * @brief Generates a random string of the specified length.

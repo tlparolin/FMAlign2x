@@ -83,7 +83,9 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     }
 
     // Generate a random string to append to temporary file names
-    random_file_end = generateRandomString(10);
+    hpx::future<std::string>random_file_end = hpx::async([]() {
+        return generateRandomString(10); 
+    });
 
     std::string output = "";
     Timer timer;
@@ -141,13 +143,19 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     // Initialize ParallelAlignParams structure for each parallel range
     // std::vector<hpx::future<void>> futures;
 
-    hpx::experimental::for_loop(hpx::execution::par, 0, parallel_num, [&](int i) {
-        parallel_params[i].data = &data;
-        parallel_params[i].parallel_range = parallel_align_range.begin() + i;
-        parallel_params[i].task_index = i;
-        parallel_params[i].result_store = parallel_string.begin() + i;
-        parallel_align(&parallel_params[i]);
-    });
+    std::vector<hpx::future<void>> futures;
+for (uint_t i = 0; i < parallel_num; ++i) {
+    futures.push_back(hpx::async([&](int index) {
+        parallel_params[index].data = &data;
+        parallel_params[index].parallel_range = parallel_align_range.begin() + index;
+        parallel_params[index].task_index = index;
+        parallel_params[index].result_store = parallel_string.begin() + index;
+        parallel_align(&parallel_params[index]);
+    }, i));
+}
+
+// Espera todas as tarefas terminarem
+hpx::wait_all(futures);
 
     // Remove temporary files created during parallel execution
     hpx::post([parallel_num]() { 
@@ -164,13 +172,27 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     }
     
     timer.reset();
-    // Concatenate the chains and parallel ranges
-    std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
-    // Concatenate the chain strings and parallel strings
-    std::vector<std::vector<std::string>> concat_string = concat_chain_and_parallel(chain_string, parallel_string);
-    std::vector<uint_t> fragment_len = get_first_nonzero_lengths(concat_string);
+    hpx::future<std::vector<std::vector<std::pair<int_t, int_t>>>> future_concat_range = hpx::async([&]() {
+        return concat_chain_and_parallel_range(chain, parallel_align_range);
+    });
 
+    hpx::future<std::vector<std::vector<std::string>>> future_concat_string = hpx::async([&]() {
+        return concat_chain_and_parallel(chain_string, parallel_string);
+    });
+
+    auto concat_string = future_concat_string.get();
+
+    hpx::future<std::vector<uint_t>> future_fragment_len = hpx::async([&]() {
+        return get_first_nonzero_lengths(concat_string);
+    });
+
+    // Esperar os resultados das tarefas assíncronas
+    std::vector<uint_t> fragment_len = future_fragment_len.get();
+    auto concat_range = future_concat_range.get();
+
+    // Agora, executar o seq2profile após as tarefas paralelizadas
     seq2profile(concat_string, data, concat_range, fragment_len);
+
     double seq2profile_time = timer.elapsed_time();
 
     hpx::future<void> alignment_future = hpx::async([&]() {
@@ -604,9 +626,6 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(std::
 * the index of the current task, and a pointer to the storage for the aligned sequences.
 * @return NULL
 */
-// Define the boilerplate code necessary for the function 'align_fasta' to be invoked as an HPX action.
-HPX_PLAIN_ACTION(align_fasta, align_fasta_action)
-
 void* parallel_align(void* arg) {
     // Cast the input parameters to the correct struct type
     ParallelAlignParams* ptr = static_cast<ParallelAlignParams*>(arg);
@@ -636,38 +655,17 @@ void* parallel_align(void* arg) {
     }
     file.close();
 
-    // Get a list of all available localities
-    std::vector<hpx::id_type> localities = hpx::find_all_localities();
+    // Call the align_fasta function to align the sequences in the file
+    std::string res_file_name = align_fasta(file_name);
 
-    // Prepare futures for alignment tasks
-    std::vector<hpx::future<std::string>> align_futures;
-    align_futures.reserve(localities.size());
 
-    // Divide tasks among localities
-    for (hpx::id_type const& node : localities) {
-        // Distribute task to each node using align_fasta_action
-        typedef align_fasta_action action_type;
-        align_futures.push_back(hpx::async<action_type>(node, file_name));
-    }
-
-    // Wait for all alignments to complete
-    hpx::wait_all(align_futures);
-
-    // Collect results from all futures
     std::vector<std::string> aligned_seq;
-    for (auto& f : align_futures) {
-        aligned_seq.push_back(f.get());  // Each future contains the result file path
-    }
-
-    // Process results
+    std::vector<std::string> aligned_name;
+    read_data(res_file_name.c_str(), aligned_seq, aligned_name, false);
     std::vector<std::string> final_aligned_seq(seq_num, "");
-    for (const auto& result_file : aligned_seq) {
-        std::vector<std::string> aligned_seq_content, aligned_names;
-        read_data(result_file.c_str(), aligned_seq_content, aligned_names, false);
-
-        for (size_t i = 0; i < aligned_seq_index.size(); ++i) {
-            final_aligned_seq[aligned_seq_index[i]] = aligned_seq_content[i];
-        }
+    // Map the aligned sequences back to their original indices in the input data vector
+    for (uint_t i = 0; i < aligned_seq_index.size(); i++) {
+        final_aligned_seq[aligned_seq_index[i]] = aligned_seq[i];
     }
    
     // Store the aligned sequences in the result storage

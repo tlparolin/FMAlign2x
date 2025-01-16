@@ -685,9 +685,9 @@ void sort_mem(std::vector<mem> &mems, std::vector<std::string> data) {
         compute_mem_avg_pos(m);
     }
     // sort mems by average position
-    hpx::sort(mems.begin(), mems.end(), [](const mem& m1, const mem& m2) {
+    hpx::sort(hpx::execution::par, mems.begin(), mems.end(), [](const mem& m1, const mem& m2) {
         return m1.avg_pos < m2.avg_pos;
-        });
+    });
     // assign mem_index based on position in sorted vector
     for (uint_t i = 0; i < mems.size(); i++) {
         *mems[i].mem_index = i;
