@@ -39,6 +39,7 @@
 #include <sstream>
 #include <hpx/algorithm.hpp>
 #include <hpx/execution.hpp>
+#include <hpx/iostream.hpp>
 #include <hpx/include/parallel_for_loop.hpp>
 
 struct sub_string {

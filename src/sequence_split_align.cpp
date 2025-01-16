@@ -78,7 +78,7 @@ std::string random_file_end;
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> chain){
     // Print status message
     if (global_args.verbose) {
-        std::cout << "#                Parallel Aligning...                       #" << std::endl;
+        hpx::cout << "#                Parallel Aligning...                       #" << std::endl;
         print_table_divider();
     }
 
@@ -186,7 +186,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     }
     alignment_future.get();
 
-    hpx::distributed::barrier::synchronize();
+    //hpx::distributed::barrier::synchronize();
     return;
 }
 
@@ -321,7 +321,7 @@ void* expand_chain(void* arg) {
     const std::vector<std::string> data = *(ptr->data);
     std::vector<std::vector<std::pair<int_t, int_t>>> chain = *(ptr->chain);
     const uint_t chain_index = ptr->chain_index;
-    // std::cout << "in" << chain_index << '\n';
+    // hpx::cout << "in" << chain_index << '\n';
     // Get the number of sequences in the data vector and the number of chains in the current chain
     uint_t seq_num = data.size();
     uint_t chain_num = chain[0].size();
@@ -669,7 +669,7 @@ void* parallel_align(void* arg) {
             final_aligned_seq[aligned_seq_index[i]] = aligned_seq_content[i];
         }
     }
-
+   
     // Store the aligned sequences in the result storage
     *(ptr->result_store) = final_aligned_seq;
 
@@ -694,7 +694,7 @@ std::string align_fasta(std::string file_name) {
         t_int = global_args.thread;
     }
     std::string t = std::to_string(t_int);
-    // std::cout << size << " "<< global_args.avg_file_size <<" " << t <<std::endl;
+    // hpx::cout << size << " "<< global_args.avg_file_size <<" " << t <<std::endl;
     // Construct command string based on selected alignment package and operating system
     std::string cmnd = "";
     std::string res_file_name = file_name.substr(0, file_name.find(".fasta")) + ".aligned.fasta";
@@ -857,7 +857,7 @@ void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vect
     hpx::sort(missing_fragment_count.begin(), missing_fragment_count.end(), cmp);
 #if DEBUG
     for (int_t i = 0; i < missing_fragment_count.size(); i++) {
-        std::cout << missing_fragment_count[i].first << " "  << missing_fragment_count[i].second << std::endl;
+        hpx::cout << missing_fragment_count[i].first << " "  << missing_fragment_count[i].second << std::endl;
     }
 #endif // 
 
@@ -868,14 +868,14 @@ void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vect
         if (missing_count <= 0) {
             continue;
         }
-        // std::cout << seq_index << std::endl;
+        // hpx::cout << seq_index << std::endl;
         bool if_start = false;
         std::vector<std::vector<std::string>>::iterator left_it = concat_string.begin();
         std::vector<std::vector<std::string>>::iterator right_it = concat_string.begin();
         std::vector<std::vector<std::string>>::iterator cur_it = concat_string.begin();
         for (; cur_it != concat_string.end(); cur_it++) {
             std::vector<std::string>cur_vec = *cur_it;
-            // std::cout << cur_vec[seq_index].length() << " " << fragment_len[cur_it - concat_string.begin()] << " " << concat_range[cur_it - concat_string.begin()][seq_index].first << std::endl;
+            // hpx::cout << cur_vec[seq_index].length() << " " << fragment_len[cur_it - concat_string.begin()] << " " << concat_range[cur_it - concat_string.begin()][seq_index].first << std::endl;
             // if (cur_vec[seq_index].length() != fragment_len[cur_it - concat_string.begin()]) {
             if (concat_range[cur_it - concat_string.begin()][seq_index].first == -1) {
                 if (!if_start) {
@@ -926,10 +926,10 @@ std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_ind
 
     std::string seq_content = data[seq_index].substr(seq_begin, seq_end - seq_begin);
 #if DEBUG
-    std::cout << seq_content << std::endl;
-    std::cout << concat_range.size() << " " << concat_range[0].size() << std::endl;
-    std::cout << left_index << " " << right_index << " " << seq_index << std::endl;
-    std::cout << seq_end << " " << seq_begin << " " << data[seq_index].length() << std::endl;
+    hpx::cout << seq_content << std::endl;
+    hpx::cout << concat_range.size() << " " << concat_range[0].size() << std::endl;
+    hpx::cout << left_index << " " << right_index << " " << seq_index << std::endl;
+    hpx::cout << seq_end << " " << seq_begin << " " << data[seq_index].length() << std::endl;
 #endif // DEBUG
 
     if (seq_content.length() == 0) {
@@ -1031,7 +1031,7 @@ std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_ind
     }
     concat_string[left_index][seq_index] = align_res[align_res.size()-1];
 #if DEBUG
-    std::cout << align_res[align_res.size() - 1] << std::endl;
+    hpx::cout << align_res[align_res.size() - 1] << std::endl;
 #endif // DEBUG
 
     // Loop through missing profile sequence indices and update concat_string accordingly

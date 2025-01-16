@@ -146,7 +146,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
     catch (const std::bad_alloc& e) { // Catch any bad allocations and print an error message.
         print_table_bound();
         std::cerr << "Error: " << e.what() << std::endl;
-        std::cout << "Program Exit!" << std::endl;
+        hpx::cout << "Program Exit!" << std::endl;
         exit(1);
     }
 

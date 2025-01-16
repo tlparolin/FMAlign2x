@@ -49,7 +49,7 @@ double Timer::elapsed_time() const {
 */
 void read_data(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, bool verbose = true){
     if (verbose && global_args.verbose) {
-        std::cout << "#                   Reading Data...                         #" << std::endl;
+        hpx::cout << "#                   Reading Data...                         #" << std::endl;
         print_table_divider();
     }
     std::string output = "";
@@ -185,21 +185,21 @@ void ArgParser::add_argument_help(const std::string& name, const std::string& he
 }
 
 void ArgParser::print_help() const {
-    std::cout << "Usage: FMAlign2 [OPTIONS]\n\n";
-    std::cout << "Options:\n";
+    hpx::cout << "Usage: FMAlign2 [OPTIONS]\n\n";
+    hpx::cout << "Options:\n";
 
     for (const auto& p : args_) {
-        std::cout << "  -" << p.first;
+        hpx::cout << "  -" << p.first;
 
         if (!p.second.required) {
-            std::cout << " (optional)";
+            hpx::cout << " (optional)";
         }
 
         if (!p.second.default_value.empty()) {
-            std::cout << " [default: " << p.second.default_value << "]";
+            hpx::cout << " [default: " << p.second.default_value << "]";
         }
 
-        std::cout << "\n    " << p.second.help_text << "\n\n";
+        hpx::cout << "\n    " << p.second.help_text << "\n\n";
     }
 }
 
@@ -266,7 +266,7 @@ bool ArgParser::has(const std::string& name) const {
 */
 void print_algorithm_info() {
     print_table_bound();
-    std::cout << "#               FMAlign2 algorithm info                     #" << std::endl;
+    hpx::cout << "#               FMAlign2 algorithm info                     #" << std::endl;
     print_table_divider();
 #if M64
     std::string output = "Mode: 64 bit";
@@ -308,15 +308,15 @@ void print_algorithm_info() {
 }
 
 void print_table_line(const std::string &output) {
-    std::cout << "# " << std::left << std::setw(TABLE_LEN-2) << std::setfill(' ') << output << "#" << std::endl;
+    hpx::cout << "# " << std::left << std::setw(TABLE_LEN-2) << std::setfill(' ') << output << "#" << std::endl;
 }
 
 void print_table_divider() {
-    std::cout << "#" << std::right << std::setw(TABLE_LEN) << std::setfill('-') << "#" << std::endl;
+    hpx::cout << "#" << std::right << std::setw(TABLE_LEN) << std::setfill('-') << "#" << std::endl;
 }
 
 void print_table_bound() {
-    std::cout << "#" << std::right << std::setw(TABLE_LEN) << std::setfill('#') << "#" << std::endl;
+    hpx::cout << "#" << std::right << std::setw(TABLE_LEN) << std::setfill('#') << "#" << std::endl;
 }
 
 

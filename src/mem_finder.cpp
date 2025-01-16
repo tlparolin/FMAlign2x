@@ -287,7 +287,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<me
  */
 std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data){
     if (global_args.verbose) {
-        std::cout << "#                    Finding MEM...                         #" << std::endl;
+        hpx::cout << "#                    Finding MEM...                         #" << std::endl;
         print_table_divider();
     }
     
