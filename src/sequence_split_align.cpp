@@ -123,46 +123,68 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 
     // Only active ranks will run
     if (world_rank < effective_world_size) {
+        // Initialize ExpandChainParams structure for each chain pair
+        #pragma omp parallel for num_threads(global_args.thread)
         for (uint_t i = chain_num_start; i < chain_num_end; i++) {
             expand_chain(&params[i]);
         }
     }
 
-    // Linearize chain_string para um buffer contíguo
-std::string linear_chain_string;
-for (const auto& chain : chain_string) {
-    for (const auto& str : chain) {
-        linear_chain_string += str; // Concatena todas as strings
+    // Linearize chain_string
+    std::string linear_chain_string;
+    for (const auto& chain : chain_string) {
+        for (const auto& str : chain) {
+            uint_t str_size = str.size();
+            linear_chain_string.append(reinterpret_cast<const char*>(&str_size), sizeof(uint_t)); // Adiciona o tamanho da string
+            linear_chain_string.append(str); // Adiciona o conteúdo da string
+        }
     }
-}
 
-// Determine o tamanho local e envie os tamanhos para todos os processos
-uint_t local_size = linear_chain_string.size();
-std::vector<int> sizes(world_size);
-MPI_Allgather(&local_size, 1, MPI_UNSIGNED, sizes.data(), 1, MPI_UNSIGNED, MPI_COMM_WORLD);
+    // Determine local sizes to gather data
+    uint_t local_size = linear_chain_string.size();
+    std::vector<int> sizes(world_size, 0); // Alterado para std::vector<int>
+    MPI_Allgather(&local_size, 1, MPI_UNSIGNED, sizes.data(), 1, MPI_UNSIGNED, MPI_COMM_WORLD);
 
-// Calcula os deslocamentos (offsets) para os dados recebidos
-std::vector<int> displs(world_size, 0);
-for (uint_t i = 1; i < world_size; ++i) {
-    displs[i] = displs[i - 1] + sizes[i - 1];
-}
-uint_t total_size = displs.back() + sizes.back();
-
-// Aloca espaço para receber todos os dados linearizados
-std::vector<char> gathered_chain_string(total_size);
-
-// Realiza a operação de MPI_Allgatherv
-MPI_Allgatherv(linear_chain_string.data(), local_size, MPI_CHAR,
-               gathered_chain_string.data(), sizes.data(), displs.data(), MPI_CHAR, MPI_COMM_WORLD);
-
-// Reconstrói chain_string a partir dos dados recebidos
-chain_string.clear();
-chain_string.resize(chain_num);
-for (uint_t i = 0, idx = 0; i < chain_num; ++i) {
-    for (uint_t j = 0; j < seq_num; ++j) {
-        chain_string[i].push_back(std::string(1, gathered_chain_string[idx++]));
+    // Calculate displacements
+    std::vector<int> displs(world_size, 0); // changed to std::vector<int>
+    for (int i = 1; i < world_size; ++i) {
+        displs[i] = displs[i - 1] + sizes[i - 1];
     }
-}
+    int total_size = displs.back() + sizes.back(); // changed to int
+
+    // Space for linearized data
+    std::vector<char> gathered_chain_string(total_size, 0);
+
+    // Realizar a operação de MPI_Allgatherv
+    MPI_Allgatherv(linear_chain_string.data(), local_size, MPI_CHAR,
+                gathered_chain_string.data(), sizes.data(), displs.data(), MPI_CHAR, MPI_COMM_WORLD);
+
+
+    // Chain_string rank 0 building
+    if (world_rank == 0) {
+        chain_string.clear();
+        chain_string.resize(chain_num);
+
+        uint_t idx = 0;
+        for (uint_t i = 0; i < chain_num; ++i) {
+            for (uint_t j = 0; j < seq_num; ++j) {
+                if (idx + sizeof(uint_t) > total_size) {
+                    throw std::runtime_error("Buffer overflow while reconstructing chain_string");
+                }
+                // Next string size
+                uint_t str_size = *reinterpret_cast<const uint_t*>(&gathered_chain_string[idx]);
+                idx += sizeof(uint_t);
+
+                if (idx + str_size > total_size) {
+                    throw std::runtime_error("Buffer overflow while reconstructing chain_string");
+                }
+                // Get string and add to chain
+                std::string str(&gathered_chain_string[idx], str_size);
+                idx += str_size;
+                chain_string[i].push_back(std::move(str));
+            }
+        }
+    }
 
     params.clear();
  
@@ -226,10 +248,8 @@ for (uint_t i = 0, idx = 0; i < chain_num; ++i) {
     }
     // Only active ranks should process tasks
     if (world_rank < effective_world_size) {
+        #pragma omp parallel for num_threads(global_args.thread)
         for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
-            if (i >= parallel_align_range.size()) {
-                break;
-            }
             parallel_params[i].data = &data;
             parallel_params[i].parallel_range = parallel_align_range.begin() + i;
             parallel_params[i].task_index = i;
@@ -262,7 +282,6 @@ for (uint_t i = 0, idx = 0; i < chain_num; ++i) {
         std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
         // Concatenate the chain strings and parallel strings
         std::vector<std::vector<std::string>> concat_string = concat_chain_and_parallel(chain_string, parallel_string);
-std::cout << "Rank " << world_rank << " executou: " << "concat_chain_and_parallel" << std::endl;
 
         std::vector<uint_t> fragment_len = get_first_nonzero_lengths(concat_string);
 
@@ -279,6 +298,7 @@ std::cout << "Rank " << world_rank << " executou: " << "concat_chain_and_paralle
             print_table_divider();
         }
     }
+
     return;
 }
 
@@ -1212,8 +1232,6 @@ void refinement(std::vector<std::string>& data1, std::vector<std::string>& data2
     }
 }
 
-
-
 /**
 * @brief Concatenate two sets of sequence data (chain and parallel) into a single set of concatenated data.
 * @param chain_string A vector of vectors containing the chain sequence data.
@@ -1221,7 +1239,6 @@ void refinement(std::vector<std::string>& data1, std::vector<std::string>& data2
 * @return std::vector<std::vectorstd::string> A vector of vectors containing the concatenated sequence data.
 */
 std::vector<std::vector<std::string>> concat_chain_and_parallel(std::vector<std::vector<std::string>>& chain_string, std::vector<std::vector<std::string>>& parallel_string) {
-std::cout << "iniciou" << std::endl;
     // Determine the number of sequences in each set of data.
     uint_t seq_num = parallel_string[0].size();
     // Determine the number of sets of chain and parallel data.

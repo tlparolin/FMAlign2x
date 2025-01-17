@@ -34,6 +34,7 @@
 #endif
 #include <random>
 #include <climits>
+#include <numeric>
 
 const std::string TMP_FOLDER = "./temp/";
 

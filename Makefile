@@ -1,5 +1,5 @@
 CXX = mpic++
-CXXFLAGS = -Wall -std=c++20
+CXXFLAGS = -Wall -std=c++20 -fopenmp
 CC = mpicc
 CFLAGS = 
 
