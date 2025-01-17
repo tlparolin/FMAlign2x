@@ -121,28 +121,23 @@ void read_data(const char* data_path, std::vector<std::string>& data, std::vecto
 
 void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, 
                    int world_rank, int world_size, bool verbose) {
-    if (world_rank == 0 && verbose && global_args.verbose) {
-        std::cout << "#                   Reading Data...                         #" << std::endl;
-        print_table_divider();
-    }
     std::string output = "";
     std::string str_data_path = data_path;
-    // check weather the input path could be accessed 
 
+    // check weather the input path could be accessed 
     if (access_file(data_path)) {
         if (verbose && global_args.verbose) {
-            output = "Rank: " + std::to_string(world_rank) + " " + str_data_path + " could be accessed";
+            output = "Rank [" + std::to_string(world_rank) + "] - Successfully accessed the file at " + str_data_path;
             print_table_line(output);
         }
     }
     else {
         print_table_bound();
-        output = "Rank " + std::to_string(world_rank) + " Error:" + str_data_path + " could not be accessed, Please check if the path of the input data is correct or if the data exists!";
+        output = "Rank [" + std::to_string(world_rank) + "] - < ERROR >" + str_data_path + " could not be accessed, Please check if the path of the input data is correct or if the data exists!";
         std::cerr << output << std::endl;
         std::cerr << "Program Exit!" << std::endl;
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    
 
     FILE* f_pointer = fopen(data_path, "r");
     kseq_t* file_t = kseq_init(fileno(f_pointer));
@@ -161,19 +156,19 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
     kseq_destroy(file_t);
     fclose(f_pointer);
 
-    // Calculate the mean lenght os sequences
+    // Calculate overlap
     double mean_length = static_cast<double>(merged_length) / data.size();
-    int min_mem_length = ceil(pow(max_length, 1/(global_args.degree+2)));
+    int min_mem_length = ceil(pow(mean_length, 1/(global_args.degree+2)));
     min_mem_length = min_mem_length > 30 ? min_mem_length : 30;
     min_mem_length = min_mem_length < 2000 ? min_mem_length : 2000;
     int overlap = 2 * min_mem_length;
 
-    // Verifica se o uso de MPI é necessário
-    if (data.size() < 2 * static_cast<size_t>(world_size) || mean_length < min_mem_length) {
+    // Check if it's worth using mpi
+    if (data.size() < 2 * static_cast<size_t>(world_size)) {
         if (world_rank == 0) {
-            std::cerr << "Data is too small for effective MPI usage. Use FMAlign2 original version" << std::endl;
+            std::cerr << "Data is too small for this MPI environment. Adjust mpi run parameters." << std::endl;
         }
-        return;
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
     // Split data into balanced columns across rankings
@@ -183,46 +178,63 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
     size_t start_col = (world_rank == 0) ? 0 : std::max(static_cast<size_t>(0), world_rank * columns_per_rank - overlap);
     size_t end_col = std::min(total_columns, (world_rank + 1) * columns_per_rank + overlap);
     if (verbose && global_args.verbose) {
-        std::string output = "Rank " + std::to_string(world_rank) + " processing columns [" + std::to_string(start_col) + ", " + std::to_string(end_col) + "].";
+        std::string output = "Rank [" + std::to_string(world_rank) + "] - Processing columns from " + std::to_string(start_col) + " to " + std::to_string(end_col);
         print_table_line(output);
     }
 
     // Subdivides the sequences for this rank
+    // Store the size of data alocated for each rank
     std::vector<std::string> local_data;
+    size_t local_data_size = 0;
     for (const auto& seq : data) {
         local_data.push_back(seq.substr(start_col, end_col - start_col));
+        local_data_size += local_data.back().size();
     }
 
     // Replace global data with local data for this rank
     data = std::move(local_data);
 
-    if(verbose&& global_args.verbose && merged_length + data.size() > UINT32_MAX && M64 == 0){
+    // Check if 32 bits program can handle data
+    uint_t error_64 = 0;
+    uint_t all_error_64 = 0;
+    if (merged_length + data.size() > UINT32_MAX && M64 == 0) {
+        error_64 = 1;
+    }
+    MPI_Reduce(&error_64, &all_error_64, 1, MPI_UNSIGNED, MPI_LOR, 0, MPI_COMM_WORLD);
+    if (world_rank == 0 && verbose && global_args.verbose && all_error_64 > 0) {
         print_table_bound();
-        std::cerr << "Error: The input data is too large and the 32-bit program may not produce correct results. Please compile a 64-bit program using the M64 parameter." << std::endl;
+        std::cerr << "Error: The input data is too large, and the 32-bit program may not produce correct results." << std::endl;
+        std::cerr << "Please compile a 64-bit program using the M64 parameter." << std::endl;
         std::cerr << "Program Exit!" << std::endl;
-        exit(1);
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    #if M64
-    if (verbose && global_args.verbose) {
-        std::stringstream s;
-        s << std::fixed << std::setprecision(2) << merged_length / pow(2, 30);
-        output = "Rank " + std::to_string(world_rank) + " Data Memory Usage: " + s.str() + " GB";
-        print_table_line(output);
+
+    // Calculate the local memory usage for each rank
+    // Gather values at rank 0
+    // Rank 0 show message for all ranks
+    double local_memory_usage = static_cast<double>(local_data_size) / (1024 * 1024); // em MB
+    double* all_memory_usage = nullptr;
+    if (world_rank == 0) {
+        all_memory_usage = new double[world_size];
     }
-    
-    #else
-    if (verbose && global_args.verbose) {
-        std::stringstream s;
-        s << std::fixed << std::setprecision(2) << merged_length / pow(2, 20);
-        output = "Rank " + std::to_string(world_rank) + " Data Memory Usage: " + s.str() + " MB";
-        print_table_line(output);
-    }
-    #endif
-    if (verbose && global_args.verbose) {
-        output = "Rank " + std::to_string(world_rank) + " Sequence Number: " + std::to_string(data.size());
-        print_table_line(output);
+    MPI_Gather(&local_memory_usage, 1, MPI_DOUBLE, all_memory_usage, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    if (world_rank == 0 && verbose && global_args.verbose) {
+        print_table_bound();
+        for (int i = 0; i < world_size; i++) {
+            std::stringstream s;
+#if M64  // compiled with M64?
+            s << std::fixed << std::setprecision(2) << all_memory_usage[i] / 1024;  // Convert MB to GB
+            output = "Rank [" + std::to_string(i) + "] - Data Memory Usage: " + s.str() + " GB";
+#else
+            s << std::fixed << std::setprecision(2) << all_memory_usage[i];  // MB
+            output = "Rank [" + std::to_string(i) + "] - Data Memory Usage: " + s.str() + " MB";
+#endif
+            print_table_line(output);
+        }
         print_table_divider();
+        delete[] all_memory_usage;  // Liberação da memória alocada
     }
+
     return;
 }
 
@@ -373,7 +385,7 @@ bool ArgParser::has(const std::string& name) const {
 */
 void print_algorithm_info(int total_threads) {
     print_table_bound();
-    std::cout << "#               FMAlign2 algorithm info                     #" << std::endl;
+    std::cout << "#                         FMAlign2 algorithm info                               #" << std::endl;
     print_table_divider();
 #if M64
     std::string output = "Mode: 64 bit";

@@ -44,7 +44,7 @@
 #include <sstream>
 #include <mpi.h>
 
-#define TABLE_LEN 60
+#define TABLE_LEN 80
 /**
  * @brief A timer class that measures elapsed time. 
  * This class uses C++11 chrono library to measure elapsed time in seconds with double precision. 
