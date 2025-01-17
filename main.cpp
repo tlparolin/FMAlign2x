@@ -148,7 +148,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
     try {
         // Read data from the input file and store in data and name vectors
         read_data_mpi(global_args.data_path.c_str(), data, name, world_rank, world_size, global_args.verbose);
-
+std::cin.get();
         // Find MEMs in the sequences and split the sequences into fragments for parallel alignment.
         std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data);
 

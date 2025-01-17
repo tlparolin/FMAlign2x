@@ -195,13 +195,7 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
     data = std::move(local_data);
 
     // Check if 32 bits program can handle data
-    uint_t error_64 = 0;
-    uint_t all_error_64 = 0;
-    if (merged_length + data.size() > UINT32_MAX && M64 == 0) {
-        error_64 = 1;
-    }
-    MPI_Reduce(&error_64, &all_error_64, 1, MPI_UNSIGNED, MPI_LOR, 0, MPI_COMM_WORLD);
-    if (world_rank == 0 && verbose && global_args.verbose && all_error_64 > 0) {
+    if (verbose && global_args.verbose && merged_length + data.size() > UINT32_MAX && M64 == 0) {
         print_table_bound();
         std::cerr << "Error: The input data is too large, and the 32-bit program may not produce correct results." << std::endl;
         std::cerr << "Please compile a 64-bit program using the M64 parameter." << std::endl;
@@ -209,30 +203,16 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    // Calculate the local memory usage for each rank
-    // Gather values at rank 0
-    // Rank 0 show message for all ranks
-    double local_memory_usage = static_cast<double>(local_data_size) / (1024 * 1024); // em MB
-    double* all_memory_usage = nullptr;
-    if (world_rank == 0) {
-        all_memory_usage = new double[world_size];
-    }
-    MPI_Gather(&local_memory_usage, 1, MPI_DOUBLE, all_memory_usage, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    if (world_rank == 0 && verbose && global_args.verbose) {
-        print_table_bound();
-        for (int i = 0; i < world_size; i++) {
-            std::stringstream s;
-#if M64  // compiled with M64?
-            s << std::fixed << std::setprecision(2) << all_memory_usage[i] / 1024;  // Convert MB to GB
-            output = "Rank [" + std::to_string(i) + "] - Data Memory Usage: " + s.str() + " GB";
+    if (verbose && global_args.verbose) {
+        std::stringstream s;
+#if M64  // Compilado com M64?
+        s << std::fixed << std::setprecision(2) << local_data_size / (1024.0 * 1024.0 * 1024.0);  // GB
+        output = "Rank [" + std::to_string(world_rank) + "] - Data Memory Usage: " + s.str() + " GB";
 #else
-            s << std::fixed << std::setprecision(2) << all_memory_usage[i];  // MB
-            output = "Rank [" + std::to_string(i) + "] - Data Memory Usage: " + s.str() + " MB";
+        s << std::fixed << std::setprecision(2) << local_data_size / (1024.0 * 1024.0);  // MB
+        output = "Rank [" + std::to_string(world_rank) + "] - Data Memory Usage: " + s.str() + " MB";
 #endif
-            print_table_line(output);
-        }
-        print_table_divider();
-        delete[] all_memory_usage;  // Liberação da memória alocada
+        print_table_line(output);
     }
 
     return;
