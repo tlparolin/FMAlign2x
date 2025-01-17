@@ -119,8 +119,9 @@ void read_data(const char* data_path, std::vector<std::string>& data, std::vecto
     return;
 }
 
-void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, int world_rank, int world_size, bool verbose){
-    if (verbose && global_args.verbose) {
+void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, 
+                   int world_rank, int world_size, bool verbose) {
+    if (world_rank == 0 && verbose && global_args.verbose) {
         std::cout << "#                   Reading Data...                         #" << std::endl;
         print_table_divider();
     }
@@ -130,16 +131,16 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
 
     if (access_file(data_path)) {
         if (verbose && global_args.verbose) {
-            output = str_data_path + " could be accessed";
+            output = "Rank: " + std::to_string(world_rank) + " " + str_data_path + " could be accessed";
             print_table_line(output);
         }
     }
     else {
         print_table_bound();
-        output = "Error:" + str_data_path + " could not be accessed, Please check if the path of the input data is correct or if the data exists!";
+        output = "Rank " + std::to_string(world_rank) + " Error:" + str_data_path + " could not be accessed, Please check if the path of the input data is correct or if the data exists!";
         std::cerr << output << std::endl;
         std::cerr << "Program Exit!" << std::endl;
-        exit(1);
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
     
 
@@ -147,19 +148,53 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
     kseq_t* file_t = kseq_init(fileno(f_pointer));
     
     uint64_t merged_length = 0;
-    int64_t tmp_length = 0; 
-    // stop loop when tmp_length equals -1
-    while ((tmp_length = kseq_read(file_t)) >= 0) // Read one sequence in each iteration of the loop
-    {
-        std::string tmp_data = clean_sequence(file_t -> seq.s);
-        std::string tmp_name = file_t -> name.s;
-        if(file_t->comment.s) tmp_name += file_t->comment.s;
+    size_t max_length = 0;
+    while (kseq_read(file_t) >= 0) {
+        std::string tmp_data = clean_sequence(file_t->seq.s);
+        std::string tmp_name = file_t->name.s;
+        if (file_t->comment.s) tmp_name += file_t->comment.s;
         data.push_back(tmp_data);
         name.push_back(tmp_name);
-        merged_length += tmp_length;
+        merged_length += tmp_data.size();
+        max_length = std::max(max_length, static_cast<size_t>(tmp_data.size()));
     }
     kseq_destroy(file_t);
     fclose(f_pointer);
+
+    // Calculate the mean lenght os sequences
+    double mean_length = static_cast<double>(merged_length) / data.size();
+    int min_mem_length = ceil(pow(max_length, 1/(global_args.degree+2)));
+    min_mem_length = min_mem_length > 30 ? min_mem_length : 30;
+    min_mem_length = min_mem_length < 2000 ? min_mem_length : 2000;
+    int overlap = 2 * min_mem_length;
+
+    // Verifica se o uso de MPI é necessário
+    if (data.size() < 2 * static_cast<size_t>(world_size) || mean_length < min_mem_length) {
+        if (world_rank == 0) {
+            std::cerr << "Data is too small for effective MPI usage. Use FMAlign2 original version" << std::endl;
+        }
+        return;
+    }
+
+    // Split data into balanced columns across rankings
+    size_t total_columns = max_length;
+    size_t columns_per_rank = (total_columns + world_size - 1) / world_size;
+
+    size_t start_col = (world_rank == 0) ? 0 : std::max(static_cast<size_t>(0), world_rank * columns_per_rank - overlap);
+    size_t end_col = std::min(total_columns, (world_rank + 1) * columns_per_rank + overlap);
+    if (verbose && global_args.verbose) {
+        std::string output = "Rank " + std::to_string(world_rank) + " processing columns [" + std::to_string(start_col) + ", " + std::to_string(end_col) + "].";
+        print_table_line(output);
+    }
+
+    // Subdivides the sequences for this rank
+    std::vector<std::string> local_data;
+    for (const auto& seq : data) {
+        local_data.push_back(seq.substr(start_col, end_col - start_col));
+    }
+
+    // Replace global data with local data for this rank
+    data = std::move(local_data);
 
     if(verbose&& global_args.verbose && merged_length + data.size() > UINT32_MAX && M64 == 0){
         print_table_bound();
@@ -171,7 +206,7 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
     if (verbose && global_args.verbose) {
         std::stringstream s;
         s << std::fixed << std::setprecision(2) << merged_length / pow(2, 30);
-        output = "Data Memory Usage: " + s.str() + " GB";
+        output = "Rank " + std::to_string(world_rank) + " Data Memory Usage: " + s.str() + " GB";
         print_table_line(output);
     }
     
@@ -179,12 +214,12 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
     if (verbose && global_args.verbose) {
         std::stringstream s;
         s << std::fixed << std::setprecision(2) << merged_length / pow(2, 20);
-        output = "Data Memory Usage: " + s.str() + " MB";
+        output = "Rank " + std::to_string(world_rank) + " Data Memory Usage: " + s.str() + " MB";
         print_table_line(output);
     }
     #endif
     if (verbose && global_args.verbose) {
-        output = "Sequence Number: " + std::to_string(data.size());
+        output = "Rank " + std::to_string(world_rank) + " Sequence Number: " + std::to_string(data.size());
         print_table_line(output);
         print_table_divider();
     }

@@ -140,6 +140,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         if (global_args.verbose) {
             print_algorithm_info(world_size);
         }
+    }
 
         std::vector<std::string> data;
         std::vector<std::string> name;
@@ -160,6 +161,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
             exit(1);
         }
 
+    if (world_rank == 0){
         double total_time = timer.elapsed_time();
         std::stringstream s;
         s << std::fixed << std::setprecision(2) << total_time;
