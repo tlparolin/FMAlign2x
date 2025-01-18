@@ -119,12 +119,11 @@ void read_data(const char* data_path, std::vector<std::string>& data, std::vecto
     return;
 }
 
-void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, 
-                   int world_rank, int world_size, bool verbose) {
+void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, int world_rank, int world_size, bool verbose){
     std::string output = "";
     std::string str_data_path = data_path;
 
-    // check weather the input path could be accessed 
+    // Check if the input path can be accessed 
     if (access_file(data_path)) {
         if (verbose && global_args.verbose) {
             output = "Rank [" + std::to_string(world_rank) + "] - Successfully accessed the file at " + str_data_path;
@@ -139,60 +138,88 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    FILE* f_pointer = fopen(data_path, "r");
-    kseq_t* file_t = kseq_init(fileno(f_pointer));
-    
-    uint64_t merged_length = 0;
-    size_t max_length = 0;
-    while (kseq_read(file_t) >= 0) {
-        std::string tmp_data = clean_sequence(file_t->seq.s);
-        std::string tmp_name = file_t->name.s;
-        if (file_t->comment.s) tmp_name += file_t->comment.s;
-        data.push_back(tmp_data);
-        name.push_back(tmp_name);
-        merged_length += tmp_data.size();
-        max_length = std::max(max_length, static_cast<size_t>(tmp_data.size()));
-    }
-    kseq_destroy(file_t);
-    fclose(f_pointer);
+    size_t total_length = 0;
+    size_t max_lenght = 0;
+    size_t sequence_count = 0;
 
-    // Calculate overlap
-    double mean_length = static_cast<double>(merged_length) / data.size();
-    int min_mem_length = ceil(pow(mean_length, 1/(global_args.degree+2)));
+    // Rank 0 takes an initial reading to get statistics
+    if (world_rank == 0) {
+        FILE* f_pointer = fopen(data_path, "r");
+        kseq_t* file_t = kseq_init(fileno(f_pointer));
+
+        while (kseq_read(file_t) >= 0) {
+            total_length += static_cast<size_t>(file_t->seq.l);
+            max_lenght = std::max(max_lenght, static_cast<size_t>(file_t->seq.l));
+            sequence_count ++;
+        }
+        kseq_destroy(file_t);
+        fclose(f_pointer);
+
+         // Broadcast statistics to other ranks
+        for (int i = 1; i < world_size; i++) {
+            MPI_Send(&max_lenght, 1, MPI_UNSIGNED_LONG, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&total_length, 1, MPI_UNSIGNED_LONG, i, 1, MPI_COMM_WORLD);
+            MPI_Send(&sequence_count, 1, MPI_UNSIGNED_LONG, i, 2, MPI_COMM_WORLD);
+        }
+    } else {
+        // Other ranks receive the total number of sequences and maximum length
+        MPI_Recv(&max_lenght, 1, MPI_UNSIGNED_LONG, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&total_length, 1, MPI_UNSIGNED_LONG, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&sequence_count, 1, MPI_UNSIGNED_LONG, 0, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+
+    // Calculate division overlap
+    int min_mem_length = ceil(pow(max_lenght, 1/(global_args.degree+2)));
     min_mem_length = min_mem_length > 30 ? min_mem_length : 30;
     min_mem_length = min_mem_length < 2000 ? min_mem_length : 2000;
     int overlap = 2 * min_mem_length;
 
-    // Check if it's worth using mpi
-    if (data.size() < 2 * static_cast<size_t>(world_size)) {
-        if (world_rank == 0) {
-            std::cerr << "Data is too small for this MPI environment. Adjust mpi run parameters." << std::endl;
-        }
-        MPI_Abort(MPI_COMM_WORLD, 1);
-    }
-
     // Split data into balanced columns across rankings
-    size_t total_columns = max_length;
-    size_t columns_per_rank = (total_columns + world_size - 1) / world_size;
+    size_t avg_length = total_length / sequence_count;
+    size_t columns_per_rank = (avg_length + world_size - 1) / world_size;
+std::cout << columns_per_rank << std::endl;
 
     size_t start_col = (world_rank == 0) ? 0 : std::max(static_cast<size_t>(0), world_rank * columns_per_rank - overlap);
-    size_t end_col = std::min(total_columns, (world_rank + 1) * columns_per_rank + overlap);
+    size_t end_col = std::min(total_length, (world_rank + 1) * columns_per_rank + overlap);
     if (verbose && global_args.verbose) {
         std::string output = "Rank [" + std::to_string(world_rank) + "] - Processing columns from " + std::to_string(start_col) + " to " + std::to_string(end_col);
         print_table_line(output);
     }
 
-    // Subdivides the sequences for this rank
-    // Store the size of data alocated for each rank
-    std::vector<std::string> local_data;
-    size_t local_data_size = 0;
-    for (const auto& seq : data) {
-        local_data.push_back(seq.substr(start_col, end_col - start_col));
-        local_data_size += local_data.back().size();
+    FILE* f_pointer = fopen(data_path, "r");
+    kseq_t* file_t = kseq_init(fileno(f_pointer));
+    
+    // Extracts the subsequence within the column range
+    uint64_t merged_length = 0;
+    while (kseq_read(file_t) >= 0) {
+        // Determines valid interval for this rank
+        size_t seq_length = file_t->seq.l;
+        size_t sub_end = std::min(seq_length, static_cast<size_t>(end_col));
+        std::string_view tmp_data(file_t->seq.s, seq_length);  // Use string_view to avoid copies
+        std::string_view sub_data = tmp_data.substr(start_col, sub_end - start_col);
+        // Cleans
+        std::string cleaned_data = clean_sequence(std::string(sub_data));
+        // Get name
+        std::string tmp_name = file_t->name.s;
+        if (file_t->comment.s) tmp_name += file_t->comment.s;
+        // Store
+        data.push_back(std::move(cleaned_data));
+        name.push_back(std::move(tmp_name));
+        // Update statistics
+        merged_length += cleaned_data.size();
     }
+    kseq_destroy(file_t);
+    fclose(f_pointer);
 
-    // Replace global data with local data for this rank
-    data = std::move(local_data);
+    // Check if it's worth using mpi
+    if (data.size() < 2 * static_cast<size_t>(world_size)) {
+        if (world_rank == 0) {
+            std::cerr << "Data is too small for this MPI environment." << std::endl  
+            << "This may subdivide the file into very small sizes that will not provide good results." << std::endl
+            << "Adjust mpirun parameters." << std::endl;
+        }
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
 
     // Check if 32 bits program can handle data
     if (verbose && global_args.verbose && merged_length + data.size() > UINT32_MAX && M64 == 0) {
@@ -206,10 +233,10 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
     if (verbose && global_args.verbose) {
         std::stringstream s;
 #if M64  // Compilado com M64?
-        s << std::fixed << std::setprecision(2) << local_data_size / (1024.0 * 1024.0 * 1024.0);  // GB
+        s << std::fixed << std::setprecision(2) << data.size() / (1024.0 * 1024.0 * 1024.0);  // GB
         output = "Rank [" + std::to_string(world_rank) + "] - Data Memory Usage: " + s.str() + " GB";
 #else
-        s << std::fixed << std::setprecision(2) << local_data_size / (1024.0 * 1024.0);  // MB
+        s << std::fixed << std::setprecision(2) << data.size() / (1024.0 * 1024.0);  // MB
         output = "Rank [" + std::to_string(world_rank) + "] - Data Memory Usage: " + s.str() + " MB";
 #endif
         print_table_line(output);
