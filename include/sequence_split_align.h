@@ -77,7 +77,7 @@ void split_and_parallel_align(std::vector<std::string> data,
                             std::vector<std::string> name, 
                             std::vector<std::vector<std::pair<int_t, int_t>>> chain, 
                             int world_rank, size_t start_col, size_t end_col, int overlap);
-							
+
 /**
 * @brief Selects columns from a sequence of split points to enable multi thread.
 * @param split_points_on_sequence A vector of vectors of pairs, where each pair represents the start and mem length
@@ -159,7 +159,9 @@ void delete_tmp_folder(uint_t task_count, int world_rank);
 * @param concat_string A 2D vector of strings containing the aligned sequences to concatenate.
 * @param name A vector of strings containing the names of the sequences.
 */
-void concat_alignment(std::vector<std::vector<std::string>>&concat_string, std::vector<std::string> &name, int world_rank);
+void concat_alignment(std::vector<std::vector<std::string>> &concat_string, 
+                    std::vector<std::string> &name, int world_rank, 
+                    size_t start_col, size_t end_col, int overlap);
 
 /**
 * @brief Convert sequence fragments into profile by aligning missing fragments with existing ones.

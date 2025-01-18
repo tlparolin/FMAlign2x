@@ -190,7 +190,7 @@ void split_and_parallel_align(std::vector<std::string> data,
     seq2profile(concat_string, data, concat_range, fragment_len, world_rank);
     double seq2profile_time = timer.elapsed_time();
 
-    concat_alignment(concat_string, name, world_rank);
+    concat_alignment(concat_string, name, world_rank, start_col, end_col, overlap);
 
     s.str("");
     s << std::fixed << std::setprecision(2) << seq2profile_time;
@@ -785,7 +785,9 @@ void delete_tmp_folder(uint_t task_count, int world_rank) {
 * @param concat_string A 2D vector of strings containing the aligned sequences to concatenate.
 * @param name A vector of strings containing the names of the sequences.
 */
-void concat_alignment(std::vector<std::vector<std::string>> &concat_string, std::vector<std::string> &name, int world_rank) {
+void concat_alignment(std::vector<std::vector<std::string>> &concat_string, 
+                    std::vector<std::string> &name, int world_rank, 
+                    size_t start_col, size_t end_col, int overlap) {
     std::string output_path = global_args.output_path + std::to_string(world_rank);
     std::vector<std::string> concated_data(name.size(), "");
     // Concatenate the sequences
