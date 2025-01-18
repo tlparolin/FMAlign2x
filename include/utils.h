@@ -168,7 +168,7 @@ std::string clean_sequence(std::string sequence);
 * sequence coverage, and parallel align method.
 * @return void
 */
-void print_algorithm_info(int total_threads);
+void print_algorithm_info(int total_threads, int world_rank);
 
 void print_table_line(const std::string& output);
 

@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
     parser.add_argument_help("t", "The maximum number of threads that the program runs, the recommended setting is the number of CPUs.");
     parser.add_argument("l", false, "default");
     parser.add_argument_help("l", "The minimum length of MEM, the default value is square root of mean length.");
-    parser.add_argument("c", false, "1");
+    parser.add_argument("c", false, "default");
     parser.add_argument_help("c", "A floating-point parameter that specifies the minimum coverage across all sequences, with values ranging from 0 to 1. The default \
 setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7.");
     parser.add_argument("p", false, "mafft");
@@ -136,12 +136,10 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         return 1;
     }
 
-    if (world_rank == 0) {
-        if (global_args.verbose) {
-            print_algorithm_info(world_size);
-        }
+    if (global_args.verbose) {
+        print_algorithm_info(world_size, world_rank);
     }
-    MPI_Barrier(MPI_COMM_WORLD);
+
     std::vector<std::string> data;
     std::vector<std::string> name;
 
@@ -160,8 +158,6 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         std::cout << "Program Exit!" << std::endl;
         exit(1);
     }
-
-    MPI_Barrier(MPI_COMM_WORLD);
 
     if (world_rank == 0){
         double total_time = timer.elapsed_time();

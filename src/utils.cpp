@@ -390,26 +390,24 @@ bool ArgParser::has(const std::string& name) const {
 * sequence coverage, and parallel align method.
 * @return void
 */
-void print_algorithm_info(int total_threads) {
-    print_table_bound();
-    std::cout << "#                         FMAlign2 algorithm info                               #" << std::endl;
-    print_table_divider();
+void print_algorithm_info(int total_threads, int world_rank) {
+    
 #if M64
-    std::string output = "Mode: 64 bit";
+    std::string output = "Rank [" + std::to_string(world_rank) + "] - Mode: 64 bit";
     print_table_line(output);
 #else
-    std::string output = "Mode: 32 bit";
+    std::string output = "Rank [" + std::to_string(world_rank) + "] - Mode: 32 bit";
     print_table_line(output);
 #endif
-    std::string thread_output = "Ranks: " + std::to_string(total_threads);
+    std::string thread_output = "Rank [" + std::to_string(world_rank) + "] - Check number of Ranks: " + std::to_string(total_threads);
     print_table_line(thread_output);
 
     std::string l_output;
     if (global_args.min_mem_length < 0) {
-        l_output = "Minimum MEM length: square root of mean length";
+        l_output = "Rank [" + std::to_string(world_rank) + "] - Minimum MEM length: square root of mean length";
     }
     else {
-        l_output = "Minimum MEM length: " + std::to_string(global_args.min_mem_length);
+        l_output = "Rank [" + std::to_string(world_rank) + "] - Minimum MEM length: " + std::to_string(global_args.min_mem_length);
     }
     
     print_table_line(l_output);
@@ -419,15 +417,15 @@ void print_algorithm_info(int total_threads) {
 
     std::string c_output;
     if (global_args.min_seq_coverage < 0) {
-        c_output = "Sequence coverage: default";
+        c_output = "Rank [" + std::to_string(world_rank) + "] - Sequence coverage: default";
     }
     else {
-        c_output = "Sequence coverage: " + std::to_string(global_args.min_mem_length);
+        c_output = "Rank [" + std::to_string(world_rank) + "] - Sequence coverage: " + std::to_string(global_args.min_mem_length);
     }
 
     print_table_line(c_output);
 
-    std::string p_output = "Parallel align method: " + global_args.package;
+    std::string p_output = "Rank [" + std::to_string(world_rank) + "] - Parallel align method: " + global_args.package;
     print_table_line(p_output);
 
     print_table_bound();
