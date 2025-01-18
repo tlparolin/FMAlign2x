@@ -98,7 +98,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
  * @return A pointer to the concatenated string.
  * @note The returned string must be deleted by the caller.
 */
-unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n);
+unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n, int world_rank);
 
 /**
  * @brief an LCP (Longest Common Prefix) array and a threshold value,
@@ -109,7 +109,7 @@ unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n
  * @param min_cross_sequence the min number of crossed sequence
  * @return  The output vector of pairs representing the LCP intervals
 */
-std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* lcp_array, int_t threshold, int_t min_cross_sequence, uint_t n);
+std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* lcp_array, int_t threshold, int_t min_cross_sequence, uint_t n, int world_rank);
 
 /**
 *@brief This function converts an LCP interval to a MEM (Maximal Exact Match).

@@ -301,7 +301,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     Timer timer;
     uint_t n = 0;
 
-    unsigned char* concat_data = concat_strings(data, n); 
+    unsigned char* concat_data = concat_strings(data, n, world_rank); 
 
     if (global_args.min_mem_length < 0) {
         int_t l = ceil(pow(n, 1/(global_args.degree+2)));
@@ -353,7 +353,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     int32_t *DA = NULL;
     DA = (int32_t*) malloc(n*sizeof(int32_t));
 #if DEBUG
-    output = "Suffix is constructing...\n";
+    output = "Rank [" + std::to_string(world_rank) + "] - Suffix is constructing...\n";
     print_table_line(output);
 #endif
     timer.reset();
@@ -377,7 +377,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         total_length += data[i].length() + 1;
     }
     // Find all intervals with an LCP >= min_mem_length and <= min_cross_sequence
-    std::vector<std::pair<uint_t, uint_t>> intervals = get_lcp_intervals(LCP, min_mem_length, min_cross_sequence, n);
+    std::vector<std::pair<uint_t, uint_t>> intervals = get_lcp_intervals(LCP, min_mem_length, min_cross_sequence, n, world_rank);
 
     free(LCP);
 
@@ -460,7 +460,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
  * @return A pointer to the concatenated string.
  * @note The returned string must be deleted by the caller.
 */
-unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n) {
+unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n, int world_rank) {
     // Calculate total length of concatenated string
     uint_t total_length = 0;
     for (uint_t i = 0; i < strings.size(); i++) {
@@ -473,7 +473,7 @@ unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n
     unsigned char* concat_data = new unsigned char[total_length];
 
     if (!concat_data) {
-        std::string out = "concat_data could not allocate enough space\n";
+        std::string out = "Rank [" + std::to_string(world_rank) + "] - ERROR: concat_data could not allocate enough space\n";
         print_table_line(out);
         exit(1);
     }
@@ -505,11 +505,11 @@ unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n
  * @param min_cross_sequence the min number of crossed sequence
  * @return  The output vector of pairs representing the LCP intervals
 */
-std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* lcp_array, int_t threshold, int_t min_cross_sequence, uint_t n) {
+std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* lcp_array, int_t threshold, int_t min_cross_sequence, uint_t n, int world_rank) {
 
     std::vector<std::pair<uint_t, uint_t>> intervals;
     if (global_args.verbose) {
-        std::string output = "Minimal cross sequence number: " + std::to_string(min_cross_sequence);
+        std::string output = "Rank [" + std::to_string(world_rank) + "] - Minimal cross sequence number: " + std::to_string(min_cross_sequence);
         print_table_line(output);
     }
     
