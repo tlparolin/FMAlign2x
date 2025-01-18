@@ -932,7 +932,7 @@ std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_ind
     file.open(seq_file_name);
     if (!file.is_open()) {
         std::cerr << "Rank [" << world_rank << "] - Failed to open " << seq_file_name << std::endl;
-        MPI_Abort(MPI_COMM_WORLD, 1);
+        exit(1);
     }
     // write the sequence content to the file in fasta format.
     std::stringstream sstream;
@@ -949,7 +949,7 @@ std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_ind
 
     if (!file.is_open()) {
         std::cerr << "Rank [" << world_rank << "] - Failed to open " << seq_file_name << std::endl;
-        MPI_Abort(MPI_COMM_WORLD, 1);
+        exit(1);
     }
 
     std::vector<uint_t> selected_profile_seq_index;

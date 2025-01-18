@@ -98,7 +98,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
             global_args.filter_mode = tmp_filter_mode;
         }
         else {
-            throw "filer mode --f parameter should be global or local!";
+            throw "filter mode --f parameter should be global or local!";
         }
 
         global_args.verbose = std::stoi(parser.get("v"));
@@ -156,6 +156,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         print_table_bound();
         std::cerr << "Rank [" << std::to_string(world_rank) << "] - Error: " << e.what() << std::endl;
         std::cout << "Program Exit!" << std::endl;
+        print_table_bound();
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
@@ -163,14 +164,11 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << total_time;
     if (global_args.verbose) {
-        print_table_divider();
         output = "Rank [" + std::to_string(world_rank) + "] - Total time: " + s.str() + " seconds.";
         print_table_line(output);
-        print_table_bound();
     }
 
     // Finalizar MPI
     MPI_Finalize();
-
     return 0;
 }

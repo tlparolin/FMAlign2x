@@ -67,6 +67,7 @@ void read_data(const char* data_path, std::vector<std::string>& data, std::vecto
         output = "Error:" + str_data_path + " could not be accessed, Please check if the path of the input data is correct or if the data exists!";
         std::cerr << output << std::endl;
         std::cerr << "Program Exit!" << std::endl;
+        print_table_bound();
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
     
@@ -93,6 +94,7 @@ void read_data(const char* data_path, std::vector<std::string>& data, std::vecto
         print_table_bound();
         std::cerr << "Error: The input data is too large and the 32-bit program may not produce correct results. Please compile a 64-bit program using the M64 parameter." << std::endl;
         std::cerr << "Program Exit!" << std::endl;
+        print_table_bound();
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
     #if M64
@@ -135,6 +137,7 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
         output = "Rank [" + std::to_string(world_rank) + "] - < ERROR >" + str_data_path + " could not be accessed, Please check if the path of the input data is correct or if the data exists!";
         std::cerr << output << std::endl;
         std::cerr << "Program Exit!" << std::endl;
+        print_table_bound();
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
@@ -177,7 +180,6 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
     // Split data into balanced columns across rankings
     size_t avg_length = total_length / sequence_count;
     size_t columns_per_rank = (avg_length + world_size - 1) / world_size;
-std::cout << columns_per_rank << std::endl;
 
     size_t start_col = (world_rank == 0) ? 0 : std::max(static_cast<size_t>(0), world_rank * columns_per_rank - overlap);
     size_t end_col = std::min(total_length, (world_rank + 1) * columns_per_rank + overlap);
@@ -227,6 +229,7 @@ std::cout << columns_per_rank << std::endl;
         std::cerr << "Error: The input data is too large, and the 32-bit program may not produce correct results." << std::endl;
         std::cerr << "Please compile a 64-bit program using the M64 parameter." << std::endl;
         std::cerr << "Program Exit!" << std::endl;
+        print_table_bound();
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
@@ -427,8 +430,6 @@ void print_algorithm_info(int total_threads, int world_rank) {
 
     std::string p_output = "Rank [" + std::to_string(world_rank) + "] - Parallel align method: " + global_args.package;
     print_table_line(p_output);
-
-    print_table_bound();
 }
 
 void print_table_line(const std::string &output) {
