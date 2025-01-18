@@ -142,15 +142,18 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
 
     std::vector<std::string> data;
     std::vector<std::string> name;
+    size_t start_col = 0;
+    size_t end_col = 0;
+    int overlap = 0;
 
     try {
         // Read data from the input file and store in data and name vectors
-        read_data_mpi(global_args.data_path.c_str(), data, name, world_rank, world_size, global_args.verbose);
+        read_data_mpi(global_args.data_path.c_str(), data, name, world_rank, world_size, start_col, end_col, overlap, global_args.verbose);
 
         // Find MEMs in the sequences and split the sequences into fragments for parallel alignment.
         std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data, world_rank);
 
-        split_and_parallel_align(data, name, split_points_on_sequence, world_rank, world_size);
+        split_and_parallel_align(data, name, split_points_on_sequence, world_rank, start_col, end_col, overlap);
     }
     catch (const std::bad_alloc& e) { // Catch any bad allocations and print an error message.
         print_table_bound();

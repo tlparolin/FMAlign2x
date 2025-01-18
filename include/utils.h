@@ -144,7 +144,12 @@ private:
  * @return multiple sequence stored in vector 
 */
 void read_data(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, bool verbose = true);
-void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, int world_rank, int world_size, bool verbose = true);
+void read_data_mpi(const char* data_path, 
+                    std::vector<std::string>& data, 
+                    std::vector<std::string>& name, 
+                    int world_rank, int world_size, 
+                    size_t& start_col, size_t& end_col, 
+                    int& overlap, bool verbose);
 /**
  * @brief: Check whether the file exists in the specified path.
  * @param data_path   The file path to check.

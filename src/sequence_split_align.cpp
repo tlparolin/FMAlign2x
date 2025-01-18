@@ -74,7 +74,10 @@ std::string generateRandomString(int length) {
 */
 std::string random_file_end;
 
-void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> chain, int world_rank, int world_size) {
+void split_and_parallel_align(std::vector<std::string> data, 
+                            std::vector<std::string> name, 
+                            std::vector<std::vector<std::pair<int_t, int_t>>> chain, 
+                            int world_rank, size_t start_col, size_t end_col, int overlap) {
     random_file_end = generateRandomString(10);
     std::string output = "";
     Timer timer;
@@ -783,7 +786,7 @@ void delete_tmp_folder(uint_t task_count, int world_rank) {
 * @param name A vector of strings containing the names of the sequences.
 */
 void concat_alignment(std::vector<std::vector<std::string>> &concat_string, std::vector<std::string> &name, int world_rank) {
-    std::string output_path = global_args.output_path;
+    std::string output_path = global_args.output_path + std::to_string(world_rank);
     std::vector<std::string> concated_data(name.size(), "");
     // Concatenate the sequences
     for (uint_t i = 0; i < name.size(); i++) {

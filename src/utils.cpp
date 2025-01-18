@@ -121,7 +121,12 @@ void read_data(const char* data_path, std::vector<std::string>& data, std::vecto
     return;
 }
 
-void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, int world_rank, int world_size, bool verbose){
+void read_data_mpi(const char* data_path, 
+                    std::vector<std::string>& data, 
+                    std::vector<std::string>& name, 
+                    int world_rank, int world_size, 
+                    size_t& start_col, size_t& end_col, 
+                    int& overlap, bool verbose) {
     std::string output = "";
     std::string str_data_path = data_path;
 
@@ -175,14 +180,14 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
     int min_mem_length = ceil(pow(max_lenght, 1/(global_args.degree+2)));
     min_mem_length = min_mem_length > 30 ? min_mem_length : 30;
     min_mem_length = min_mem_length < 2000 ? min_mem_length : 2000;
-    int overlap = 2 * min_mem_length;
+    overlap = 2 * min_mem_length;
 
     // Split data into balanced columns across rankings
     size_t avg_length = total_length / sequence_count;
     size_t columns_per_rank = (avg_length + world_size - 1) / world_size;
 
-    size_t start_col = (world_rank == 0) ? 0 : std::max(static_cast<size_t>(0), world_rank * columns_per_rank - overlap);
-    size_t end_col = std::min(total_length, (world_rank + 1) * columns_per_rank + overlap);
+    start_col = (world_rank == 0) ? 0 : std::max(static_cast<size_t>(0), world_rank * columns_per_rank - overlap);
+    end_col = std::min(total_length, (world_rank + 1) * columns_per_rank + overlap);
     if (verbose && global_args.verbose) {
         std::string output = "Rank [" + std::to_string(world_rank) + "] - Processing columns from " + std::to_string(start_col) + " to " + std::to_string(end_col);
         print_table_line(output);
@@ -362,7 +367,7 @@ void ArgParser::parse_args(int argc, char** argv) {
     }
     for (auto& p : args_) {
         if (p.second.required && p.second.value == "") {
-            throw std::invalid_argument("Missing required argument: -" + p.first);  // �޸������Ϊ�������ۺ�
+            throw std::invalid_argument("Missing required argument: -" + p.first);
         }
         if (p.second.required == false && p.second.value == "") {
             p.second.value = p.second.default_value;
