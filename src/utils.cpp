@@ -67,7 +67,7 @@ void read_data(const char* data_path, std::vector<std::string>& data, std::vecto
         output = "Error:" + str_data_path + " could not be accessed, Please check if the path of the input data is correct or if the data exists!";
         std::cerr << output << std::endl;
         std::cerr << "Program Exit!" << std::endl;
-        exit(1);
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
     
 
@@ -93,7 +93,7 @@ void read_data(const char* data_path, std::vector<std::string>& data, std::vecto
         print_table_bound();
         std::cerr << "Error: The input data is too large and the 32-bit program may not produce correct results. Please compile a 64-bit program using the M64 parameter." << std::endl;
         std::cerr << "Program Exit!" << std::endl;
-        exit(1);
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
     #if M64
     if (verbose && global_args.verbose) {

@@ -475,7 +475,7 @@ unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n
     if (!concat_data) {
         std::string out = "Rank [" + std::to_string(world_rank) + "] - ERROR: concat_data could not allocate enough space\n";
         print_table_line(out);
-        exit(1);
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
     // Concatenate all strings with 1 as separator

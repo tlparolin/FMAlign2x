@@ -108,7 +108,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
 
         global_args.degree = std::stoi(parser.get("d"));
         if (global_args.degree > 2) {
-            exit(1);
+            MPI_Abort(MPI_COMM_WORLD, 1);
         }
 
         std::string tmp_c = parser.get("c");
@@ -130,7 +130,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         global_args.output_path = parser.get("o");
     } // Catch any invalid arguments and print the help message.
     catch (const std::invalid_argument& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << "Rank [" << std::to_string(world_rank) << "] - Error: " << e.what() << std::endl;
         std::cerr << "Program Exit!" << std::endl;
         parser.print_help();
         return 1;
@@ -154,21 +154,19 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
     }
     catch (const std::bad_alloc& e) { // Catch any bad allocations and print an error message.
         print_table_bound();
-        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << "Rank [" << std::to_string(world_rank) << "] - Error: " << e.what() << std::endl;
         std::cout << "Program Exit!" << std::endl;
-        exit(1);
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    if (world_rank == 0){
-        double total_time = timer.elapsed_time();
-        std::stringstream s;
-        s << std::fixed << std::setprecision(2) << total_time;
-        if (global_args.verbose) {
-            print_table_divider();
-            output = "FMAlign2 total time: " + s.str() + " seconds.";
-            print_table_line(output);
-            print_table_bound();
-        }
+    double total_time = timer.elapsed_time();
+    std::stringstream s;
+    s << std::fixed << std::setprecision(2) << total_time;
+    if (global_args.verbose) {
+        print_table_divider();
+        output = "Rank [" + std::to_string(world_rank) + "] - Total time: " + s.str() + " seconds.";
+        print_table_line(output);
+        print_table_bound();
     }
 
     // Finalizar MPI

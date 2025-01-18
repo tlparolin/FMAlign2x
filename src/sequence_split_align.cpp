@@ -628,7 +628,7 @@ void* parallel_align(void* arg) {
 
     if (!file.is_open()) {
         std::cerr << "Rank [" << world_rank << "] - Failed to open " << file_name << std::endl;
-        exit(1);
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
     std::vector<uint_t> aligned_seq_index;
@@ -754,7 +754,7 @@ std::string align_fasta(std::string file_name, int world_rank) {
     }
     catch (const char* e) { // Catch any bad allocations and print an error message.
         std::cerr << "Rank [" << world_rank << "] - ERROR: " << e << std::endl;
-        exit(1);
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
     
     return res_file_name;
@@ -796,7 +796,7 @@ void concat_alignment(std::vector<std::vector<std::string>> &concat_string, std:
     output_file.open(output_path);
     if (!output_file.is_open()) {
         std::cerr << "Rank [" << world_rank << "] - ERROR opening output file " << output_path << std::endl;
-        exit(1);
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
     for (uint_t i = 0; i < concated_data.size(); i++) {
@@ -932,7 +932,7 @@ std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_ind
     file.open(seq_file_name);
     if (!file.is_open()) {
         std::cerr << "Rank [" << world_rank << "] - Failed to open " << seq_file_name << std::endl;
-        exit(1);
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
     // write the sequence content to the file in fasta format.
     std::stringstream sstream;
@@ -949,7 +949,7 @@ std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_ind
 
     if (!file.is_open()) {
         std::cerr << "Rank [" << world_rank << "] - Failed to open " << seq_file_name << std::endl;
-        exit(1);
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
     std::vector<uint_t> selected_profile_seq_index;
