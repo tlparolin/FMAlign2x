@@ -75,12 +75,6 @@ std::string generateRandomString(int length) {
 std::string random_file_end;
 
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> chain, int world_rank, int world_size) {
-    // Print status message
-    if (global_args.verbose) {
-        std::cout << "#                Parallel Aligning...                       #" << std::endl;
-        print_table_divider();
-    }
-
     random_file_end = generateRandomString(10);
     std::string output = "";
     Timer timer;
@@ -124,7 +118,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << SW_time;
     if (global_args.verbose) {
-        output = "SW expand time: " + s.str() + " seconds.";
+        output = "Rank [" + std::to_string(world_rank) + "] - SW expand time: " + s.str() + " seconds.";
         print_table_line(output);
     }
     
@@ -135,11 +129,11 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     {
 #ifdef __linux__
         if (0 != mkdir(TMP_FOLDER.c_str(), 0755)) {
-            std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
+            std::cerr << "Rank [" << world_rank << "] - Fail to create file folder " << TMP_FOLDER << std::endl;
     }
 #else
         if (0 != mkdir(TMP_FOLDER.c_str())) {
-            std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
+            std::cerr << "Rank [" << world_rank << "] - Fail to create file folder " << TMP_FOLDER << std::endl;
         }
 #endif
     }
@@ -177,7 +171,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     s.str("");
     s << std::fixed << std::setprecision(2) << parallel_align_time;
     if (global_args.verbose) {
-        output = "Parallel align time: " + s.str() + " seconds.";
+        output = "Rank [" + std::to_string(world_rank) + "] - Parallel align time: " + s.str() + " seconds.";
         print_table_line(output);
     }
     
@@ -196,9 +190,8 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     s.str("");
     s << std::fixed << std::setprecision(2) << seq2profile_time;
     if (global_args.verbose) {
-        output = "Seq-profile time: " + s.str() + " seconds.";
+        output = "Rank [" + std::to_string(world_rank) + "] - Seq-profile time: " + s.str() + " seconds.";
         print_table_line(output);
-        print_table_divider();
     }
     return;
 }

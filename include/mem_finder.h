@@ -89,7 +89,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vecto
  * @param data A vector of strings representing the sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data);
+std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data, int world_rank);
 
 /**
  * @brief Concatenates a vector of strings with separator 1 and a terminating 0.

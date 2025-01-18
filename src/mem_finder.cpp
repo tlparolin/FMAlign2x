@@ -296,12 +296,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<me
  * @param data A vector of strings representing the sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data){
-    if (global_args.verbose) {
-        std::cout << "#                    Finding MEM...                         #" << std::endl;
-        print_table_divider();
-    }
-    
+std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data, int world_rank){
     std::string output = "";
     Timer timer;
     uint_t n = 0;
@@ -317,7 +312,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         
     }
     if (global_args.verbose) {
-        output = "Minimal MEM length is set to " + std::to_string(global_args.min_mem_length);
+        output = "Rank [" + std::to_string(world_rank) + "] - Minimal MEM length is set to " + std::to_string(global_args.min_mem_length);
         print_table_line(output);
     }
 
@@ -332,7 +327,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     }
 
     if (global_args.verbose) {
-        output = "Filter mode is set to " + global_args.filter_mode;
+        output = "Rank [" + std::to_string(world_rank) + "] - Filter mode is set to " + global_args.filter_mode;
         print_table_line(output);
     }
 
@@ -346,7 +341,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
        
     }
     if (global_args.verbose) {
-        output = "Minimal sequence coverage is set to " + std::to_string(global_args.min_seq_coverage);
+        output = "Rank [" + std::to_string(world_rank) + "] - Minimal sequence coverage is set to " + std::to_string(global_args.min_seq_coverage);
         print_table_line(output);
     }
     
@@ -367,7 +362,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << suffix_construction_time;
     if (global_args.verbose) {
-    output = "Suffix construction time: " + s.str() + " seconds";
+    output = "Rank [" + std::to_string(world_rank) + "] - Suffix construction time: " + s.str() + " seconds";
     print_table_line(output);
     }
     
@@ -422,7 +417,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
 #endif
 
     if (mems.size() <= 0 && global_args.verbose) {
-        output = "Warning: There is no MEMs, please adjust your paramters.";
+        output = "Rank [" + std::to_string(world_rank) + "] - Warning: There is no MEMs, please adjust your paramters.";
         print_table_line(output);
        
     }
@@ -447,15 +442,13 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     global_args.avg_file_size = (n / (split_point_on_sequence[0].size() + 1)) / pow(2, 20);
     double mem_process_time = timer.elapsed_time();
     if (global_args.verbose) {
-        output = "Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1);
+        output = "Rank [" + std::to_string(world_rank) + "] - Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1);
         print_table_line(output);
         s.str("");
         s << std::fixed << std::setprecision(3) << mem_process_time;
-        output = "MEM process time: " + s.str() + " seconds.";
+        output = "Rank [" + std::to_string(world_rank) + "] - MEM process time: " + s.str() + " seconds.";
         print_table_line(output);
-        print_table_divider();
     }
-   
 
     return split_point_on_sequence;
 }
