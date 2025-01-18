@@ -121,6 +121,19 @@ void read_data(const char* data_path, std::vector<std::string>& data, std::vecto
     return;
 }
 
+/**
+ * @brief: read fasta and fastq format data, divide columns to ranks 
+ * @param data_path the path to the target data
+ * @param data store sequence content
+ * @param name store sequence name
+ * @param world_rank refers to the rank you are running
+ * @param world_size refers to all ranks available
+ * @param start_col will update with calculated value to each rank interval
+ * @param end_col will update with calculated value to each rank interval
+ * @param overlap will update with calculated value to each rank interval
+ * @param verbose controls whether messages are displayed to the user
+ * @return multiple sequence stored in vector and updates range values ​​for each rank 
+*/
 void read_data_mpi(const char* data_path, 
                     std::vector<std::string>& data, 
                     std::vector<std::string>& name, 
