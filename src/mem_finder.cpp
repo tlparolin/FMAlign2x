@@ -302,8 +302,6 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         print_table_divider();
     }
     
-    MPI_Barrier(MPI_COMM_WORLD);
-
     std::string output = "";
     Timer timer;
     uint_t n = 0;
@@ -364,8 +362,6 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     print_table_line(output);
 #endif
 
-    MPI_Barrier(MPI_COMM_WORLD);
-
     timer.reset();
     gsacak((unsigned char *)concat_data, (uint_t*)SA, LCP, DA, n);
     double suffix_construction_time = timer.elapsed_time();
@@ -380,8 +376,6 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         print_table_line(output);
     }
     
-    MPI_Barrier(MPI_COMM_WORLD);
-
     timer.reset();
     int_t min_mem_length = global_args.min_mem_length;
     int_t min_cross_sequence = ceil(global_args.min_seq_coverage * data.size());

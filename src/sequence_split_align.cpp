@@ -224,8 +224,6 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
 
-    MPI_Barrier(MPI_COMM_WORLD);
-
     // Determine the effective number of ranks required
     effective_world_size = std::min(world_size, parallel_num);
 
@@ -248,7 +246,6 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     }
     // Only active ranks should process tasks
     if (world_rank < effective_world_size) {
-        #pragma omp parallel for num_threads(global_args.thread)
         for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
             parallel_params[i].data = &data;
             parallel_params[i].parallel_range = parallel_align_range.begin() + i;
@@ -259,7 +256,6 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     }
 
     // Remove temporary files created during parallel execution
-    MPI_Barrier(MPI_COMM_WORLD);
     delete_tmp_folder(parallel_num_start, parallel_num_end);
 
     // Calculate the time taken for parallel alignment and print the output
@@ -277,6 +273,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 
     timer.reset();
 
+    MPI_Barrier(MPI_COMM_WORLD);
     if (world_rank == 0){
         // Concatenate the chains and parallel ranges
         std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);

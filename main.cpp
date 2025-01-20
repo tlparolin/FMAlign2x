@@ -159,8 +159,6 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         exit(1);
     }
 
-    MPI_Barrier(MPI_COMM_WORLD);
-    
     double total_time = timer.elapsed_time();
     double max_time = 0.0;
 
