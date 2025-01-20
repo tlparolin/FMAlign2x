@@ -68,7 +68,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         global_args.data_path = parser.get("i");
         std::string tmp_thread = parser.get("t");
         if (tmp_thread == "cpu_num") {
-            global_args.thread = hpx::threads::hardware_concurrency();
+            global_args.thread = std::min(static_cast<size_t>(global_args.thread), hpx::get_os_thread_count());
         }
         else {
             global_args.thread = std::stoi(tmp_thread);

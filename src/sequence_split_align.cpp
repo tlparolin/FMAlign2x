@@ -82,40 +82,34 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         print_table_divider();
     }
 
-    // Generate a random string to append to temporary file names
-    hpx::future<std::string>random_file_end = hpx::async([]() {
-        return generateRandomString(10); 
-    });
-
+    random_file_end = generateRandomString(10);
     std::string output = "";
     Timer timer;
     uint_t chain_num = chain[0].size();
     uint_t seq_num = data.size();
-    std::vector<std::vector<std::string>> chain_string(chain_num); // chain_num * seq_num
-
+    std::vector<std::vector<std::string>> chain_string(chain_num);
+    
     // Initialize ExpandChainParams structure for each chain pair
     std::vector<ExpandChainParams> params(chain_num);
 
-    // Expand each chain pair and store the resulting aligned sequences
-    hpx::experimental::for_loop(hpx::execution::par, 0, chain_num, [&](int i) {
+    for (uint_t i = 0; i < chain_num; i++) {
         params[i].data = &data;
         params[i].chain = &chain;
         params[i].chain_index = i;
         params[i].result_store = chain_string.begin() + i;
-        expand_chain(&params[i]);
+    }
+
+    // HPX parallel execution for chain expansion
+    hpx::for_each(hpx::execution::par, params.begin(), params.end(), [](ExpandChainParams& param) {
+        expand_chain(&param);
     });
     
-    params.clear();
- 
-    // Calculate SW expand time and print status message
     double SW_time = timer.elapsed_time();
-    std::stringstream s;
-    s << std::fixed << std::setprecision(2) << SW_time;
     if (global_args.verbose) {
-        output = "SW expand time: " + s.str() + " seconds.";
-        print_table_line(output);
+        std::stringstream s;
+        s << std::fixed << std::setprecision(2) << SW_time;
+        print_table_line("SW expand time: " + s.str() + " seconds.");
     }
-    
     timer.reset();
 
     // Create temporary file folder (if it doesn't already exist)
@@ -135,27 +129,22 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     });
 
     // Calculate parallel alignment ranges and perform parallel alignment for each range
-    std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range = get_parallel_align_range(data, chain);
+    auto parallel_align_range = get_parallel_align_range(data, chain);
     uint_t parallel_num = parallel_align_range.size();
     std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
 
-    // Initialize ParallelAlignParams structure for each parallel range
-    // std::vector<hpx::future<void>> futures;
+    for (uint_t i = 0; i < parallel_num; i++) {
+        parallel_params[i].data = &data;
+        parallel_params[i].parallel_range = parallel_align_range.begin() + i;
+        parallel_params[i].task_index = i;
+        parallel_params[i].result_store = parallel_string.begin() + i;
+    }
 
-    std::vector<hpx::future<void>> futures;
-for (uint_t i = 0; i < parallel_num; ++i) {
-    futures.push_back(hpx::async([&](int index) {
-        parallel_params[index].data = &data;
-        parallel_params[index].parallel_range = parallel_align_range.begin() + index;
-        parallel_params[index].task_index = index;
-        parallel_params[index].result_store = parallel_string.begin() + index;
-        parallel_align(&parallel_params[index]);
-    }, i));
-}
-
-// Espera todas as tarefas terminarem
-hpx::wait_all(futures);
+    // HPX parallel execution for alignment
+    hpx::for_each(hpx::execution::par, parallel_params.begin(), parallel_params.end(), [](ParallelAlignParams& param) {
+        parallel_align(&param);
+    });
 
     // Remove temporary files created during parallel execution
     hpx::post([parallel_num]() { 
@@ -164,51 +153,31 @@ hpx::wait_all(futures);
 
     // Calculate the time taken for parallel alignment and print the output
     double parallel_align_time = timer.elapsed_time();
-    s.str("");
-    s << std::fixed << std::setprecision(2) << parallel_align_time;
+
     if (global_args.verbose) {
-        output = "Parallel align time: " + s.str() + " seconds.";
-        print_table_line(output);
+        std::stringstream s;
+        s << std::fixed << std::setprecision(2) << parallel_align_time;
+        print_table_line("Parallel align time: " + s.str() + " seconds.");
     }
-    
+
     timer.reset();
-    hpx::future<std::vector<std::vector<std::pair<int_t, int_t>>>> future_concat_range = hpx::async([&]() {
-        return concat_chain_and_parallel_range(chain, parallel_align_range);
-    });
 
-    hpx::future<std::vector<std::vector<std::string>>> future_concat_string = hpx::async([&]() {
-        return concat_chain_and_parallel(chain_string, parallel_string);
-    });
+    auto concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
+    auto concat_string = concat_chain_and_parallel(chain_string, parallel_string);
+    auto fragment_len = get_first_nonzero_lengths(concat_string);
 
-    auto concat_string = future_concat_string.get();
-
-    hpx::future<std::vector<uint_t>> future_fragment_len = hpx::async([&]() {
-        return get_first_nonzero_lengths(concat_string);
-    });
-
-    // Esperar os resultados das tarefas assíncronas
-    std::vector<uint_t> fragment_len = future_fragment_len.get();
-    auto concat_range = future_concat_range.get();
-
-    // Agora, executar o seq2profile após as tarefas paralelizadas
     seq2profile(concat_string, data, concat_range, fragment_len);
-
     double seq2profile_time = timer.elapsed_time();
 
-    hpx::future<void> alignment_future = hpx::async([&]() {
-        concat_alignment(concat_string, name);
-    });
+    concat_alignment(concat_string, name);
 
-    s.str("");
-    s << std::fixed << std::setprecision(2) << seq2profile_time;
     if (global_args.verbose) {
-        output = "Seq-profile time: " + s.str() + " seconds.";
-        print_table_line(output);
+        std::stringstream s;
+        s << std::fixed << std::setprecision(2) << seq2profile_time;
+        print_table_line("Seq-profile time: " + s.str() + " seconds.");
         print_table_divider();
     }
-    alignment_future.get();
 
-    //hpx::distributed::barrier::synchronize();
     return;
 }
 

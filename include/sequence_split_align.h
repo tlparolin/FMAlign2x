@@ -45,6 +45,7 @@
 #include <hpx/include/runtime.hpp>
 #include <hpx/include/util.hpp>
 #include <hpx/iostream.hpp>
+#include <hpx/coroutines/thread_enums.hpp>
 
 const std::string TMP_FOLDER = "./temp/";
 
