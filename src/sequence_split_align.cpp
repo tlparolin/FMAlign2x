@@ -93,12 +93,6 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 
     // Initialize ExpandChainParams structure for each chain pair
     std::vector<ExpandChainParams> params(chain_num);
-    for (uint_t i = 0; i < chain_num; i++) {
-        params[i].data = &data;
-        params[i].chain = &chain;
-        params[i].chain_index = i;
-        params[i].result_store = chain_string.begin() + i;
-    }
     
     // Determine the necessary number of ranks to process chain_num
     uint_t effective_world_size = std::min(static_cast<uint_t>(world_size), chain_num);
@@ -124,8 +118,11 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     // Only active ranks will run
     if (world_rank < effective_world_size) {
         // Initialize ExpandChainParams structure for each chain pair
-        #pragma omp parallel for num_threads(global_args.thread)
         for (uint_t i = chain_num_start; i < chain_num_end; i++) {
+            params[i].data = &data;
+            params[i].chain = &chain;
+            params[i].chain_index = i;
+            params[i].result_store = chain_string.begin() + i;
             expand_chain(&params[i]);
         }
     }
@@ -143,7 +140,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     // Determine local sizes to gather data
     uint_t local_size = linear_chain_string.size();
     std::vector<int> sizes(world_size, 0);
-    MPI_Allgather(&local_size, 1, MPI_UNSIGNED, sizes.data(), 1, MPI_UNSIGNED, MPI_COMM_WORLD);
+    MPI_Gather(&local_size, 1, MPI_UNSIGNED, sizes.data(), 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
 
     // Calculate displacements
     std::vector<int> displs(world_size, 0); // changed to std::vector<int>
@@ -156,8 +153,8 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     std::vector<char> gathered_chain_string(total_size, 0);
 
     // Realizar a operação de MPI_Allgatherv
-    MPI_Allgatherv(linear_chain_string.data(), local_size, MPI_CHAR,
-                gathered_chain_string.data(), sizes.data(), displs.data(), MPI_CHAR, MPI_COMM_WORLD);
+    MPI_Gatherv(linear_chain_string.data(), local_size, MPI_CHAR,
+                gathered_chain_string.data(), sizes.data(), displs.data(), MPI_CHAR, 0, MPI_COMM_WORLD);
 
 
     // Chain_string rank 0 building
@@ -201,8 +198,6 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         print_table_line(output);
     }
     
-    timer.reset();
-
     if (world_rank == 0) {
         // Create temporary file folder (if it doesn't already exist)
         if (0 != access(TMP_FOLDER.c_str(), 0)) {
@@ -218,35 +213,48 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         }
     }
 
+    timer.reset();
+
     // Calculate parallel alignment ranges and perform parallel alignment for each range
     std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range = get_parallel_align_range(data, chain);
     uint_t parallel_num = parallel_align_range.size();
     std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
 
-    // Determine the effective number of ranks required
-    effective_world_size = std::min(world_size, parallel_num);
+    // // Determine the effective number of ranks required
+    // effective_world_size = std::min(world_size, parallel_num);
 
-    // Calculate the number of tasks per active rank
-    uint_t parallel_num_per_rank = parallel_num / effective_world_size;
-    uint_t parallel_num_remain = parallel_num % effective_world_size;
+    // // Calculate the number of tasks per active rank
+    // uint_t parallel_num_per_rank = parallel_num / effective_world_size;
+    // uint_t parallel_num_remain = parallel_num % effective_world_size;
 
-    // Adjust indexes for each rank
-    uint_t parallel_num_start = 0;
-    uint_t parallel_num_end = 0;
+    // // Adjust indexes for each rank
+    // uint_t parallel_num_start = 0;
+    // uint_t parallel_num_end = 0;
 
-    if (world_rank < effective_world_size) {
-        parallel_num_start = world_rank * parallel_num_per_rank;
-        parallel_num_end = (world_rank + 1) * parallel_num_per_rank;
+    // if (world_rank < effective_world_size) {
+    //     parallel_num_start = world_rank * parallel_num_per_rank;
+    //     parallel_num_end = (world_rank + 1) * parallel_num_per_rank;
 
-        // The last active rank handles the remaining tasks
-        if (world_rank == effective_world_size - 1) {
-            parallel_num_end += parallel_num_remain;
-        }
-    }
-    // Only active ranks should process tasks
-    if (world_rank < effective_world_size) {
-        for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
+    //     // The last active rank handles the remaining tasks
+    //     if (world_rank == effective_world_size - 1) {
+    //         parallel_num_end += parallel_num_remain;
+    //     }
+    // }
+    // // Only active ranks should process tasks
+    // if (world_rank < effective_world_size) {
+    //     for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
+    //         parallel_params[i].data = &data;
+    //         parallel_params[i].parallel_range = parallel_align_range.begin() + i;
+    //         parallel_params[i].task_index = i;
+    //         parallel_params[i].result_store = parallel_string.begin() + i;
+    //         parallel_align(&parallel_params[i]);
+    //     }
+    // }
+    // Cyclical distribution between ranks
+    for (uint_t i = 0; i < parallel_num; i++) {
+        uint_t rank = i % world_size;
+        if (rank == world_rank) {
             parallel_params[i].data = &data;
             parallel_params[i].parallel_range = parallel_align_range.begin() + i;
             parallel_params[i].task_index = i;
@@ -297,10 +305,28 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
                 parallel_string[i].push_back(std::move(str));
             }
         }
+    // }
+
+/////////
+// if (world_rank == 0){
+std::ofstream parallel_string_file("parallel_string.txt");
+        if (!parallel_string_file.is_open()) {
+            std::cerr << "Error opening file parallel_string.txt" << std::endl;
+            exit(1);
+        }
+
+        for (const auto& parallel : parallel_string) {
+            for (const auto& str : parallel) {
+                parallel_string_file << str << '\n';
+            }
+        }
+
+        parallel_string_file.close();
     }
+///////////////
 
     // Remove temporary files created during parallel execution
-    delete_tmp_folder(parallel_num_start, parallel_num_end);
+    //delete_tmp_folder(parallel_num_start, parallel_num_end);
 
     // Calculate the time taken for parallel alignment and print the output
     double parallel_align_time = timer.elapsed_time();
@@ -329,12 +355,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         double seq2profile_time = timer.elapsed_time();
 
         concat_alignment(concat_string, name);
-std::cout << "Size of chain_string: " << chain_string.size() << std::endl;
-    std::cout << "Size of parallel_string: " << parallel_string.size() << std::endl;
-    std::cout << "Size of concat_string: " << concat_string.size() << std::endl;
-    for (uint_t i = 0; i < concat_string.size(); ++i) {
-        std::cout << "Size of concat_string[" << i << "]: " << concat_string[i].size() << std::endl;
-    }
+
         s.str("");
         s << std::fixed << std::setprecision(2) << seq2profile_time;
         if (global_args.verbose) {
