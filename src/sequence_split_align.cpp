@@ -142,12 +142,12 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 
     // Determine local sizes to gather data
     uint_t local_size = linear_chain_string.size();
-    std::vector<int> sizes(world_size, 0); // Alterado para std::vector<int>
+    std::vector<int> sizes(world_size, 0);
     MPI_Allgather(&local_size, 1, MPI_UNSIGNED, sizes.data(), 1, MPI_UNSIGNED, MPI_COMM_WORLD);
 
     // Calculate displacements
     std::vector<int> displs(world_size, 0); // changed to std::vector<int>
-    for (int i = 1; i < world_size; ++i) {
+    for (uint_t i = 1; i < world_size; ++i) {
         displs[i] = displs[i - 1] + sizes[i - 1];
     }
     int total_size = displs.back() + sizes.back(); // changed to int
@@ -168,14 +168,14 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         uint_t idx = 0;
         for (uint_t i = 0; i < chain_num; ++i) {
             for (uint_t j = 0; j < seq_num; ++j) {
-                if (idx + sizeof(uint_t) > total_size) {
+                if (idx + sizeof(uint_t) > static_cast<size_t>(total_size)) {
                     throw std::runtime_error("Buffer overflow while reconstructing chain_string");
                 }
                 // Next string size
                 uint_t str_size = *reinterpret_cast<const uint_t*>(&gathered_chain_string[idx]);
                 idx += sizeof(uint_t);
 
-                if (idx + str_size > total_size) {
+                if (idx + str_size > static_cast<size_t>(total_size)) {
                     throw std::runtime_error("Buffer overflow while reconstructing chain_string");
                 }
                 // Get string and add to chain
@@ -255,6 +255,50 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         }
     }
 
+    // Linearize parallel_string
+    std::string linear_parallel_string;
+    for (const auto& parallel : parallel_string) {
+        for (const auto& str : parallel) {
+            uint_t str_size = str.size();
+            linear_parallel_string.append(reinterpret_cast<const char*>(&str_size), sizeof(uint_t));
+            linear_parallel_string.append(str);
+        }
+    }
+
+    // Determine local sizes to gather data
+    uint_t local_parallel_size = linear_parallel_string.size();
+    std::vector<int> parallel_sizes(world_size, 0);
+    MPI_Allgather(&local_parallel_size, 1, MPI_UNSIGNED, parallel_sizes.data(), 1, MPI_UNSIGNED, MPI_COMM_WORLD);
+
+    // Calculate displacements
+    std::vector<int> parallel_displs(world_size, 0);
+    for (uint_t i = 1; i < world_size; ++i) {
+        parallel_displs[i] = parallel_displs[i - 1] + parallel_sizes[i - 1];
+    }
+    int total_parallel_size = parallel_displs.back() + parallel_sizes.back();
+
+    std::vector<char> gathered_parallel_string(total_parallel_size, 0);
+    MPI_Allgatherv(linear_parallel_string.data(), local_parallel_size, MPI_CHAR,
+                   gathered_parallel_string.data(), parallel_sizes.data(), parallel_displs.data(), MPI_CHAR, MPI_COMM_WORLD);
+
+    // Parallel_string rank 0 building
+    if (world_rank == 0) {
+        parallel_string.clear();
+        parallel_string.resize(parallel_num);
+
+        uint_t idx = 0;
+        for (uint_t i = 0; i < parallel_num; ++i) {
+            for (uint_t j = 0; j < seq_num; ++j) {
+                uint_t str_size = *reinterpret_cast<const uint_t*>(&gathered_parallel_string[idx]);
+                idx += sizeof(uint_t);
+
+                std::string str(&gathered_parallel_string[idx], str_size);
+                idx += str_size;
+                parallel_string[i].push_back(std::move(str));
+            }
+        }
+    }
+
     // Remove temporary files created during parallel execution
     delete_tmp_folder(parallel_num_start, parallel_num_end);
 
@@ -273,7 +317,6 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 
     timer.reset();
 
-    MPI_Barrier(MPI_COMM_WORLD);
     if (world_rank == 0){
         // Concatenate the chains and parallel ranges
         std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
@@ -286,7 +329,12 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         double seq2profile_time = timer.elapsed_time();
 
         concat_alignment(concat_string, name);
-
+std::cout << "Size of chain_string: " << chain_string.size() << std::endl;
+    std::cout << "Size of parallel_string: " << parallel_string.size() << std::endl;
+    std::cout << "Size of concat_string: " << concat_string.size() << std::endl;
+    for (uint_t i = 0; i < concat_string.size(); ++i) {
+        std::cout << "Size of concat_string[" << i << "]: " << concat_string[i].size() << std::endl;
+    }
         s.str("");
         s << std::fixed << std::setprecision(2) << seq2profile_time;
         if (global_args.verbose) {
@@ -883,12 +931,18 @@ void delete_tmp_folder(uint_t idx_start, uint_t idx_end) {
 void concat_alignment(std::vector<std::vector<std::string>> &concat_string, std::vector<std::string> &name) {
     std::string output_path = global_args.output_path;
     std::vector<std::string> concated_data(name.size(), "");
+
     // Concatenate the sequences
     for (uint_t i = 0; i < name.size(); i++) {
         for (uint_t j = 0; j < concat_string.size(); j++) {
-            concated_data[i] += concat_string[j][i];          
+            if (concat_string[j].size() != name.size()) {
+                std::cerr << "Error: Inconsistent sequence sizes in concat_string" << std::endl;
+                exit(1);
+            }
+            concated_data[i] += concat_string[j][i];
         }
     }
+
     // Write the concatenated sequences to the output file
     std::ofstream output_file;
     output_file.open(output_path);
