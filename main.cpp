@@ -148,9 +148,61 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         read_data_mpi(global_args.data_path.c_str(), data, name, world_rank, world_size, global_args.verbose);
 
         // Find MEMs in the sequences and split the sequences into fragments for parallel alignment.
-        std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data, world_rank, world_size);
+        std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence;
+        if (world_rank == 0) {
+            split_points_on_sequence = find_mem(data, world_rank, world_size);
+        }
 
-        split_and_parallel_align(data, name, split_points_on_sequence, world_rank, world_size);
+        // Flatten the split_points_on_sequence into a continuous array for broadcasting
+        std::vector<std::pair<int_t, int_t>> flattened_data;
+        std::vector<size_t> sizes;
+        if (world_rank == 0) {
+            // Flatten the data into a single vector
+            size_t total_size = 0;
+            for (const auto& vec : split_points_on_sequence) {
+                total_size += vec.size();
+            }
+            flattened_data.resize(total_size);
+
+            size_t idx = 0;
+            for (const auto& vec : split_points_on_sequence) {
+                for (const auto& elem : vec) {
+                    flattened_data[idx++] = elem;
+                }
+            }
+
+            // Store the sizes of each subvector for later unflattening
+            sizes.resize(split_points_on_sequence.size());
+            for (size_t i = 0; i < split_points_on_sequence.size(); i++) {
+                sizes[i] = split_points_on_sequence[i].size();
+            }
+        }
+
+        // Broadcast the sizes vector to all ranks
+        size_t sizes_size = sizes.size();
+        MPI_Bcast(&sizes_size, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+        sizes.resize(sizes_size);
+        MPI_Bcast(sizes.data(), sizes.size(), MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+
+        // Broadcast the flattened data to all ranks
+        size_t total_size = flattened_data.size();
+        MPI_Bcast(&total_size, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);  // Envia o tamanho total do vetor
+        flattened_data.resize(total_size);
+        MPI_Bcast(flattened_data.data(), total_size * sizeof(std::pair<int_t, int_t>), MPI_BYTE, 0, MPI_COMM_WORLD);
+
+        // Unflatten the data received back into the original format
+        std::vector<std::vector<std::pair<int_t, int_t>>> received_split_points;
+        received_split_points.resize(sizes.size());
+
+        size_t idx = 0;
+        for (size_t i = 0; i < sizes.size(); i++) {
+            received_split_points[i].resize(sizes[i]);
+            for (size_t j = 0; j < sizes[i]; j++) {
+                received_split_points[i][j] = flattened_data[idx++];
+            }
+        }
+
+        split_and_parallel_align(data, name, received_split_points, world_rank, world_size);
     }
     catch (const std::bad_alloc& e) { // Catch any bad allocations and print an error message.
         print_table_bound();
