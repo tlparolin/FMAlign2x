@@ -359,13 +359,10 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
 
     timer.reset();
     gsacak((unsigned char *)concat_data, (uint_t*)SA, LCP, DA, n);
+    
     double suffix_construction_time = timer.elapsed_time();
-    double max_suffix_time = 0.0;
-
-    // Reduce to get the max time
-    MPI_Reduce(&suffix_construction_time, &max_suffix_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     std::stringstream s;
-    s << std::fixed << std::setprecision(2) << max_suffix_time;
+    s << std::fixed << std::setprecision(2) << suffix_construction_time;
     if (global_args.verbose) {
         output = "(Finding MEM) - Suffix construction time: " + s.str() + " seconds";
         print_table_line(output, world_rank);
@@ -445,15 +442,12 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     
     global_args.avg_file_size = (n / (split_point_on_sequence[0].size() + 1)) / pow(2, 20);
     double mem_process_time = timer.elapsed_time();
-    double max_mem_time = 0.0;
-
-    // Reduce to get the max time
-    MPI_Reduce(&mem_process_time, &max_mem_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    
     if (global_args.verbose) {
         output = "(Finding MEM) - Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1);
         print_table_line(output, world_rank);
         s.str("");
-        s << std::fixed << std::setprecision(3) << max_mem_time;
+        s << std::fixed << std::setprecision(3) << mem_process_time;
         output = "(Finding MEM) - MEM process time: " + s.str() + " seconds.";
         print_table_line(output, world_rank);
     }
@@ -517,7 +511,7 @@ std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* lcp_array, int_t
 
     std::vector<std::pair<uint_t, uint_t>> intervals;
     if (global_args.verbose) {
-        std::string output = "Minimal cross sequence number: " + std::to_string(min_cross_sequence);
+        std::string output = "(FInding MEM) - Minimal cross sequence number: " + std::to_string(min_cross_sequence);
         print_table_line(output, world_rank);
     }
     

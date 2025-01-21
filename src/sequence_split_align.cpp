@@ -121,36 +121,28 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         }
     }
 
-    
-
     params.clear();
  
     // Calculate SW expand time and print status message
-    double SW_time = timer.elapsed_time();
-    double max_expand_time = 0.0;
-
-    // Reduce to get the max time
-    MPI_Reduce(&SW_time, &max_expand_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    double SW_time = timer.elapsed_time(); 
     std::stringstream s;
-    s << std::fixed << std::setprecision(2) << max_expand_time;
-    if (world_rank == 0 && global_args.verbose) {
+    s << std::fixed << std::setprecision(2) << SW_time;
+    if (global_args.verbose) {
         output = "(Parallel Align) - SW expand time: " + s.str() + " seconds.";
         print_table_line(output, world_rank);
     }
     
-    if (world_rank == 0) {
-        // Create temporary file folder (if it doesn't already exist)
-        if (0 != access(TMP_FOLDER.c_str(), 0)) {
+    // Create temporary file folder (if it doesn't already exist)
+    if (0 != access(TMP_FOLDER.c_str(), 0)) {
 #ifdef __linux__
-            if (0 != mkdir(TMP_FOLDER.c_str(), 0755)) {
-                std::cerr << "(Parallel Align) - Fail to create file folder " << TMP_FOLDER << std::endl;
-            }
-#else
-            if (0 != mkdir(TMP_FOLDER.c_str())) {
-                std::cerr << "(Parallel Align) - Fail to create file folder " << TMP_FOLDER << std::endl;
-            }
-#endif
+        if (0 != mkdir(TMP_FOLDER.c_str(), 0755)) {
+            std::cerr << "(Parallel Align) - Fail to create file folder " << TMP_FOLDER << std::endl;
         }
+#else
+        if (0 != mkdir(TMP_FOLDER.c_str())) {
+            std::cerr << "(Parallel Align) - Fail to create file folder " << TMP_FOLDER << std::endl;
+        }
+#endif
     }
 
     timer.reset();
@@ -192,37 +184,14 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         }
     }
 
-
-/////////
-// if (world_rank == 0){
-std::ofstream parallel_string_file("parallel_string.txt");
-        if (!parallel_string_file.is_open()) {
-            std::cerr << "Error opening file parallel_string.txt" << std::endl;
-            exit(1);
-        }
-
-        for (const auto& parallel : parallel_string) {
-            for (const auto& str : parallel) {
-                parallel_string_file << str << '\n';
-            }
-        }
-
-        parallel_string_file.close();
-    // }
-///////////////
-
     // Remove temporary files created during parallel execution
-    //delete_tmp_folder(parallel_num_start, parallel_num_end);
+    delete_tmp_folder(parallel_num_start, parallel_num_end);
 
     // Calculate the time taken for parallel alignment and print the output
     double parallel_align_time = timer.elapsed_time();
-    double max_parallel_time = 0.0;
-
-    // Reduce to get the max time
-    MPI_Reduce(&parallel_align_time, &max_parallel_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     s.str("");
-    s << std::fixed << std::setprecision(2) << max_parallel_time;
-    if (world_rank == 0 && global_args.verbose) {
+    s << std::fixed << std::setprecision(2) << parallel_align_time;
+    if (global_args.verbose) {
         output = "(Parallel Align) - Parallel align time: " + s.str() + " seconds.";
         print_table_line(output, world_rank);
     }
@@ -283,9 +252,8 @@ std::ofstream parallel_string_file("parallel_string.txt");
 
     // Send linearized parallel_string data to rank 0
     std::vector<char> gathered_data(world_rank == 0 ? parallel_string_displs.back() + global_parallel_string_sizes.back() : 0);
-    MPI_Gatherv(linear_parallel_string.data(), local_size, MPI_CHAR,
+    MPI_Gatherv(linear_parallel_string.data(), local_parallel_string_size, MPI_CHAR,
                 gathered_data.data(), global_parallel_string_sizes.data(), parallel_string_displs.data(), MPI_CHAR, 0, MPI_COMM_WORLD);
-
 
     // Rank 0 will reconstruct the chain_string and parallel_string
     // The chain_string and parallel_string will be used to generate the final alignment
@@ -321,16 +289,38 @@ std::ofstream parallel_string_file("parallel_string.txt");
         uint_t parallel_idx = 0;
         for (uint_t i = 0; i < parallel_num; i++) {
             for (uint_t j = 0; j < seq_num; j++) {
+                if (parallel_idx + sizeof(uint_t) > gathered_data.size()) {
+                    throw std::runtime_error("Buffer overflow while reconstructing parallel_string");
+                }
                 uint_t str_size = *reinterpret_cast<const uint_t*>(&gathered_data[parallel_idx]);
                 parallel_idx += sizeof(uint_t);
 
+                if (parallel_idx + str_size > gathered_data.size()) {
+                    throw std::runtime_error("Buffer overflow while reconstructing parallel_string");
+                }
                 std::string str(&gathered_data[parallel_idx], str_size);
                 parallel_idx += str_size;
 
                 parallel_string[i].push_back(std::move(str));
             }
         }
+/////////
+// if (world_rank == 0){
+std::ofstream parallel_string_file("parallel_string.txt");
+        if (!parallel_string_file.is_open()) {
+            std::cerr << "Error opening file parallel_string.txt" << std::endl;
+            exit(1);
+        }
 
+        for (const auto& parallel : parallel_string) {
+            for (const auto& str : parallel) {
+                parallel_string_file << str << '\n';
+            }
+        }
+
+        parallel_string_file.close();
+    // }
+///////////////
         // Concatenate the chains and parallel ranges
         std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
         // Concatenate the chain strings and parallel strings

@@ -160,17 +160,11 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
     }
 
     double total_time = timer.elapsed_time();
-    double max_time = 0.0;
-
-    // Reduce to get the max time
-    MPI_Reduce(&total_time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-
     std::stringstream s;
-    s << std::fixed << std::setprecision(2) << max_time;
+    s << std::fixed << std::setprecision(2) << total_time;
     if (global_args.verbose) {
-        output = "FMAlign2 total time: " + s.str() + " seconds.";
+        output = "(FMAlign2) - total time: " + s.str() + " seconds.";
         print_table_line(output, world_rank);
-        print_table_bound();
     }
 
     // Finalizar MPI
