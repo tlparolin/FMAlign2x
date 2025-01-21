@@ -98,7 +98,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
  * @return A pointer to the concatenated string.
  * @note The returned string must be deleted by the caller.
 */
-unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n);
+unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n, const int &world_rank);
 
 /**
  * @brief an LCP (Longest Common Prefix) array and a threshold value,

@@ -44,7 +44,7 @@
 #include <sstream>
 #include <mpi.h>
 
-#define TABLE_LEN 60
+#define TABLE_LEN 80
 /**
  * @brief A timer class that measures elapsed time. 
  * This class uses C++11 chrono library to measure elapsed time in seconds with double precision. 
@@ -143,7 +143,7 @@ private:
  * @param name store sequence name
  * @return multiple sequence stored in vector 
 */
-void read_data(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, bool verbose = true);
+void read_data(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, const int& world_rank, bool verbose = true);
 void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, int world_rank, int world_size, bool verbose = true);
 /**
  * @brief: Check whether the file exists in the specified path.
@@ -168,9 +168,9 @@ std::string clean_sequence(std::string sequence);
 * sequence coverage, and parallel align method.
 * @return void
 */
-void print_algorithm_info(int total_threads);
+void print_algorithm_info(int total_threads, const int &world_rank);
 
-void print_table_line(const std::string& output);
+void print_table_line(const std::string& output, const int& world_rank);
 
 void print_table_divider();
 

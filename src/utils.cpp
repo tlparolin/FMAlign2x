@@ -47,7 +47,7 @@ double Timer::elapsed_time() const {
  * @param name store sequence name
  * @return multiple sequence stored in vector 
 */
-void read_data(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, bool verbose){
+void read_data(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, const int& world_rank, bool verbose){
     std::string output = "";
     std::string str_data_path = data_path;
     // check weather the input path could be accessed 
@@ -55,7 +55,7 @@ void read_data(const char* data_path, std::vector<std::string>& data, std::vecto
     if (access_file(data_path)) {
         if (verbose && global_args.verbose) {
             output = str_data_path + " could be accessed";
-            print_table_line(output);
+            print_table_line(output, world_rank);
         }
     }
     else {
@@ -96,7 +96,7 @@ void read_data(const char* data_path, std::vector<std::string>& data, std::vecto
         std::stringstream s;
         s << std::fixed << std::setprecision(2) << merged_length / pow(2, 30);
         output = "Data Memory Usage: " + s.str() + " GB";
-        print_table_line(output);
+        print_table_line(output, world_rank);
     }
     
     #else
@@ -104,35 +104,30 @@ void read_data(const char* data_path, std::vector<std::string>& data, std::vecto
         std::stringstream s;
         s << std::fixed << std::setprecision(2) << merged_length / pow(2, 20);
         output = "Data Memory Usage: " + s.str() + " MB";
-        print_table_line(output);
+        print_table_line(output, world_rank);
     }
     #endif
     if (verbose && global_args.verbose) {
         output = "Sequence Number: " + std::to_string(data.size());
-        print_table_line(output);
-        print_table_divider();
+        print_table_line(output, world_rank);
     }
     return;
 }
 
 void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, int world_rank, int world_size, bool verbose){
-    if (world_rank == 0 && verbose && global_args.verbose) {
-        std::cout << "#                   Reading Data...                         #" << std::endl;
-        print_table_divider();
-    }
     std::string output = "";
     std::string str_data_path = data_path;
     // check weather the input path could be accessed 
 
     if (access_file(data_path)) {
-        if (world_rank == 0 && verbose && global_args.verbose) {
-            output = str_data_path + " could be accessed";
-            print_table_line(output);
+        if (verbose && global_args.verbose) {
+            output = "(Reading Data) - " + str_data_path + " could be accessed";
+            print_table_line(output, world_rank);
         }
     }
     else {
         print_table_bound();
-        output = "Error:" + str_data_path + " could not be accessed by Rank " + std::to_string(world_rank) + ". Please check if the path of the input data is correct or if the data exists!";
+        output = "(Reading Data) - Error: " + str_data_path + " could not be accessed. Please check if the path of the input data is correct or if the data exists!";
         std::cerr << output << std::endl;
         std::cerr << "Program Exit!" << std::endl;
         exit(1);
@@ -158,7 +153,7 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
     fclose(f_pointer);
 
     if (merged_length + data.size() > UINT32_MAX && M64 == 0) {
-        if(world_rank == 0 && verbose && global_args.verbose) {
+        if(verbose && global_args.verbose) {
             print_table_bound();
             std::cerr << "Error: The input data is too large and the 32-bit program may not produce correct results. Please compile a 64-bit program using the M64 parameter." << std::endl;
             std::cerr << "Program Exit!" << std::endl;
@@ -166,25 +161,24 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
         }
     }
     #if M64
-    if (world_rank == 0 && verbose && global_args.verbose) {
+    if (verbose && global_args.verbose) {
         std::stringstream s;
         s << std::fixed << std::setprecision(2) << merged_length / pow(2, 30);
-        output = "Data Memory Usage: " + s.str() + " GB";
-        print_table_line(output);
+        output = "(Reading Data) - Data Memory Usage: " + s.str() + " GB";
+        print_table_line(output, world_rank);
     }
     
     #else
-    if (world_rank == 0 && verbose && global_args.verbose) {
+    if (verbose && global_args.verbose) {
         std::stringstream s;
         s << std::fixed << std::setprecision(2) << merged_length / pow(2, 20);
-        output = "Data Memory Usage: " + s.str() + " MB";
-        print_table_line(output);
+        output = "(Reading Data) - Data Memory Usage: " + s.str() + " MB";
+        print_table_line(output, world_rank);
     }
     #endif
-    if (world_rank == 0 && verbose && global_args.verbose) {
-        output = "Sequence Number: " + std::to_string(data.size());
-        print_table_line(output);
-        print_table_divider();
+    if (verbose && global_args.verbose) {
+        output = "(Reading Data) - Sequence Number: " + std::to_string(data.size());
+        print_table_line(output, world_rank);
     }
     return;
 }
@@ -334,51 +328,46 @@ bool ArgParser::has(const std::string& name) const {
 * sequence coverage, and parallel align method.
 * @return void
 */
-void print_algorithm_info(int total_threads) {
-    print_table_bound();
-    std::cout << "#               FMAlign2 algorithm info                     #" << std::endl;
-    print_table_divider();
+void print_algorithm_info(int total_threads, const int& world_rank) {
 #if M64
-    std::string output = "Mode: 64 bit";
-    print_table_line(output);
+    std::string output = "(Algorithm Info) - Mode: 64 bit";
+    print_table_line(output, world_rank);
 #else
-    std::string output = "Mode: 32 bit";
-    print_table_line(output);
+    std::string output = "(Algorithm Info) - Mode: 32 bit";
+    print_table_line(output, world_rank);
 #endif
-    std::string thread_output = "Ranks: " + std::to_string(total_threads);
-    print_table_line(thread_output);
+    std::string thread_output = "(Algorithm Info) - Ranks: " + std::to_string(total_threads);
+    print_table_line(thread_output, world_rank);
 
     std::string l_output;
     if (global_args.min_mem_length < 0) {
-        l_output = "Minimum MEM length: square root of mean length";
+        l_output = "(Algorithm Info) - Minimum MEM length: square root of mean length";
     }
     else {
-        l_output = "Minimum MEM length: " + std::to_string(global_args.min_mem_length);
+        l_output = "(Algorithm Info) - Minimum MEM length: " + std::to_string(global_args.min_mem_length);
     }
     
-    print_table_line(l_output);
+    print_table_line(l_output, world_rank);
 
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << global_args.min_seq_coverage;
 
     std::string c_output;
     if (global_args.min_seq_coverage < 0) {
-        c_output = "Sequence coverage: default";
+        c_output = "(Algorithm Info) - Sequence coverage: default";
     }
     else {
-        c_output = "Sequence coverage: " + std::to_string(global_args.min_mem_length);
+        c_output = "(Algorithm Info) - Sequence coverage: " + std::to_string(global_args.min_mem_length);
     }
 
-    print_table_line(c_output);
+    print_table_line(c_output, world_rank);
 
-    std::string p_output = "Parallel align method: " + global_args.package;
-    print_table_line(p_output);
-
-    print_table_bound();
+    std::string p_output = "(Algorithm Info) - Parallel align method: " + global_args.package;
+    print_table_line(p_output, world_rank);
 }
 
-void print_table_line(const std::string &output) {
-    std::cout << "# " << std::left << std::setw(TABLE_LEN-2) << std::setfill(' ') << output << "#" << std::endl;
+void print_table_line(const std::string &output, const int &world_rank) {
+    std::cout << "# " << std::left << "Rank [" << std::setw(4) << std::right << world_rank << std::setfill(' ') << "] - " << std::left << std::setw(TABLE_LEN - 11) << std::setfill(' ') << output << " #" << std::endl;
 }
 
 void print_table_divider() {

@@ -135,14 +135,14 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(std::
 * the index of the current task, and a pointer to the storage for the aligned sequences.
 * @return NULL
 */
-void* parallel_align(void* arg);
+void* parallel_align(void* arg, const int &world_rank);
 
 /**
 * @brief Align sequences in a FASTA file using either halign or mafft package.
 * @param file_name The name of the FASTA file to align.
 * @return The name of the resulting aligned FASTA file.
 */
-std::string align_fasta(std::string file_name);
+std::string align_fasta(std::string file_name, const int &world_rank);
 
 /**
 * @brief Deletes temporary files generated during sequence alignment tasks.
@@ -165,7 +165,7 @@ void concat_alignment(std::vector<std::vector<std::string>>&concat_string, std::
 * @param fragment_len A reference to a vector of unsigned integers representing the lengths of the sequence fragments.
 * @return None.
 */
-void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vector<std::string>& data, std::vector<std::vector<std::pair<int_t, int_t>>>& concat_range, std::vector<uint_t>& fragment_len);
+void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vector<std::string>& data, std::vector<std::vector<std::pair<int_t, int_t>>>& concat_range, std::vector<uint_t>& fragment_len, const int& world_rank);
 
 /**
 * @brief: Aligns a sequence and a profile using a third-party tool called profile_two_align and returns the iterator pointing to the next position in the 2D vector of strings.
@@ -181,7 +181,7 @@ void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vect
 * @param fragment_len: Vector of unsigned integers representing the length of each fragment.
 * @return std::vector<std::vectorstd::string>::iterator: Iterator pointing to the next position in the 2D vector of strings.
 */
-std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_index, uint_t left_index, uint_t right_index, std::vector<std::vector<std::string>>& concat_string, std::vector<std::string>& data, std::vector<std::vector<std::pair<int_t, int_t>>>& concat_range, std::vector<uint_t>& fragment_len);
+std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_index, uint_t left_index, uint_t right_index, std::vector<std::vector<std::string>>& concat_string, std::vector<std::string>& data, std::vector<std::vector<std::pair<int_t, int_t>>>& concat_range, std::vector<uint_t>& fragment_len, const int& world_rank);
 /**
 * @brief Concatenate two sets of sequence data (chain and parallel) into a single set of concatenated data.
 * @param chain_string A vector of vectors containing the chain sequence data.

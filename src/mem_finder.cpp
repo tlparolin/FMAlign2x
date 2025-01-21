@@ -297,16 +297,11 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<me
  * @return Vector of split points for each sequence.
  */
 std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data, int world_rank, int world_size){
-    if (world_rank == 0 && global_args.verbose) {
-        std::cout << "#                    Finding MEM...                         #" << std::endl;
-        print_table_divider();
-    }
-    
     std::string output = "";
     Timer timer;
     uint_t n = 0;
 
-    unsigned char* concat_data = concat_strings(data, n); 
+    unsigned char* concat_data = concat_strings(data, n, world_rank); 
 
     if (global_args.min_mem_length < 0) {
         int_t l = ceil(pow(n, 1/(global_args.degree+2)));
@@ -316,9 +311,9 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         global_args.min_mem_length = l;
         
     }
-    if (world_rank == 0 && global_args.verbose) {
-        output = "Minimal MEM length is set to " + std::to_string(global_args.min_mem_length);
-        print_table_line(output);
+    if (global_args.verbose) {
+        output = "(Finding MEM) - Minimal MEM length is set to " + std::to_string(global_args.min_mem_length);
+        print_table_line(output, world_rank);
     }
 
     if (global_args.filter_mode == "default") {
@@ -331,9 +326,9 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         
     }
 
-    if (world_rank == 0 && global_args.verbose) {
-        output = "Filter mode is set to " + global_args.filter_mode;
-        print_table_line(output);
+    if (global_args.verbose) {
+        output = "(Finding MEM) - Filter mode is set to " + global_args.filter_mode;
+        print_table_line(output, world_rank);
     }
 
     if (global_args.min_seq_coverage < 0) {
@@ -345,9 +340,9 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         }
        
     }
-    if (world_rank == 0 && global_args.verbose) {
-        output = "Minimal sequence coverage is set to " + std::to_string(global_args.min_seq_coverage);
-        print_table_line(output);
+    if (global_args.verbose) {
+        output = "(Finding MEM) - Minimal sequence coverage is set to " + std::to_string(global_args.min_seq_coverage);
+        print_table_line(output, world_rank);
     }
     
     uint_t *SA = NULL;
@@ -358,8 +353,8 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     int32_t *DA = NULL;
     DA = (int32_t*) malloc(n*sizeof(int32_t));
 #if DEBUG
-    output = "Suffix is constructing...\n";
-    print_table_line(output);
+    output = "(Finding MEM) - Suffix is constructing...\n";
+    print_table_line(output, world_rank);
 #endif
 
     timer.reset();
@@ -371,9 +366,9 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     MPI_Reduce(&suffix_construction_time, &max_suffix_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << max_suffix_time;
-    if (world_rank == 0 && global_args.verbose) {
-        output = "Suffix construction time: " + s.str() + " seconds";
-        print_table_line(output);
+    if (global_args.verbose) {
+        output = "(Finding MEM) - Suffix construction time: " + s.str() + " seconds";
+        print_table_line(output, world_rank);
     }
     
     timer.reset();
@@ -425,9 +420,9 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     }
 #endif
 
-    if (mems.size() <= 0 && world_rank == 0 && global_args.verbose) {
+    if (mems.size() <= 0 && global_args.verbose) {
         output = "Warning: There is no MEMs, please adjust your paramters.";
-        print_table_line(output);
+        print_table_line(output, world_rank);
        
     }
 
@@ -454,17 +449,15 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
 
     // Reduce to get the max time
     MPI_Reduce(&mem_process_time, &max_mem_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-    if (world_rank == 0 && global_args.verbose) {
-        output = "Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1);
-        print_table_line(output);
+    if (global_args.verbose) {
+        output = "(Finding MEM) - Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1);
+        print_table_line(output, world_rank);
         s.str("");
         s << std::fixed << std::setprecision(3) << max_mem_time;
-        output = "MEM process time: " + s.str() + " seconds.";
-        print_table_line(output);
-        print_table_divider();
+        output = "(Finding MEM) - MEM process time: " + s.str() + " seconds.";
+        print_table_line(output, world_rank);
     }
    
-
     return split_point_on_sequence;
 }
 
@@ -475,7 +468,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
  * @return A pointer to the concatenated string.
  * @note The returned string must be deleted by the caller.
 */
-unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n) {
+unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n, const int &world_rank) {
     // Calculate total length of concatenated string
     uint_t total_length = 0;
     for (uint_t i = 0; i < strings.size(); i++) {
@@ -489,7 +482,7 @@ unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n
 
     if (!concat_data) {
         std::string out = "concat_data could not allocate enough space\n";
-        print_table_line(out);
+        print_table_line(out, world_rank);
         exit(1);
     }
 
@@ -523,9 +516,9 @@ unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n
 std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* lcp_array, int_t threshold, int_t min_cross_sequence, uint_t n, int world_rank, int world_size) {
 
     std::vector<std::pair<uint_t, uint_t>> intervals;
-    if (world_rank == 0 && global_args.verbose) {
+    if (global_args.verbose) {
         std::string output = "Minimal cross sequence number: " + std::to_string(min_cross_sequence);
-        print_table_line(output);
+        print_table_line(output, world_rank);
     }
     
     int_t left = 0, right = 0;

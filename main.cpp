@@ -136,8 +136,8 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         return 1;
     }
 
-    if (world_rank == 0 && global_args.verbose) {
-        print_algorithm_info(world_size);
+    if (global_args.verbose) {
+        print_algorithm_info(world_size, world_rank);
     }
 
     std::vector<std::string> data;
@@ -167,9 +167,9 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
 
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << max_time;
-    if (world_rank == 0 && global_args.verbose) {
+    if (global_args.verbose) {
         output = "FMAlign2 total time: " + s.str() + " seconds.";
-        print_table_line(output);
+        print_table_line(output, world_rank);
         print_table_bound();
     }
 

@@ -78,12 +78,6 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     uint_t world_rank = static_cast<uint_t>(world_rank_);
     uint_t world_size = static_cast<uint_t>(world_size_);
 
-    // Print status message
-    if (world_rank == 0 && global_args.verbose) {
-        std::cout << "#                Parallel Aligning...                       #" << std::endl;
-        print_table_divider();
-    }
-
     random_file_end = generateRandomString(10);
     std::string output = "";
     Timer timer;
@@ -140,8 +134,8 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << max_expand_time;
     if (world_rank == 0 && global_args.verbose) {
-        output = "SW expand time: " + s.str() + " seconds.";
-        print_table_line(output);
+        output = "(Parallel Align) - SW expand time: " + s.str() + " seconds.";
+        print_table_line(output, world_rank);
     }
     
     if (world_rank == 0) {
@@ -149,11 +143,11 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         if (0 != access(TMP_FOLDER.c_str(), 0)) {
 #ifdef __linux__
             if (0 != mkdir(TMP_FOLDER.c_str(), 0755)) {
-                std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
+                std::cerr << "(Parallel Align) - Fail to create file folder " << TMP_FOLDER << std::endl;
             }
 #else
             if (0 != mkdir(TMP_FOLDER.c_str())) {
-                std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
+                std::cerr << "(Parallel Align) - Fail to create file folder " << TMP_FOLDER << std::endl;
             }
 #endif
         }
@@ -194,7 +188,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
             parallel_params[i].parallel_range = parallel_align_range.begin() + i;
             parallel_params[i].task_index = i;
             parallel_params[i].result_store = parallel_string.begin() + i;
-            parallel_align(&parallel_params[i]);
+            parallel_align(&parallel_params[i], world_rank);
         }
     }
 
@@ -229,8 +223,8 @@ std::ofstream parallel_string_file("parallel_string.txt");
     s.str("");
     s << std::fixed << std::setprecision(2) << max_parallel_time;
     if (world_rank == 0 && global_args.verbose) {
-        output = "Parallel align time: " + s.str() + " seconds.";
-        print_table_line(output);
+        output = "(Parallel Align) - Parallel align time: " + s.str() + " seconds.";
+        print_table_line(output, world_rank);
     }
 
     timer.reset();
@@ -344,7 +338,7 @@ std::ofstream parallel_string_file("parallel_string.txt");
 
         std::vector<uint_t> fragment_len = get_first_nonzero_lengths(concat_string);
 
-        seq2profile(concat_string, data, concat_range, fragment_len);
+        seq2profile(concat_string, data, concat_range, fragment_len, world_rank);
         double seq2profile_time = timer.elapsed_time();
 
         concat_alignment(concat_string, name);
@@ -352,9 +346,8 @@ std::ofstream parallel_string_file("parallel_string.txt");
         s.str("");
         s << std::fixed << std::setprecision(2) << seq2profile_time;
         if (global_args.verbose) {
-            output = "Seq-profile time: " + s.str() + " seconds.";
-            print_table_line(output);
-            print_table_divider();
+            output = "(Parallel Align) - Seq-profile time: " + s.str() + " seconds.";
+            print_table_line(output, world_rank);
         }
     }
 
@@ -774,7 +767,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(std::
 * the index of the current task, and a pointer to the storage for the aligned sequences.
 * @return NULL
 */
-void* parallel_align(void* arg) {
+void* parallel_align(void* arg, const int& world_rank) {
     // Cast the input parameters to the correct struct type
     ParallelAlignParams* ptr = static_cast<ParallelAlignParams*>(arg);
     // Get data, chain, and chain_index from the input parameters
@@ -805,11 +798,11 @@ void* parallel_align(void* arg) {
     }
     file.close();
     // Call the align_fasta function to align the sequences in the file
-    std::string res_file_name = align_fasta(file_name);
+    std::string res_file_name = align_fasta(file_name, world_rank);
 
     std::vector<std::string> aligned_seq;
     std::vector<std::string> aligned_name;
-    read_data(res_file_name.c_str(), aligned_seq, aligned_name, false);
+    read_data(res_file_name.c_str(), aligned_seq, aligned_name, world_rank, false);
     std::vector<std::string> final_aligned_seq(seq_num, "");
     // Map the aligned sequences back to their original indices in the input data vector
     for (uint_t i = 0; i < aligned_seq_index.size(); i++) {
@@ -827,7 +820,7 @@ void* parallel_align(void* arg) {
 * @param file_name The name of the FASTA file to align.
 * @return The name of the resulting aligned FASTA file.
 */
-std::string align_fasta(std::string file_name) {
+std::string align_fasta(std::string file_name, const int &world_rank) {
 
     // std::ifstream file(file_name, std::ios::binary | std::ios::ate);
     // int_t size = file.tellg() / (1024 * 1024);
@@ -887,7 +880,7 @@ std::string align_fasta(std::string file_name) {
         int res = system(cmnd.c_str());
         if (res != 0) {
             std::string out = "Warning: Starts calling FMAlign2 recursively to align " + file_name;
-            print_table_line(out);
+            print_table_line(out, world_rank);
             cmnd = "";
 #if (defined(__linux__))
             cmnd.append("mpirun ./FMAlign2 ")
@@ -986,7 +979,7 @@ bool cmp(const std::pair<uint_t, uint_t>& a, const std::pair<uint_t, uint_t>& b)
 * @return None.
 */
 void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vector<std::string> &data, 
-    std::vector<std::vector<std::pair<int_t, int_t>>> &concat_range, std::vector<uint_t> &fragment_len) {
+    std::vector<std::vector<std::pair<int_t, int_t>>> &concat_range, std::vector<uint_t> &fragment_len, const int &world_rank) {
     // Count the number of missing fragments for each sequence and store them in a vector of pairs.
     uint_t seq_num = data.size();
     uint_t fragment_num = fragment_len.size();
@@ -1034,12 +1027,12 @@ void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vect
                 }
             } else if (if_start) {
                 right_it = cur_it - 1;
-                cur_it = seq2profile_align(seq_index,left_it-concat_string.begin(), right_it - concat_string.begin(), concat_string, data, concat_range, fragment_len);
+                cur_it = seq2profile_align(seq_index,left_it-concat_string.begin(), right_it - concat_string.begin(), concat_string, data, concat_range, fragment_len, world_rank);
                 if_start = false;
             }
             if (if_start && cur_it + 1 == concat_string.end()) {
                 right_it = cur_it;
-                seq2profile_align(seq_index, left_it - concat_string.begin(), right_it - concat_string.begin(), concat_string, data, concat_range, fragment_len);
+                seq2profile_align(seq_index, left_it - concat_string.begin(), right_it - concat_string.begin(), concat_string, data, concat_range, fragment_len, world_rank);
                 break;
             }          
         }
@@ -1061,7 +1054,7 @@ void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vect
 * @param fragment_len: Vector of unsigned integers representing the length of each fragment.
 * @return std::vector<std::vectorstd::string>::iterator: Iterator pointing to the next position in the 2D vector of strings.
 */
-std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_index, uint_t left_index, uint_t right_index, std::vector<std::vector<std::string>>& concat_string, std::vector<std::string>& data, std::vector<std::vector<std::pair<int_t, int_t>>>& concat_range, std::vector<uint_t>& fragment_len) {
+std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_index, uint_t left_index, uint_t right_index, std::vector<std::vector<std::string>>& concat_string, std::vector<std::string>& data, std::vector<std::vector<std::pair<int_t, int_t>>>& concat_range, std::vector<uint_t>& fragment_len, const int& world_rank) {
     int_t seq_begin = 0;
     // determine the start position of the sequence, if there is a sequence on the left side, take the end of the last one.
     if (left_index >= 1) {
@@ -1167,14 +1160,14 @@ std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_ind
     if (res != 0) {
 #if DEBUG
         std::string out = "Warning: Seq-Profile alignment may result in errors and may produce invalid results.";
-        print_table_line(out);
+        print_table_line(out, world_rank);
 #endif
     }
     // Define vectors for storing aligned sequences and their names
     std::vector<std::string> align_res;
     std::vector<std::string> align_res_name;
     // Read data from a file and store it in the above vectors
-    read_data(profile_file_name.c_str(), align_res, align_res_name, false);
+    read_data(profile_file_name.c_str(), align_res, align_res_name, world_rank, false);
 
     for (uint_t i = 0; i < selected_profile_seq_index.size(); i++) {
         concat_string[left_index][selected_profile_seq_index[i]] = align_res[i];
