@@ -304,23 +304,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
                 parallel_string[i].push_back(std::move(str));
             }
         }
-/////////
-// if (world_rank == 0){
-std::ofstream parallel_string_file("parallel_string.txt");
-        if (!parallel_string_file.is_open()) {
-            std::cerr << "Error opening file parallel_string.txt" << std::endl;
-            exit(1);
-        }
 
-        for (const auto& parallel : parallel_string) {
-            for (const auto& str : parallel) {
-                parallel_string_file << str << '\n';
-            }
-        }
-
-        parallel_string_file.close();
-    // }
-///////////////
         // Concatenate the chains and parallel ranges
         std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
         // Concatenate the chain strings and parallel strings
