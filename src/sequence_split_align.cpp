@@ -127,61 +127,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         }
     }
 
-    // Linearize chain_string
-    std::string linear_chain_string;
-    for (const auto& chain : chain_string) {
-        for (const auto& str : chain) {
-            uint_t str_size = str.size();
-            linear_chain_string.append(reinterpret_cast<const char*>(&str_size), sizeof(uint_t)); // Adiciona o tamanho da string
-            linear_chain_string.append(str); // Adiciona o conteúdo da string
-        }
-    }
-
-    // Determine local sizes to gather data
-    uint_t local_size = linear_chain_string.size();
-    std::vector<int> sizes(world_size, 0);
-    MPI_Gather(&local_size, 1, MPI_UNSIGNED, sizes.data(), 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
-
-    // Calculate displacements
-    std::vector<int> displs(world_size, 0); // changed to std::vector<int>
-    for (uint_t i = 1; i < world_size; ++i) {
-        displs[i] = displs[i - 1] + sizes[i - 1];
-    }
-    int total_size = displs.back() + sizes.back(); // changed to int
-
-    // Space for linearized data
-    std::vector<char> gathered_chain_string(total_size, 0);
-
-    // Realizar a operação de MPI_Allgatherv
-    MPI_Gatherv(linear_chain_string.data(), local_size, MPI_CHAR,
-                gathered_chain_string.data(), sizes.data(), displs.data(), MPI_CHAR, 0, MPI_COMM_WORLD);
-
-
-    // Chain_string rank 0 building
-    if (world_rank == 0) {
-        chain_string.clear();
-        chain_string.resize(chain_num);
-
-        uint_t idx = 0;
-        for (uint_t i = 0; i < chain_num; ++i) {
-            for (uint_t j = 0; j < seq_num; ++j) {
-                if (idx + sizeof(uint_t) > static_cast<size_t>(total_size)) {
-                    throw std::runtime_error("Buffer overflow while reconstructing chain_string");
-                }
-                // Next string size
-                uint_t str_size = *reinterpret_cast<const uint_t*>(&gathered_chain_string[idx]);
-                idx += sizeof(uint_t);
-
-                if (idx + str_size > static_cast<size_t>(total_size)) {
-                    throw std::runtime_error("Buffer overflow while reconstructing chain_string");
-                }
-                // Get string and add to chain
-                std::string str(&gathered_chain_string[idx], str_size);
-                idx += str_size;
-                chain_string[i].push_back(std::move(str));
-            }
-        }
-    }
+    
 
     params.clear();
  
@@ -221,40 +167,29 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
 
-    // // Determine the effective number of ranks required
-    // effective_world_size = std::min(world_size, parallel_num);
+    // Determine the effective number of ranks required
+    effective_world_size = std::min(world_size, parallel_num);
 
-    // // Calculate the number of tasks per active rank
-    // uint_t parallel_num_per_rank = parallel_num / effective_world_size;
-    // uint_t parallel_num_remain = parallel_num % effective_world_size;
+    // Calculate the number of tasks per active rank
+    uint_t parallel_num_per_rank = parallel_num / effective_world_size;
+    uint_t parallel_num_remain = parallel_num % effective_world_size;
 
-    // // Adjust indexes for each rank
-    // uint_t parallel_num_start = 0;
-    // uint_t parallel_num_end = 0;
+    // Adjust indexes for each rank
+    uint_t parallel_num_start = 0;
+    uint_t parallel_num_end = 0;
 
-    // if (world_rank < effective_world_size) {
-    //     parallel_num_start = world_rank * parallel_num_per_rank;
-    //     parallel_num_end = (world_rank + 1) * parallel_num_per_rank;
+    if (world_rank < effective_world_size) {
+        parallel_num_start = world_rank * parallel_num_per_rank;
+        parallel_num_end = (world_rank + 1) * parallel_num_per_rank;
 
-    //     // The last active rank handles the remaining tasks
-    //     if (world_rank == effective_world_size - 1) {
-    //         parallel_num_end += parallel_num_remain;
-    //     }
-    // }
-    // // Only active ranks should process tasks
-    // if (world_rank < effective_world_size) {
-    //     for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
-    //         parallel_params[i].data = &data;
-    //         parallel_params[i].parallel_range = parallel_align_range.begin() + i;
-    //         parallel_params[i].task_index = i;
-    //         parallel_params[i].result_store = parallel_string.begin() + i;
-    //         parallel_align(&parallel_params[i]);
-    //     }
-    // }
-    // Cyclical distribution between ranks
-    for (uint_t i = 0; i < parallel_num; i++) {
-        uint_t rank = i % world_size;
-        if (rank == world_rank) {
+        // The last active rank handles the remaining tasks
+        if (world_rank == effective_world_size - 1) {
+            parallel_num_end += parallel_num_remain;
+        }
+    }
+    // Only active ranks should process tasks
+    if (world_rank < effective_world_size) {
+        for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
             parallel_params[i].data = &data;
             parallel_params[i].parallel_range = parallel_align_range.begin() + i;
             parallel_params[i].task_index = i;
@@ -263,49 +198,6 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         }
     }
 
-    // Linearize parallel_string
-    std::string linear_parallel_string;
-    for (const auto& parallel : parallel_string) {
-        for (const auto& str : parallel) {
-            uint_t str_size = str.size();
-            linear_parallel_string.append(reinterpret_cast<const char*>(&str_size), sizeof(uint_t));
-            linear_parallel_string.append(str);
-        }
-    }
-
-    // Determine local sizes to gather data
-    uint_t local_parallel_size = linear_parallel_string.size();
-    std::vector<int> parallel_sizes(world_size, 0);
-    MPI_Allgather(&local_parallel_size, 1, MPI_UNSIGNED, parallel_sizes.data(), 1, MPI_UNSIGNED, MPI_COMM_WORLD);
-
-    // Calculate displacements
-    std::vector<int> parallel_displs(world_size, 0);
-    for (uint_t i = 1; i < world_size; ++i) {
-        parallel_displs[i] = parallel_displs[i - 1] + parallel_sizes[i - 1];
-    }
-    int total_parallel_size = parallel_displs.back() + parallel_sizes.back();
-
-    std::vector<char> gathered_parallel_string(total_parallel_size, 0);
-    MPI_Allgatherv(linear_parallel_string.data(), local_parallel_size, MPI_CHAR,
-                   gathered_parallel_string.data(), parallel_sizes.data(), parallel_displs.data(), MPI_CHAR, MPI_COMM_WORLD);
-
-    // Parallel_string rank 0 building
-    if (world_rank == 0) {
-        parallel_string.clear();
-        parallel_string.resize(parallel_num);
-
-        uint_t idx = 0;
-        for (uint_t i = 0; i < parallel_num; ++i) {
-            for (uint_t j = 0; j < seq_num; ++j) {
-                uint_t str_size = *reinterpret_cast<const uint_t*>(&gathered_parallel_string[idx]);
-                idx += sizeof(uint_t);
-
-                std::string str(&gathered_parallel_string[idx], str_size);
-                idx += str_size;
-                parallel_string[i].push_back(std::move(str));
-            }
-        }
-    // }
 
 /////////
 // if (world_rank == 0){
@@ -322,7 +214,7 @@ std::ofstream parallel_string_file("parallel_string.txt");
         }
 
         parallel_string_file.close();
-    }
+    // }
 ///////////////
 
     // Remove temporary files created during parallel execution
@@ -343,7 +235,108 @@ std::ofstream parallel_string_file("parallel_string.txt");
 
     timer.reset();
 
-    if (world_rank == 0){
+    // Linearize chain_string to send to rank 0
+    std::string linear_chain_string;
+    for (const auto& chain : chain_string) {
+        for (const auto& str : chain) {
+            uint_t str_size = str.size();
+            linear_chain_string.append(reinterpret_cast<const char*>(&str_size), sizeof(uint_t)); // Add string size
+            linear_chain_string.append(str); // Adiciona o conteúdo da string
+        }
+    }
+
+    // Determine local sizes to gather data
+    uint_t local_size = linear_chain_string.size();
+    std::vector<int> chain_string_sizes(world_size, 0);
+    MPI_Gather(&local_size, 1, MPI_UNSIGNED, chain_string_sizes.data(), 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
+
+    // Calculate displacements
+    std::vector<int> chain_string_displs(world_size, 0); // changed to std::vector<int>
+    for (uint_t i = 1; i < world_size; ++i) {
+        chain_string_displs[i] = chain_string_displs[i - 1] + chain_string_sizes[i - 1];
+    }
+    int total_size = chain_string_displs.back() + chain_string_sizes.back(); // changed to int
+
+    // Space for linearized data
+    std::vector<char> gathered_chain_string(total_size, 0);
+
+    // Gather data
+    MPI_Gatherv(linear_chain_string.data(), local_size, MPI_CHAR,
+                gathered_chain_string.data(), chain_string_sizes.data(), chain_string_displs.data(), MPI_CHAR, 0, MPI_COMM_WORLD);
+
+    // Linearize parallel_string to send to rank 0
+    std::string linear_parallel_string;
+    for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
+        for (const auto& str : parallel_string[i]) {
+            uint_t str_size = str.size();
+            linear_parallel_string.append(reinterpret_cast<const char*>(&str_size), sizeof(uint_t));
+            linear_parallel_string.append(str);
+        }
+    }
+
+    // Determine local sizes to gather data 
+    uint_t local_parallel_string_size = linear_parallel_string.size();
+    std::vector<int> global_parallel_string_sizes(world_size, 0);
+    MPI_Gather(&local_parallel_string_size, 1, MPI_UNSIGNED, global_parallel_string_sizes.data(), 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
+
+    // Calculate displacements
+    std::vector<int> parallel_string_displs(world_size, 0);
+    if (world_rank == 0) {
+        for (uint_t i = 1; i < world_size; i++) {
+            parallel_string_displs[i] = parallel_string_displs[i - 1] + global_parallel_string_sizes[i - 1];
+        }
+    }
+
+    // Send linearized parallel_string data to rank 0
+    std::vector<char> gathered_data(world_rank == 0 ? parallel_string_displs.back() + global_parallel_string_sizes.back() : 0);
+    MPI_Gatherv(linear_parallel_string.data(), local_size, MPI_CHAR,
+                gathered_data.data(), global_parallel_string_sizes.data(), parallel_string_displs.data(), MPI_CHAR, 0, MPI_COMM_WORLD);
+
+
+    // Rank 0 will reconstruct the chain_string and parallel_string
+    // The chain_string and parallel_string will be used to generate the final alignment
+    if (world_rank == 0) {
+        // Building chain_string
+        chain_string.clear();
+        chain_string.resize(chain_num);
+
+        uint_t chain_idx = 0;
+        for (uint_t i = 0; i < chain_num; ++i) {
+            for (uint_t j = 0; j < seq_num; ++j) {
+                if (chain_idx + sizeof(uint_t) > static_cast<size_t>(total_size)) {
+                    throw std::runtime_error("Buffer overflow while reconstructing chain_string");
+                }
+                // Next string size
+                uint_t str_size = *reinterpret_cast<const uint_t*>(&gathered_chain_string[chain_idx]);
+                chain_idx += sizeof(uint_t);
+
+                if (chain_idx + str_size > static_cast<size_t>(total_size)) {
+                    throw std::runtime_error("Buffer overflow while reconstructing chain_string");
+                }
+                // Get string and add to chain
+                std::string str(&gathered_chain_string[chain_idx], str_size);
+                chain_idx += str_size;
+                chain_string[i].push_back(std::move(str));
+            }
+        }
+
+        // Building parallel_string
+        parallel_string.clear();
+        parallel_string.resize(parallel_num);
+
+        uint_t parallel_idx = 0;
+        for (uint_t i = 0; i < parallel_num; i++) {
+            for (uint_t j = 0; j < seq_num; j++) {
+                uint_t str_size = *reinterpret_cast<const uint_t*>(&gathered_data[parallel_idx]);
+                parallel_idx += sizeof(uint_t);
+
+                std::string str(&gathered_data[parallel_idx], str_size);
+                parallel_idx += str_size;
+
+                parallel_string[i].push_back(std::move(str));
+            }
+        }
+
         // Concatenate the chains and parallel ranges
         std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
         // Concatenate the chain strings and parallel strings
