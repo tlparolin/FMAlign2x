@@ -358,7 +358,13 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
 #endif
 
     timer.reset();
-    gsacak((unsigned char *)concat_data, (uint_t*)SA, LCP, DA, n);
+    #pragma omp parallel
+    {
+        #pragma omp single
+        {
+            gsacak((unsigned char *)concat_data, (uint_t*)SA, LCP, DA, n);
+        }
+    }
     
     double suffix_construction_time = timer.elapsed_time();
     std::stringstream s;
@@ -418,7 +424,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
 #endif
 
     if (mems.size() <= 0 && global_args.verbose) {
-        output = "Warning: There is no MEMs, please adjust your paramters.";
+        output = "Warning: There is no MEMs, please adjust your parameters.";
         print_table_line(output, world_rank);
        
     }
@@ -451,7 +457,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         output = "(Finding MEM) - MEM process time: " + s.str() + " seconds.";
         print_table_line(output, world_rank);
     }
-   
+
     return split_point_on_sequence;
 }
 

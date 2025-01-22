@@ -114,6 +114,16 @@ void read_data(const char* data_path, std::vector<std::string>& data, std::vecto
     return;
 }
 
+/**
+ * @brief: read fasta and fastq format data
+ * @param data_path   the path to the target data
+ * @param data store sequence content
+ * @param name store sequence name
+ * @param world_rank rank identification
+ * @param world_size total processes
+ * @param verbose control whether messages should be displayed
+ * @return multiple sequence stored in vector 
+*/
 void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::vector<std::string>& name, int world_rank, int world_size, bool verbose){
     std::string output = "";
     std::string str_data_path = data_path;
@@ -132,7 +142,6 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
         std::cerr << "Program Exit!" << std::endl;
         exit(1);
     }
-    
 
     FILE* f_pointer = fopen(data_path, "r");
     kseq_t* file_t = kseq_init(fileno(f_pointer));
@@ -160,25 +169,27 @@ void read_data_mpi(const char* data_path, std::vector<std::string>& data, std::v
             exit(1);
         }
     }
-    #if M64
-    if (verbose && global_args.verbose) {
-        std::stringstream s;
-        s << std::fixed << std::setprecision(2) << merged_length / pow(2, 30);
-        output = "(Reading Data) - Data Memory Usage: " + s.str() + " GB";
-        print_table_line(output, world_rank);
-    }
-    
-    #else
-    if (verbose && global_args.verbose) {
-        std::stringstream s;
-        s << std::fixed << std::setprecision(2) << merged_length / pow(2, 20);
-        output = "(Reading Data) - Data Memory Usage: " + s.str() + " MB";
-        print_table_line(output, world_rank);
-    }
-    #endif
-    if (verbose && global_args.verbose) {
-        output = "(Reading Data) - Sequence Number: " + std::to_string(data.size());
-        print_table_line(output, world_rank);
+    if(world_rank == 0){
+        #if M64
+        if (verbose && global_args.verbose) {
+            std::stringstream s;
+            s << std::fixed << std::setprecision(2) << merged_length / pow(2, 30);
+            output = "(Reading Data) - Data Memory Usage: " + s.str() + " GB";
+            print_table_line(output, world_rank);
+        }
+        
+        #else
+        if (verbose && global_args.verbose) {
+            std::stringstream s;
+            s << std::fixed << std::setprecision(2) << merged_length / pow(2, 20);
+            output = "(Reading Data) - Data Memory Usage: " + s.str() + " MB";
+            print_table_line(output, world_rank);
+        }
+        #endif
+        if (verbose && global_args.verbose) {
+            output = "(Reading Data) - Sequence Number: " + std::to_string(data.size());
+            print_table_line(output, world_rank);
+        }
     }
     return;
 }

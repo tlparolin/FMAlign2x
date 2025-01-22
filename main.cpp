@@ -136,7 +136,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         return 1;
     }
 
-    if (global_args.verbose) {
+    if (world_rank == 0 && global_args.verbose) {
         print_algorithm_info(world_size, world_rank);
     }
 
