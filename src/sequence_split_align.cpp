@@ -88,37 +88,21 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     // Initialize ExpandChainParams structure for each chain pair
     std::vector<ExpandChainParams> params(chain_num);
     
-    // Determine the necessary number of ranks to process chain_num
-    uint_t effective_world_size = std::min(static_cast<uint_t>(world_size), chain_num);
-
     // Number os tasks by rank
-    uint_t chain_num_per_rank = chain_num / effective_world_size;
-    uint_t chain_num_remain = chain_num % effective_world_size;
+    uint_t chain_num_per_rank = chain_num / world_size;
+    uint_t chain_num_remain = chain_num % world_size;
 
     // Setting range
-    uint_t chain_num_start = 0;
-    uint_t chain_num_end = 0;
+    uint_t chain_num_start = world_rank * chain_num_per_rank + std::min(world_rank, chain_num_remain);
+    uint_t chain_num_end = chain_num_start + chain_num_per_rank + (world_rank < chain_num_remain ? 1 : 0);
 
-    if (world_rank < effective_world_size) {
-        chain_num_start = world_rank * chain_num_per_rank;
-        chain_num_end = (world_rank + 1) * chain_num_per_rank;
-
-        // The last rank get all remaining
-        if (world_rank == effective_world_size - 1) {
-            chain_num_end += chain_num_remain;
-        }
-    }
-
-    // Only active ranks will run
-    if (world_rank < effective_world_size) {
-        // Initialize ExpandChainParams structure for each chain pair
-        for (uint_t i = chain_num_start; i < chain_num_end; i++) {
-            params[i].data = &data;
-            params[i].chain = &chain;
-            params[i].chain_index = i;
-            params[i].result_store = chain_string.begin() + i;
-            expand_chain(&params[i]);
-        }
+    // Initialize ExpandChainParams structure for each chain pair
+    for (uint_t i = chain_num_start; i < chain_num_end; i++) {
+        params[i].data = &data;
+        params[i].chain = &chain;
+        params[i].chain_index = i;
+        params[i].result_store = chain_string.begin() + i;
+        expand_chain(&params[i]);
     }
 
     params.clear();
@@ -153,35 +137,20 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
 
-    // Determine the effective number of ranks required
-    effective_world_size = std::min(world_size, parallel_num);
-
     // Calculate the number of tasks per active rank
-    uint_t parallel_num_per_rank = parallel_num / effective_world_size;
-    uint_t parallel_num_remain = parallel_num % effective_world_size;
+    uint_t parallel_num_per_rank = parallel_num / world_size;
+    uint_t parallel_num_remain = parallel_num % world_size;
 
     // Adjust indexes for each rank
-    uint_t parallel_num_start = 0;
-    uint_t parallel_num_end = 0;
-
-    if (world_rank < effective_world_size) {
-        parallel_num_start = world_rank * parallel_num_per_rank;
-        parallel_num_end = (world_rank + 1) * parallel_num_per_rank;
-
-        // The last active rank handles the remaining tasks
-        if (world_rank == effective_world_size - 1) {
-            parallel_num_end += parallel_num_remain;
-        }
-    }
-    // Only active ranks should process tasks
-    if (world_rank < effective_world_size) {
-        for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
-            parallel_params[i].data = &data;
-            parallel_params[i].parallel_range = parallel_align_range.begin() + i;
-            parallel_params[i].task_index = i;
-            parallel_params[i].result_store = parallel_string.begin() + i;
-            parallel_align(&parallel_params[i], world_rank);
-        }
+    uint_t parallel_num_start = world_rank * parallel_num_per_rank + std::min(world_rank, parallel_num_remain);
+    uint_t parallel_num_end = parallel_num_start + parallel_num_per_rank + (world_rank < parallel_num_remain ? 1 : 0);
+    
+    for (uint_t i = parallel_num_start; i < parallel_num_end; i++) {
+        parallel_params[i].data = &data;
+        parallel_params[i].parallel_range = parallel_align_range.begin() + i;
+        parallel_params[i].task_index = i;
+        parallel_params[i].result_store = parallel_string.begin() + i;
+        parallel_align(&parallel_params[i], world_rank);
     }
 
     // Remove temporary files created during parallel execution
