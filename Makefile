@@ -1,6 +1,21 @@
-CXX = mpic++
+# Detecta se o Intel Compiler está disponível
+ifeq ($(shell which mpiicpc),)
+    # Caso o Intel Compiler não esteja disponível, usa o mpic++
+    CXX = mpic++
+    CC = mpicc
+    # Flags do GCC (usando mpicxx para GCC)
+    MPI_COMPILE_FLAGS = $(strip $(shell mpicxx --showme:compile))
+    MPI_LINK_FLAGS = $(strip $(shell mpicxx --showme:link))
+else
+    # Caso o Intel Compiler esteja disponível, usa mpiicpc
+    CXX = mpiicpc
+    CC = mpiicc
+    # Flags do Intel Compiler (usando mpiicpc para Intel)
+    MPI_COMPILE_FLAGS = $(strip $(shell mpiicpc --showme:compile))
+    MPI_LINK_FLAGS = $(strip $(shell mpiicpc --showme:link))
+endif
+
 CXXFLAGS = -Wall -std=c++20 -fopenmp
-CC = mpicc
 CFLAGS = 
 
 SRCS = main.cpp src/utils.cpp src/mem_finder.cpp src/sequence_split_align.cpp ext/SW/ssw.cpp ext/SW/ssw_cpp.cpp
@@ -14,10 +29,10 @@ else
 endif
 
 ifeq ($(OS),Windows_NT)
-	CXXFLAGS += -fopenmp # Still include OpenMP for Windows if needed
+	CXXFLAGS += -fopenmp
 else
-	CXXFLAGS += -lpthread -pthread -lrt # These are generally not needed with MPI
-	SRCS += src/thread_pool.cpp src/thread_condition.cpp # Keep these if you intend to use threads alongside MPI
+	CXXFLAGS += -lpthread -pthread -lrt
+	SRCS += src/thread_pool.cpp src/thread_condition.cpp
 endif
 
 OBJS = $(SRCS:.cpp=.o)
@@ -27,10 +42,6 @@ ifdef M64
 	CXXFLAGS += -DM64
 	CFLAGS += -DM64
 endif
-
-# Add MPI flags
-CXXFLAGS += $(shell mpic++ --showme:compile)
-LDFLAGS += $(shell mpic++ --showme:link)
 
 FMAlign2: $(OBJS)
 	$(CXX) $(CXXFLAGS) $(OBJS) $(LDFLAGS) -o FMAlign2
