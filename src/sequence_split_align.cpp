@@ -73,8 +73,6 @@ std::string generateRandomString(int length) {
 * @return void
 */
 std::string random_file_end;
-std::mutex file_queue_mutex;
-std::queue<FileTask> file_queue;
 
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> chain, int world_rank_, int world_size_) {
     uint_t world_rank = static_cast<uint_t>(world_rank_);
@@ -111,6 +109,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         }
     }
 
+    // Only active ranks will run
     if (world_rank < effective_world_size) {
         // Initialize ExpandChainParams structure for each chain pair
         for (uint_t i = chain_num_start; i < chain_num_end; i++) {
@@ -184,9 +183,6 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
             parallel_align(&parallel_params[i], world_rank);
         }
     }
-
-    // Align in parallel
-    process_files(world_rank, world_size, file_queue);
 
     // Remove temporary files created during parallel execution
     delete_tmp_folder(parallel_num_start, parallel_num_end);
@@ -775,69 +771,22 @@ void* parallel_align(void* arg, const int& world_rank) {
         }       
     }
     file.close();
+    // Call the align_fasta function to align the sequences in the file
+    std::string res_file_name = align_fasta(file_name, world_rank);
 
-    // Update file queue
-    {
-        std::lock_guard<std::mutex> lock(file_queue_mutex);
-        FileTask task = {file_name, aligned_seq_index, ptr->result_store, seq_num};
-        file_queue.push(task);
+    std::vector<std::string> aligned_seq;
+    std::vector<std::string> aligned_name;
+    read_data(res_file_name.c_str(), aligned_seq, aligned_name, world_rank, false);
+    std::vector<std::string> final_aligned_seq(seq_num, "");
+    // Map the aligned sequences back to their original indices in the input data vector
+    for (uint_t i = 0; i < aligned_seq_index.size(); i++) {
+        final_aligned_seq[aligned_seq_index[i]] = aligned_seq[i];
     }
+
+    // Store the aligned sequences in the result storage
+    *(ptr->result_store) = final_aligned_seq;
 
     return NULL;
-}
-
-/**
- * @brief Process files from a queue and align sequences in parallel.
- * This function processes each file in the provided queue by performing the following:
- * 1. Extracts the task details (file name, indices, result storage, and sequence number).
- * 2. Aligns the sequences in the file using an external alignment function (`align_fasta`).
- * 3. Reads the aligned sequences from the resulting file.
- * 4. Maps the aligned sequences back to their original indices.
- * 5. Stores the aligned sequences in the corresponding result storage location.
- * The function runs in a loop, processing files until the queue is empty.
- * @param world_rank The rank of the current process in a parallel environment.
- * @param world_size The total number of processes in the parallel environment.
- * @param file_queue A reference to the queue holding the `FileTask` objects to be processed.
- */
-void process_files(int world_rank, int world_size, std::queue<FileTask>& file_queue) {
-    while (true) {
-        std::vector<uint_t> aligned_seq_index;
-        std::string file_name;
-        std::vector<std::vector<std::string>>::iterator result_store;
-        uint_t seq_num;
-
-        // Locks the queue for exclusive access
-        {
-            std::lock_guard<std::mutex> lock(file_queue_mutex);
-            if (file_queue.empty()) {
-                break;
-            }
-            FileTask current_task = file_queue.front();
-            file_queue.pop();
-
-            file_name = current_task.file_name;
-            aligned_seq_index = current_task.indices;
-            result_store = current_task.result_store;  // Gets the pointer to result_store
-            seq_num = current_task.seq_num;
-        }
-
-        // Process the file and get the results file name
-        std::string res_file_name = align_fasta(file_name, world_rank);
-
-        // Read aligned sequences from the results file
-        std::vector<std::string> aligned_seq;
-        std::vector<std::string> aligned_name;
-        read_data(res_file_name.c_str(), aligned_seq, aligned_name, world_rank, false);
-
-        std::vector<std::string> final_aligned_seq(seq_num, "");
-        // Map the aligned sequences back to their original indices in the input data vector
-        for (uint_t i = 0; i < aligned_seq_index.size(); i++) {
-            final_aligned_seq[aligned_seq_index[i]] = aligned_seq[i];
-        }
-
-        // Store the aligned sequences in the result storage
-        *result_store = final_aligned_seq;
-    }
 }
 
 /**

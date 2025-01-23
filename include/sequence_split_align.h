@@ -35,8 +35,6 @@
 #include <random>
 #include <climits>
 #include <numeric>
-#include <queue>
-#include <mutex>
 
 const std::string TMP_FOLDER = "./temp/";
 
@@ -52,13 +50,6 @@ struct ParallelAlignParams {
 	std::vector<std::vector<std::pair<int_t, int_t>>>::iterator parallel_range;
 	uint_t task_index;
 	std::vector<std::vector<std::string>>::iterator result_store;
-};
-
-struct FileTask {
-    std::string file_name;
-    std::vector<uint_t> indices;
-	std::vector<std::vector<std::string>>::iterator result_store;
-	uint_t seq_num;
 };
 
 /**
@@ -144,22 +135,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(std::
 * the index of the current task, and a pointer to the storage for the aligned sequences.
 * @return NULL
 */
-void* parallel_align(void* arg, const int& world_rank);
-
-/**
- * @brief Process files from a queue and align sequences in parallel.
- * This function processes each file in the provided queue by performing the following:
- * 1. Extracts the task details (file name, indices, result storage, and sequence number).
- * 2. Aligns the sequences in the file using an external alignment function (`align_fasta`).
- * 3. Reads the aligned sequences from the resulting file.
- * 4. Maps the aligned sequences back to their original indices.
- * 5. Stores the aligned sequences in the corresponding result storage location.
- * The function runs in a loop, processing files until the queue is empty.
- * @param world_rank The rank of the current process in a parallel environment.
- * @param world_size The total number of processes in the parallel environment.
- * @param file_queue A reference to the queue holding the `FileTask` objects to be processed.
- */
-void process_files(int world_rank, int world_size, std::queue<FileTask>& file_queue);
+void* parallel_align(void* arg, const int &world_rank);
 
 /**
 * @brief Align sequences in a FASTA file using either halign or mafft package.
