@@ -305,6 +305,15 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
             }
         }
 
+        double comm_time = timer.elapsed_time();
+        s.str("");
+        s << std::fixed << std::setprecision(2) << comm_time;
+        if (global_args.verbose) {
+            output = "(Parallel Align) - Message Passing time: " + s.str() + " seconds.";
+            print_table_line(output, world_rank);
+        }
+        
+        timer.reset();
         // Concatenate the chains and parallel ranges
         std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
         // Concatenate the chain strings and parallel strings
