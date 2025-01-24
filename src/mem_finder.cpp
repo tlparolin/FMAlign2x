@@ -351,13 +351,18 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     print_table_line(output);
 #endif
     timer.reset();
-    gsacak((unsigned char *)concat_data, (uint_t*)SA, LCP, DA, n);
+
+    hpx::future<void> task_gsacak = hpx::async([=]() {
+        gsacak((unsigned char *)concat_data, (uint_t*)SA, LCP, DA, n);
+    });
+    task_gsacak.get();
+
     double suffix_construction_time = timer.elapsed_time();
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << suffix_construction_time;
     if (global_args.verbose) {
-    output = "Suffix construction time: " + s.str() + " seconds";
-    print_table_line(output);
+        output = "Suffix construction time: " + s.str() + " seconds";
+        print_table_line(output);
     }
     
 
@@ -381,6 +386,8 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     mems.resize(interval_size);
     // Convert each interval to a MEM in parallel
     IntervalToMemConversionParams* params = new IntervalToMemConversionParams[interval_size];
+    // Quando a task 'gsacak' for concluída, execute o loop paralelo
+
     hpx::experimental::for_loop(hpx::execution::par, 0, interval_size, [&](int i) {
         params[i].SA = SA;
         params[i].DA = DA;
@@ -391,6 +398,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         params[i].joined_sequence_bound = joined_sequence_bound;
         interval2mem(params + i);
     });
+
 
     if (mems.size() <= 0 && global_args.verbose) {
         output = "Warning: There is no MEMs, please adjust your paramters.";
