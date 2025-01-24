@@ -285,157 +285,127 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<me
  * @param data A vector of strings representing the sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data){
+std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data) {
     if (global_args.verbose) {
         hpx::cout << "#                    Finding MEM...                         #" << std::endl;
         print_table_divider();
     }
-    
-    std::string output = "";
+
     Timer timer;
     uint_t n = 0;
 
-    unsigned char* concat_data = concat_strings(data, n); 
-
     if (global_args.min_mem_length < 0) {
-        int_t l = ceil(pow(n, 1/(global_args.degree+2)));
-        l = l > 30 ? l : 30;
-        l = l < 2000 ? l : 2000;
-
-        global_args.min_mem_length = l;
-        
-    }
-    if (global_args.verbose) {
-        output = "Minimal MEM length is set to " + std::to_string(global_args.min_mem_length);
-        print_table_line(output);
+        global_args.min_mem_length = std::clamp(static_cast<int_t>(ceil(pow(n, 1 / (global_args.degree + 2)))), 30, 2000);
     }
 
     if (global_args.filter_mode == "default") {
-        if (data.size() < 100) {
-            global_args.filter_mode = "local";
-        }
-        else {
-            global_args.filter_mode = "global";
-        }
-        
-    }
-
-    if (global_args.verbose) {
-        output = "Filter mode is set to " + global_args.filter_mode;
-        print_table_line(output);
+        global_args.filter_mode = (data.size() < 100) ? "local" : "global";
     }
 
     if (global_args.min_seq_coverage < 0) {
-        if (data.size() < 100) {
-            global_args.min_seq_coverage = 1;
-        }
-        else {
-            global_args.min_seq_coverage = 0.7;
-        }
-       
+        global_args.min_seq_coverage = (data.size() < 100) ? 1 : 0.7;
     }
+
     if (global_args.verbose) {
-        output = "Minimal sequence coverage is set to " + std::to_string(global_args.min_seq_coverage);
-        print_table_line(output);
+        print_table_line("Minimal MEM length is set to " + std::to_string(global_args.min_mem_length));
+        print_table_line("Filter mode is set to " + global_args.filter_mode);
+        print_table_line("Minimal sequence coverage is set to " + std::to_string(global_args.min_seq_coverage));
     }
-    
-    uint_t *SA = NULL;
-    SA = (uint_t*) malloc(n*sizeof(uint_t));
-    // LCP[0] = 0, LCP[i] = lcp(concat_data[SA[i]], concat_data[SA[i-1]])
-    int_t *LCP = NULL;
-    LCP = (int_t*) malloc(n*sizeof(int_t));
-    int32_t *DA = NULL;
-    DA = (int32_t*) malloc(n*sizeof(int32_t));
+
+    // Task 1: Concatenação de strings
+    auto concat_task = hpx::dataflow(hpx::launch::async, [&]() {
+        return concat_strings(data, n);
+    });
+
+    // Task 2: Construção do sufixo
+    auto gsacak_task = hpx::dataflow(hpx::launch::sync, [&](auto concat_data_future) {
+        unsigned char* concat_data = concat_data_future.get();
+
+        uint_t *SA = NULL;
+        SA = (uint_t*) malloc(n*sizeof(uint_t));
+        int_t *LCP = NULL;
+        LCP = (int_t*) malloc(n*sizeof(int_t));
+        int32_t *DA = NULL;
+        DA = (int32_t*) malloc(n*sizeof(int32_t));
+
 #if DEBUG
-    output = "Suffix is constructing...\n";
-    print_table_line(output);
+        print_table_line("Suffix is constructing...\n");
 #endif
-    timer.reset();
-
-    hpx::future<void> task_gsacak = hpx::async([=]() {
         gsacak((unsigned char *)concat_data, (uint_t*)SA, LCP, DA, n);
-    });
-    task_gsacak.get();
 
-    double suffix_construction_time = timer.elapsed_time();
-    std::stringstream s;
-    s << std::fixed << std::setprecision(2) << suffix_construction_time;
+        return std::make_tuple(SA, LCP, DA, concat_data);
+    }, concat_task);
+
+    // Task 3: Cálculo de intervalos LCP
+    auto intervals_task = hpx::dataflow(hpx::launch::async, [&](auto gsacak_result) {
+        auto [SA, LCP, DA, concat_data] = gsacak_result.get();
+        if (global_args.verbose) {
+            std::ostringstream oss;
+            oss << std::fixed << std::setprecision(2) << timer.elapsed_time();
+            print_table_line("Suffix construction time: " + oss.str() + " seconds");
+        }
+        timer.reset();
+        int_t min_mem_length = global_args.min_mem_length;
+        int_t min_cross_sequence = ceil(global_args.min_seq_coverage * data.size());
+        auto intervals = get_lcp_intervals(LCP, min_mem_length, min_cross_sequence, n);
+        free(LCP); // LCP não é mais necessário
+        return std::make_tuple(intervals, SA, DA, concat_data);
+    }, gsacak_task);
+
+    // Task 4: Conversão de intervalos para MEMs
+    auto mems_task = hpx::dataflow(hpx::launch::async, [&](auto intervals_result) {
+        auto [intervals, SA, DA, concat_data] = intervals_result.get();
+
+        uint_t interval_size = intervals.size();
+        std::vector<mem> mems(interval_size);
+        int_t min_mem_length = global_args.min_mem_length;
+
+        std::vector<uint_t> joined_sequence_bound;
+        uint_t total_length = 0;
+        for (auto& seq : data) {
+            joined_sequence_bound.push_back(total_length);
+            total_length += seq.length() + 1;
+        }
+
+        hpx::experimental::for_loop(hpx::execution::par, 0, interval_size, [&](int i) {
+            IntervalToMemConversionParams params{
+                .SA = SA,
+                .DA = DA,
+                .concat_data = concat_data,
+                .result_store = mems.begin() + i,
+                .min_mem_length = min_mem_length,
+                .interval = intervals[i],
+                .joined_sequence_bound = joined_sequence_bound
+            };
+            interval2mem(&params);
+        });
+
+        free(SA);
+        free(DA);
+        free(concat_data);
+        return mems;
+    }, intervals_task);
+
+    // Task 5: Filtragem de MEMs
+    auto filter_task = hpx::dataflow(hpx::launch::async, [&](auto mems_future) {
+        auto mems = mems_future.get();
+        sort_mem(mems, data);
+        return (global_args.filter_mode == "global")
+            ? filter_mem_fast(mems, data.size())
+            : filter_mem_accurate(mems, data.size());
+    }, mems_task);
+
+
+    // Retorna o resultado final
+    auto split_point_on_sequence = filter_task.get();
+    global_args.avg_file_size = (n / (split_point_on_sequence[0].size() + 1)) / (1 << 20); // Usando deslocamento de bits para divisão por 2^20
     if (global_args.verbose) {
-        output = "Suffix construction time: " + s.str() + " seconds";
-        print_table_line(output);
-    }
-    
-
-    timer.reset();
-    int_t min_mem_length = global_args.min_mem_length;
-    int_t min_cross_sequence = ceil(global_args.min_seq_coverage * data.size());
-    std::vector<uint_t> joined_sequence_bound;
-    uint_t total_length = 0;
-    for (uint_t i = 0; i < data.size(); i++) {
-        joined_sequence_bound.push_back(total_length);
-        total_length += data[i].length() + 1;
-    }
-    // Find all intervals with an LCP >= min_mem_length and <= min_cross_sequence
-    std::vector<std::pair<uint_t, uint_t>> intervals = get_lcp_intervals(LCP, min_mem_length, min_cross_sequence, n);
-
-    free(LCP);
-
-    uint_t interval_size = intervals.size();
-
-    std::vector<mem> mems;
-    mems.resize(interval_size);
-    // Convert each interval to a MEM in parallel
-    IntervalToMemConversionParams* params = new IntervalToMemConversionParams[interval_size];
-    // Quando a task 'gsacak' for concluída, execute o loop paralelo
-
-    hpx::experimental::for_loop(hpx::execution::par, 0, interval_size, [&](int i) {
-        params[i].SA = SA;
-        params[i].DA = DA;
-        params[i].interval = intervals[i];
-        params[i].concat_data = concat_data;
-        params[i].result_store = mems.begin() + i;
-        params[i].min_mem_length = min_mem_length;
-        params[i].joined_sequence_bound = joined_sequence_bound;
-        interval2mem(params + i);
-    });
-
-
-    if (mems.size() <= 0 && global_args.verbose) {
-        output = "Warning: There is no MEMs, please adjust your paramters.";
-        print_table_line(output);
-       
-    }
-
-    // Sort the MEMs based on their average positions and assign their indices
-    sort_mem(mems, data);
-
-    free(SA);
-    free(DA);
-    free(concat_data);
-    delete[] params;
-
-    uint_t sequence_num = data.size();
-    std::vector<std::vector<std::pair<int_t, int_t>>> split_point_on_sequence;
-    if (global_args.filter_mode == "global") {
-        split_point_on_sequence = filter_mem_fast(mems, sequence_num);
-    }
-    else {
-        split_point_on_sequence = filter_mem_accurate(mems, sequence_num);
-    }
-    
-    global_args.avg_file_size = (n / (split_point_on_sequence[0].size() + 1)) / pow(2, 20);
-    double mem_process_time = timer.elapsed_time();
-    if (global_args.verbose) {
-        output = "Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1);
-        print_table_line(output);
-        s.str("");
-        s << std::fixed << std::setprecision(3) << mem_process_time;
-        output = "MEM process time: " + s.str() + " seconds.";
-        print_table_line(output);
+        print_table_line("Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1));
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(2) << timer.elapsed_time();
+        print_table_line("MEM process time: " + oss.str() + " seconds.");
         print_table_divider();
     }
-   
-
     return split_point_on_sequence;
 }
 
