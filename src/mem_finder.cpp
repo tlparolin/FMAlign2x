@@ -331,19 +331,21 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
 #if DEBUG
         print_table_line("Suffix is constructing...\n");
 #endif
+        timer.reset();
         gsacak((unsigned char *)concat_data, (uint_t*)SA, LCP, DA, n);
-
+        if (global_args.verbose) {
+            std::ostringstream oss;
+            oss << std::fixed << std::setprecision(2) << timer.elapsed_time();
+            print_table_line("Suffix construction time: " + oss.str() + " seconds");
+        }
+        
         return std::make_tuple(SA, LCP, DA, concat_data);
     }, concat_task);
 
     // Task 3: Cálculo de intervalos LCP
     auto intervals_task = hpx::dataflow(hpx::launch::async, [&](auto gsacak_result) {
         auto [SA, LCP, DA, concat_data] = gsacak_result.get();
-        if (global_args.verbose) {
-            std::ostringstream oss;
-            oss << std::fixed << std::setprecision(2) << timer.elapsed_time();
-            print_table_line("Suffix construction time: " + oss.str() + " seconds");
-        }
+        
         timer.reset();
         int_t min_mem_length = global_args.min_mem_length;
         int_t min_cross_sequence = ceil(global_args.min_seq_coverage * data.size());
