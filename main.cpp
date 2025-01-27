@@ -135,17 +135,12 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
 
     try {
         // Read data from the input file and store in data and name vectors
-        Timer subtimer;
         read_data(global_args.data_path.c_str(), data, name, true);
-        std::cout << "Read Data timer " << std::to_string(subtimer.elapsed_time()) << std::endl;
-        subtimer.reset();
+
         // Find MEMs in the sequences and split the sequences into fragments for parallel alignment.
         std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data);
-        std::cout << "Find MEM timer " << std::to_string(subtimer.elapsed_time()) << std::endl;
-        subtimer.reset();
+
         split_and_parallel_align(data, name, split_points_on_sequence);
-        std::cout << "Parallel Align timer " << std::to_string(subtimer.elapsed_time()) << std::endl;
-        subtimer.reset();
     }
     catch (const std::bad_alloc& e) { // Catch any bad allocations and print an error message.
         print_table_bound();
