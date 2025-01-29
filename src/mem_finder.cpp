@@ -306,29 +306,22 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     Timer timer;
     uint_t n = 0;
 
-    unsigned char* concat_data = concat_strings(data, n); 
+    unsigned char* concat_data = concat_strings(data, n);
 
     if (global_args.min_mem_length < 0) {
-        int_t l = ceil(pow(n, 1/(global_args.degree+2)));
-        l = l > 30 ? l : 30;
-        l = l < 2000 ? l : 2000;
-
-        global_args.min_mem_length = l;
-        
-    }
-    if (global_args.verbose) {
-        output = "Minimal MEM length is set to " + std::to_string(global_args.min_mem_length);
-        print_table_line(output);
+        global_args.min_mem_length = std::max(30, std::min(2000, static_cast<int_t>(std::ceil(std::pow(n, 1 / (global_args.degree + 2))))));
+        if (global_args.verbose) {
+            output = "Minimal MEM length is set to " + std::to_string(global_args.min_mem_length);
+            print_table_line(output);
+        }
     }
 
     if (global_args.filter_mode == "default") {
-        if (data.size() < 100) {
-            global_args.filter_mode = "local";
+        global_args.filter_mode = data.size() < 100 ? "local" : "global";
+        if (global_args.verbose) {
+            output = "Filter mode is set to " + global_args.filter_mode;
+            print_table_line(output);
         }
-        else {
-            global_args.filter_mode = "global";
-        }
-        
     }
 
     if (global_args.verbose) {
@@ -337,81 +330,80 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     }
 
     if (global_args.min_seq_coverage < 0) {
-        if (data.size() < 100) {
-            global_args.min_seq_coverage = 1;
+        global_args.min_seq_coverage = data.size() < 100 ? 1 : 0.7;
+        if (global_args.verbose) {
+            output = "Minimal sequence coverage is set to " + std::to_string(global_args.min_seq_coverage);
+            print_table_line(output);
         }
-        else {
-            global_args.min_seq_coverage = 0.7;
-        }
-       
-    }
-    if (global_args.verbose) {
-        output = "Minimal sequence coverage is set to " + std::to_string(global_args.min_seq_coverage);
-        print_table_line(output);
     }
     
-    uint_t *SA = NULL;
-    SA = (uint_t*) malloc(n*sizeof(uint_t));
-    // LCP[0] = 0, LCP[i] = lcp(concat_data[SA[i]], concat_data[SA[i-1]])
-    int_t *LCP = NULL;
-    LCP = (int_t*) malloc(n*sizeof(int_t));
-    int32_t *DA = NULL;
-    DA = (int32_t*) malloc(n*sizeof(int32_t));
-#if DEBUG
-    output = "Suffix is constructing...\n";
-    print_table_line(output);
-#endif
     timer.reset();
-    gsacak((unsigned char *)concat_data, (uint_t*)SA, LCP, DA, n);
+
+    sdsl::csa_wt<> csa;
+    sdsl::construct_im(csa, concat_data, 1);  // Construa o CSA com concat_data
+
+    // Acessando SA e LCP usando isa() e lcp()
+    const auto& SA = csa.isa();   // Inverse Suffix Array
+    const auto& LCP = csa.lcp();  // LCP Array
+
+    // Calculando os limites das sequências concatenadas (joined_sequence_bound)
+    std::vector<uint_t> joined_sequence_bound;
+    uint_t total_length = 0;
+    for (const auto& seq : data) {
+        joined_sequence_bound.push_back(total_length);
+        total_length += seq.length() + 1;  // Inclui o delimitador
+    }
+
+    // 2.  Document Array (DA) - Efficient Calculation
+    std::vector<int32_t> DA(total_length);  // Size is now total_length
+    for (size_t i = 0; i < total_length; ++i) {
+        auto it = std::upper_bound(joined_sequence_bound.begin(), joined_sequence_bound.end(), SA[i]);
+        DA[i] = std::distance(joined_sequence_bound.begin(), it) -1; //Corrected index
+    }
+
     double suffix_construction_time = timer.elapsed_time();
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << suffix_construction_time;
     if (global_args.verbose) {
-    output = "Suffix construction time: " + s.str() + " seconds";
-    print_table_line(output);
+        output = "Suffix construction time: " + s.str() + " seconds";
+        print_table_line(output);
     }
-    
 
     timer.reset();
     int_t min_mem_length = global_args.min_mem_length;
-    int_t min_cross_sequence = ceil(global_args.min_seq_coverage * data.size());
-    std::vector<uint_t> joined_sequence_bound;
-    uint_t total_length = 0;
-    for (uint_t i = 0; i < data.size(); i++) {
-        joined_sequence_bound.push_back(total_length);
-        total_length += data[i].length() + 1;
-    }
-    // Find all intervals with an LCP >= min_mem_length and <= min_cross_sequence
-    std::vector<std::pair<uint_t, uint_t>> intervals = get_lcp_intervals(LCP, min_mem_length, min_cross_sequence, n);
+    int_t min_cross_sequence = std::ceil(global_args.min_seq_coverage * data.size());
 
-    free(LCP);
+    // Find all intervals with an LCP >= min_mem_length and <= min_cross_sequence
+    // 3. LCP Intervals (using sdsl if possible, otherwise your existing function)
+    auto intervals = get_lcp_intervals(LCP.data(), min_mem_length, min_cross_sequence, total_length); // Pass total_length
 
     uint_t interval_size = intervals.size();
+    std::vector<mem> mems(interval_size);
 
-    std::vector<mem> mems;
-    mems.resize(interval_size);
     // Convert each interval to a MEM in parallel
     IntervalToMemConversionParams* params = new IntervalToMemConversionParams[interval_size];
 #if (defined(__linux__))
     threadpool pool;
     threadpool_init(&pool, global_args.thread);
     for (uint_t i = 0; i < interval_size; i++) {
-        params[i].SA = SA;
-        params[i].DA = DA;
+        // ... (set params[i] correctly, using total_length for size of arrays)
+        params[i].SA = SA.data();
+        params[i].DA = DA.data();
         params[i].interval = intervals[i];
         params[i].concat_data = concat_data;
         params[i].result_store = mems.begin() + i;
         params[i].min_mem_length = min_mem_length;
         params[i].joined_sequence_bound = joined_sequence_bound;
 
-        threadpool_add_task(&pool, interval2mem, params+i);
+        threadpool_add_task(&pool, interval2mem, params + i);
     }
     threadpool_destroy(&pool);
 #else
 #pragma omp parallel for num_threads(global_args.thread)
     for (uint_t i = 0; i < interval_size; i++) {
-        params[i].SA = SA;
-        params[i].DA = DA;
+        // ... (set params[i] correctly, using total_length for size of arrays)
+        params[i].SA = SA.data();
+        params[i].DA = DA.data();
         params[i].interval = intervals[i];
         params[i].concat_data = concat_data;
         params[i].result_store = mems.begin() + i;
@@ -423,28 +415,19 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
 
     if (mems.size() <= 0 && global_args.verbose) {
         output = "Warning: There is no MEMs, please adjust your paramters.";
-        print_table_line(output);
-       
+        print_table_line(output); 
     }
+    
+    delete[] params;
 
     // Sort the MEMs based on their average positions and assign their indices
     sort_mem(mems, data);
 
-    free(SA);
-    free(DA);
-    free(concat_data);
-    delete[] params;
-
     uint_t sequence_num = data.size();
-    std::vector<std::vector<std::pair<int_t, int_t>>> split_point_on_sequence;
-    if (global_args.filter_mode == "global") {
-        split_point_on_sequence = filter_mem_fast(mems, sequence_num);
-    }
-    else {
-        split_point_on_sequence = filter_mem_accurate(mems, sequence_num);
-    }
-    
-    global_args.avg_file_size = (n / (split_point_on_sequence[0].size() + 1)) / pow(2, 20);
+    auto split_point_on_sequence = (global_args.filter_mode == "global") ? filter_mem_fast(mems, sequence_num) : filter_mem_accurate(mems, sequence_num);
+
+    global_args.avg_file_size = (n / (split_point_on_sequence[0].size() + 1)) / std::pow(2, 20);
+
     double mem_process_time = timer.elapsed_time();
     if (global_args.verbose) {
         output = "Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1);
@@ -455,7 +438,6 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         print_table_line(output);
         print_table_divider();
     }
-   
 
     return split_point_on_sequence;
 }

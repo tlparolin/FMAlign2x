@@ -37,6 +37,12 @@
 #include <vector>
 #include <unordered_map>
 #include <sstream>
+#include <sdsl/csa_wt.hpp>
+#include <sdsl/lcp_support_tree.hpp>
+#include <sdsl/util.hpp>
+#include <sdsl/construct_sa.hpp>
+#include <sdsl/construct_lcp.hpp>
+
 struct sub_string {
     int_t sequence_index; // the sequence index that substring in
     uint_t position; // the begin position in the seqence
