@@ -324,11 +324,6 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         }
     }
 
-    if (global_args.verbose) {
-        output = "Filter mode is set to " + global_args.filter_mode;
-        print_table_line(output);
-    }
-
     if (global_args.min_seq_coverage < 0) {
         global_args.min_seq_coverage = data.size() < 100 ? 1 : 0.7;
         if (global_args.verbose) {
@@ -337,30 +332,14 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         }
     }
     
+    // Alocação dinâmica gerenciada automaticamente
+    std::vector<uint_t> SA(n);
+    std::vector<int_t> LCP(n);
+    std::vector<int32_t> DA(n);
+
     timer.reset();
-
-    sdsl::csa_wt<> csa;
-    sdsl::construct_im(csa, concat_data, 1);  // Construa o CSA com concat_data
-
-    // Acessando SA e LCP usando isa() e lcp()
-    const auto& SA = csa.isa();   // Inverse Suffix Array
-    const auto& LCP = csa.lcp();  // LCP Array
-
-    // Calculando os limites das sequências concatenadas (joined_sequence_bound)
-    std::vector<uint_t> joined_sequence_bound;
-    uint_t total_length = 0;
-    for (const auto& seq : data) {
-        joined_sequence_bound.push_back(total_length);
-        total_length += seq.length() + 1;  // Inclui o delimitador
-    }
-
-    // 2.  Document Array (DA) - Efficient Calculation
-    std::vector<int32_t> DA(total_length);  // Size is now total_length
-    for (size_t i = 0; i < total_length; ++i) {
-        auto it = std::upper_bound(joined_sequence_bound.begin(), joined_sequence_bound.end(), SA[i]);
-        DA[i] = std::distance(joined_sequence_bound.begin(), it) -1; //Corrected index
-    }
-
+    gsacak((unsigned char*)concat_data, SA.data(), LCP.data(), DA.data(), n);
+   
     double suffix_construction_time = timer.elapsed_time();
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << suffix_construction_time;
@@ -370,12 +349,18 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     }
 
     timer.reset();
+    // Calculando os limites das sequências concatenadas (joined_sequence_bound)
+    std::vector<uint_t> joined_sequence_bound;
+    uint_t total_length = 0;
+    for (const auto& seq : data) {
+        joined_sequence_bound.push_back(total_length);
+        total_length += seq.length() + 1;  // Inclui o delimitador
+    }
     int_t min_mem_length = global_args.min_mem_length;
     int_t min_cross_sequence = std::ceil(global_args.min_seq_coverage * data.size());
 
     // Find all intervals with an LCP >= min_mem_length and <= min_cross_sequence
-    // 3. LCP Intervals (using sdsl if possible, otherwise your existing function)
-    auto intervals = get_lcp_intervals(LCP.data(), min_mem_length, min_cross_sequence, total_length); // Pass total_length
+    auto intervals = get_lcp_intervals(LCP.data(), min_mem_length, min_cross_sequence, total_length);
 
     uint_t interval_size = intervals.size();
     std::vector<mem> mems(interval_size);
