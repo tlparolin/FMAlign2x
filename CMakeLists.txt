@@ -1,11 +1,17 @@
 cmake_minimum_required(VERSION 3.10)
-project(FMAlign2)
+project(FMAlign2 C CXX)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
+set (CMAKE_CXX_STANDARD 23)
+set (CMAKE_CXX_STANDARD_REQUIRED True)
 
+# add seqan3 to search path
 list(APPEND CMAKE_PREFIX_PATH "ext/seqan3")
-find_package(seqan3 REQUIRED)
+# add the Sharg Parser to search path
+list (APPEND CMAKE_PREFIX_PATH "ext/sharg-parser/cmake")
+
+# require seqan3 with a version between >=3.0.0 and <4.0.0
+find_package (seqan3 3.0 REQUIRED)
+find_package (sharg 1.0 REQUIRED)
 
 # Define source files
 set(SRCS
@@ -17,6 +23,8 @@ set(SRCS
     ext/SW/ssw_cpp.cpp
     src/gsacak.c
 )
+
+set_source_files_properties(src/gsacak.c PROPERTIES LANGUAGE C)
 
 # Add platform-specific sources
 if(NOT WIN32)
@@ -48,7 +56,7 @@ endif()
 # Define executable
 add_executable(FMAlign2 ${SRCS})
 
-target_link_libraries(FMAlign2 PRIVATE seqan3::seqan3)
+target_link_libraries(FMAlign2 seqan3::seqan3 sharg::sharg)
 
 # Additional definitions
 if(M64)
