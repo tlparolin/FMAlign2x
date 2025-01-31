@@ -26,6 +26,7 @@
 /remove_gap.py
 /output.fasta
 /output.aligned.fasta
+/output.fmaligned2.fasta
 /FMAlign2.vcxproj.user
 /chr1_h.fasta
 /chain.o
@@ -35,3 +36,5 @@
 /src/gsacak.o
 *.o
 /bug
+/build
+FMAlign2
