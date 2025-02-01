@@ -1,0 +1,6 @@
+[submodule "ext/seqan3"]
+	path = ext/seqan3
+	url = https://github.com/seqan/seqan3.git
+[submodule "ext/sharg-parser"]
+	path = ext/sharg-parser
+	url = https://github.com/seqan/sharg-parser.git

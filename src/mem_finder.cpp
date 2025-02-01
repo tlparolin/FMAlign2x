@@ -306,38 +306,8 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
     Timer timer;
     uint_t n = 0;
 
-    // Concatenar todas as sequências em uma única string com '1' como separador e '0' no final
-    std::vector<seqan3::dna4> concatenated_sequence;
-    for (size_t i = 0; i < data.size(); ++i) {
-        concatenated_sequence.insert(concatenated_sequence.end(), data[i].begin(), data[i].end());
-        if (i < data.size() - 1) {
-            concatenated_sequence.push_back(seqan3::dna4('1'));  // separador entre as sequências
-        }
-    }
-    concatenated_sequence.push_back(seqan3::dna4('0'));  // terminador no final
-
-    if (global_args.min_mem_length < 0) {
-        global_args.min_mem_length = std::max(30, std::min(2000, static_cast<int>(std::ceil(std::pow(n, 1 / (global_args.degree + 2))))));
-        if (global_args.verbose) {
-            output = "Minimal MEM length is set to " + std::to_string(global_args.min_mem_length);
-            print_table_line(output);
-        }
-    }
-
-    // Calcular o Suffix Array e LCP
+    seqan3::fm_index index{data};
     timer.reset();
-    auto SA = seqan3::suffix_array(concatenated_sequence);
-    auto LCP = seqan3::lcp_array(concatenated_sequence, SA);
-
-    // Document Array (DA) pode ser obtido diretamente do Suffix Array
-    std::vector<size_t> DA;
-    size_t current_document = 0;
-    for (size_t i = 0; i < SA.size(); ++i) {
-        if (concatenated_sequence[SA[i]] == seqan3::dna4('1')) {
-            current_document++;
-        }
-        DA.push_back(current_document);
-    }
 
     double suffix_construction_time = timer.elapsed_time();
     std::stringstream s;
@@ -348,82 +318,90 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
     }
 
     timer.reset();
+    // if (global_args.min_mem_length < 0) {
+    //     global_args.min_mem_length = std::max(30, std::min(2000, static_cast<int>(std::ceil(std::pow(n, 1 / (global_args.degree + 2))))));
+    //     if (global_args.verbose) {
+    //         output = "Minimal MEM length is set to " + std::to_string(global_args.min_mem_length);
+    //         print_table_line(output);
+    //     }
+    // }
     // Calculando os limites das sequências concatenadas (joined_sequence_bound)
-    std::vector<uint_t> joined_sequence_bound;
-    uint_t total_length = 0;
-    for (const auto& seq : data) {
-        joined_sequence_bound.push_back(total_length);
-        total_length += seq.size() + 1;  // Inclui o delimitador
-    }
+    // std::vector<uint_t> joined_sequence_bound;
+    // uint_t total_length = 0;
+    // for (const auto& seq : data) {
+    //     joined_sequence_bound.push_back(total_length);
+    //     total_length += seq.size() + 1;  // Inclui o delimitador
+    // }
 
-    int_t min_mem_length = global_args.min_mem_length;
-    int_t min_cross_sequence = std::ceil(global_args.min_seq_coverage * data.size());
+    // int_t min_mem_length = global_args.min_mem_length;
+    // int_t min_cross_sequence = std::ceil(global_args.min_seq_coverage * data.size());
 
     // Encontrar intervalos de LCP
-    auto intervals = get_lcp_intervals(LCP, min_mem_length, min_cross_sequence, total_length);
+    // auto intervals = get_lcp_intervals(LCP, min_mem_length, data.size(), concatenated_sequence.size());
 
-    uint_t interval_size = intervals.size();
-    std::vector<mem> mems(interval_size);
+
+    // uint_t interval_size = intervals.size();
+    // std::vector<mem> mems(interval_size);
 
     // Convert each interval to a MEM in parallel
-    IntervalToMemConversionParams* params = new IntervalToMemConversionParams[interval_size];
-#if (defined(__linux__))
-    threadpool pool;
-    threadpool_init(&pool, global_args.thread);
-    for (uint_t i = 0; i < interval_size; i++) {
-        // Ajustar parâmetros
-        params[i].SA = SA.data();
-        params[i].DA = DA.data();
-        params[i].interval = intervals[i];
-        params[i].concat_data = concatenated_sequence;
-        params[i].result_store = mems.begin() + i;
-        params[i].min_mem_length = min_mem_length;
-        params[i].joined_sequence_bound = joined_sequence_bound;
+//     IntervalToMemConversionParams* params = new IntervalToMemConversionParams[interval_size];
+// #if (defined(__linux__))
+//     threadpool pool;
+//     threadpool_init(&pool, global_args.thread);
+//     for (uint_t i = 0; i < interval_size; i++) {
+//         // Ajustar parâmetros
+//         params[i].SA = SA.data();
+//         params[i].DA = DA.data();
+//         params[i].interval = intervals[i];
+//         params[i].concat_data = concatenated_sequence;
+//         params[i].result_store = mems.begin() + i;
+//         params[i].min_mem_length = min_mem_length;
+//         params[i].joined_sequence_bound = joined_sequence_bound;
 
-        threadpool_add_task(&pool, interval2mem, params + i);
-    }
-    threadpool_destroy(&pool);
-#else
-#pragma omp parallel for num_threads(global_args.thread)
-    for (uint_t i = 0; i < interval_size; i++) {
-        // Ajustar parâmetros
-        params[i].SA = SA.data();
-        params[i].DA = DA.data();
-        params[i].interval = intervals[i];
-        params[i].concat_data = concatenated_sequence;
-        params[i].result_store = mems.begin() + i;
-        params[i].min_mem_length = min_mem_length;
-        params[i].joined_sequence_bound = joined_sequence_bound;
-        interval2mem(params + i);
-    }
-#endif
+//         threadpool_add_task(&pool, interval2mem, params + i);
+//     }
+//     threadpool_destroy(&pool);
+// #else
+// #pragma omp parallel for num_threads(global_args.thread)
+//     for (uint_t i = 0; i < interval_size; i++) {
+//         // Ajustar parâmetros
+//         params[i].SA = SA.data();
+//         params[i].DA = DA.data();
+//         params[i].interval = intervals[i];
+//         params[i].concat_data = concatenated_sequence;
+//         params[i].result_store = mems.begin() + i;
+//         params[i].min_mem_length = min_mem_length;
+//         params[i].joined_sequence_bound = joined_sequence_bound;
+//         interval2mem(params + i);
+//     }
+// #endif
 
-    if (mems.size() <= 0 && global_args.verbose) {
-        output = "Warning: There is no MEMs, please adjust your parameters.";
-        print_table_line(output); 
-    }
+//     if (mems.size() <= 0 && global_args.verbose) {
+//         output = "Warning: There is no MEMs, please adjust your parameters.";
+//         print_table_line(output); 
+//     }
 
-    delete[] params;
+//     delete[] params;
 
-    // Sort the MEMs based on their average positions and assign their indices
-    sort_mem(mems, data);
+//     // Sort the MEMs based on their average positions and assign their indices
+//     sort_mem(mems, data);
 
-    uint_t sequence_num = data.size();
-    auto split_point_on_sequence = (global_args.filter_mode == "global") ? filter_mem_fast(mems, sequence_num) : filter_mem_accurate(mems, sequence_num);
+//     uint_t sequence_num = data.size();
+//     auto split_point_on_sequence = (global_args.filter_mode == "global") ? filter_mem_fast(mems, sequence_num) : filter_mem_accurate(mems, sequence_num);
 
-    global_args.avg_file_size = (n / (split_point_on_sequence[0].size() + 1)) / std::pow(2, 20);
+//     global_args.avg_file_size = (n / (split_point_on_sequence[0].size() + 1)) / std::pow(2, 20);
 
-    double mem_process_time = timer.elapsed_time();
-    if (global_args.verbose) {
-        output = "Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1);
-        print_table_line(output);
-        s.str("");
-        s << std::fixed << std::setprecision(3) << mem_process_time;
-        output = "MEM process time: " + s.str() + " seconds.";
-        print_table_line(output);
-        print_table_divider();
-    }
-
+//     double mem_process_time = timer.elapsed_time();
+//     if (global_args.verbose) {
+//         output = "Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1);
+//         print_table_line(output);
+//         s.str("");
+//         s << std::fixed << std::setprecision(3) << mem_process_time;
+//         output = "MEM process time: " + s.str() + " seconds.";
+//         print_table_line(output);
+//         print_table_divider();
+//     }
+std::vector<std::vector<std::pair<int_t, int_t>>> split_point_on_sequence;
     return split_point_on_sequence;
 }
 

@@ -38,6 +38,7 @@
 #include <unordered_map>
 #include <sstream>
 #include <memory>
+#include <seqan3/search/fm_index/all.hpp>
 
 struct sub_string {
     int_t sequence_index; // the sequence index that substring in
