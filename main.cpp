@@ -83,13 +83,12 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         print_algorithm_info();
     }
 
-    std::vector<std::string> data;
-    std::vector<std::string> name;
+    std::vector<std::vector<seqan3::dna4>> data;
 
     try {
-        read_data(global_args.data_path.c_str(), data, name, true);
-        std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data);
-        split_and_parallel_align(data, name, split_points_on_sequence);
+        read_data(global_args.data_path.c_str(), data, true);
+        // std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data);
+        // split_and_parallel_align(data, name, split_points_on_sequence);
     } catch (const std::bad_alloc& e) {
         print_table_bound();
         std::cerr << "Error: " << e.what() << "\nProgram Exit!" << std::endl;

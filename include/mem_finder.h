@@ -91,7 +91,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vecto
  * @param data A vector of strings representing the sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data);
+std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std::vector<seqan3::dna4>>& data);
 
 /**
  * @brief Concatenates a vector of strings with separator 1 and a terminating 0.
@@ -100,7 +100,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
  * @return A pointer to the concatenated string.
  * @note The returned string must be deleted by the caller.
 */
-unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n);
+// unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n);
 
 /**
  * @brief an LCP (Longest Common Prefix) array and a threshold value,

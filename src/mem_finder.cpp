@@ -296,50 +296,49 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<me
  * @param data A vector of strings representing the sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data){
+std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std::vector<seqan3::dna4>>& data) {
     if (global_args.verbose) {
         std::cout << "#                    Finding MEM...                         #" << std::endl;
         print_table_divider();
     }
-    
+
     std::string output = "";
     Timer timer;
     uint_t n = 0;
 
-    unsigned char* concat_data = concat_strings(data, n);
+    // Concatenar todas as sequências em uma única string com '1' como separador e '0' no final
+    std::vector<seqan3::dna4> concatenated_sequence;
+    for (size_t i = 0; i < data.size(); ++i) {
+        concatenated_sequence.insert(concatenated_sequence.end(), data[i].begin(), data[i].end());
+        if (i < data.size() - 1) {
+            concatenated_sequence.push_back(seqan3::dna4('1'));  // separador entre as sequências
+        }
+    }
+    concatenated_sequence.push_back(seqan3::dna4('0'));  // terminador no final
 
     if (global_args.min_mem_length < 0) {
-        global_args.min_mem_length = std::max(30, std::min(2000, static_cast<int_t>(std::ceil(std::pow(n, 1 / (global_args.degree + 2))))));
+        global_args.min_mem_length = std::max(30, std::min(2000, static_cast<int>(std::ceil(std::pow(n, 1 / (global_args.degree + 2))))));
         if (global_args.verbose) {
             output = "Minimal MEM length is set to " + std::to_string(global_args.min_mem_length);
             print_table_line(output);
         }
     }
 
-    if (global_args.filter_mode == "default") {
-        global_args.filter_mode = data.size() < 100 ? "local" : "global";
-        if (global_args.verbose) {
-            output = "Filter mode is set to " + global_args.filter_mode;
-            print_table_line(output);
-        }
-    }
-
-    if (global_args.min_seq_coverage < 0) {
-        global_args.min_seq_coverage = data.size() < 100 ? 1 : 0.7;
-        if (global_args.verbose) {
-            output = "Minimal sequence coverage is set to " + std::to_string(global_args.min_seq_coverage);
-            print_table_line(output);
-        }
-    }
-    
-    // Alocação dinâmica gerenciada automaticamente
-    std::vector<uint_t> SA(n);
-    std::vector<int_t> LCP(n);
-    std::vector<int32_t> DA(n);
-
+    // Calcular o Suffix Array e LCP
     timer.reset();
-    gsacak((unsigned char*)concat_data, SA.data(), LCP.data(), DA.data(), n);
-   
+    auto SA = seqan3::suffix_array(concatenated_sequence);
+    auto LCP = seqan3::lcp_array(concatenated_sequence, SA);
+
+    // Document Array (DA) pode ser obtido diretamente do Suffix Array
+    std::vector<size_t> DA;
+    size_t current_document = 0;
+    for (size_t i = 0; i < SA.size(); ++i) {
+        if (concatenated_sequence[SA[i]] == seqan3::dna4('1')) {
+            current_document++;
+        }
+        DA.push_back(current_document);
+    }
+
     double suffix_construction_time = timer.elapsed_time();
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << suffix_construction_time;
@@ -354,13 +353,14 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     uint_t total_length = 0;
     for (const auto& seq : data) {
         joined_sequence_bound.push_back(total_length);
-        total_length += seq.length() + 1;  // Inclui o delimitador
+        total_length += seq.size() + 1;  // Inclui o delimitador
     }
+
     int_t min_mem_length = global_args.min_mem_length;
     int_t min_cross_sequence = std::ceil(global_args.min_seq_coverage * data.size());
 
-    // Find all intervals with an LCP >= min_mem_length and <= min_cross_sequence
-    auto intervals = get_lcp_intervals(LCP.data(), min_mem_length, min_cross_sequence, total_length);
+    // Encontrar intervalos de LCP
+    auto intervals = get_lcp_intervals(LCP, min_mem_length, min_cross_sequence, total_length);
 
     uint_t interval_size = intervals.size();
     std::vector<mem> mems(interval_size);
@@ -371,11 +371,11 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     threadpool pool;
     threadpool_init(&pool, global_args.thread);
     for (uint_t i = 0; i < interval_size; i++) {
-        // ... (set params[i] correctly, using total_length for size of arrays)
+        // Ajustar parâmetros
         params[i].SA = SA.data();
         params[i].DA = DA.data();
         params[i].interval = intervals[i];
-        params[i].concat_data = concat_data;
+        params[i].concat_data = concatenated_sequence;
         params[i].result_store = mems.begin() + i;
         params[i].min_mem_length = min_mem_length;
         params[i].joined_sequence_bound = joined_sequence_bound;
@@ -386,11 +386,11 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
 #else
 #pragma omp parallel for num_threads(global_args.thread)
     for (uint_t i = 0; i < interval_size; i++) {
-        // ... (set params[i] correctly, using total_length for size of arrays)
+        // Ajustar parâmetros
         params[i].SA = SA.data();
         params[i].DA = DA.data();
         params[i].interval = intervals[i];
-        params[i].concat_data = concat_data;
+        params[i].concat_data = concatenated_sequence;
         params[i].result_store = mems.begin() + i;
         params[i].min_mem_length = min_mem_length;
         params[i].joined_sequence_bound = joined_sequence_bound;
@@ -399,10 +399,10 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
 #endif
 
     if (mems.size() <= 0 && global_args.verbose) {
-        output = "Warning: There is no MEMs, please adjust your paramters.";
+        output = "Warning: There is no MEMs, please adjust your parameters.";
         print_table_line(output); 
     }
-    
+
     delete[] params;
 
     // Sort the MEMs based on their average positions and assign their indices
@@ -434,41 +434,41 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
  * @return A pointer to the concatenated string.
  * @note The returned string must be deleted by the caller.
 */
-unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n) {
-    // Calculate total length of concatenated string
-    uint_t total_length = 0;
-    for (uint_t i = 0; i < strings.size(); i++) {
-        total_length += strings[i].length() + 1;
-    }
+// unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n) {
+//     // Calculate total length of concatenated string
+//     uint_t total_length = 0;
+//     for (uint_t i = 0; i < strings.size(); i++) {
+//         total_length += strings[i].length() + 1;
+//     }
    
-    total_length++;  // Add 1 for the terminating 0
+//     total_length++;  // Add 1 for the terminating 0
 
-    // Allocate memory for concatenated string
-    unsigned char* concat_data = new unsigned char[total_length];
+//     // Allocate memory for concatenated string
+//     unsigned char* concat_data = new unsigned char[total_length];
 
-    if (!concat_data) {
-        std::string out = "concat_data could not allocate enough space\n";
-        print_table_line(out);
-        exit(1);
-    }
+//     if (!concat_data) {
+//         std::string out = "concat_data could not allocate enough space\n";
+//         print_table_line(out);
+//         exit(1);
+//     }
 
-    // Concatenate all strings with 1 as separator
-    uint_t index = 0;
-    for (const auto& s : strings) {
-        std::copy(s.begin(), s.end(), concat_data + index);
-        index += s.length();
-        concat_data[index] = 1;
-        index++;
-    }
+//     // Concatenate all strings with 1 as separator
+//     uint_t index = 0;
+//     for (const auto& s : strings) {
+//         std::copy(s.begin(), s.end(), concat_data + index);
+//         index += s.length();
+//         concat_data[index] = 1;
+//         index++;
+//     }
 
-    // Set the terminating 0
-    concat_data[total_length - 1] = 0;
+//     // Set the terminating 0
+//     concat_data[total_length - 1] = 0;
 
-    n = total_length;
+//     n = total_length;
 
-    return concat_data;
+//     return concat_data;
 
-}
+// }
 
 /**
  * @brief an LCP (Longest Common Prefix) array and a threshold value,
@@ -479,38 +479,34 @@ unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n
  * @param min_cross_sequence the min number of crossed sequence
  * @return  The output vector of pairs representing the LCP intervals
 */
-std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* lcp_array, int_t threshold, int_t min_cross_sequence, uint_t n) {
-
-    std::vector<std::pair<uint_t, uint_t>> intervals;
-    if (global_args.verbose) {
-        std::string output = "Minimal cross sequence number: " + std::to_string(min_cross_sequence);
-        print_table_line(output);
+std::vector<std::pair<int_t, int_t>> get_lcp_intervals(const std::vector<int_t>& LCP, int_t min_mem_length, int_t min_cross_sequence, uint_t total_length) {
+    std::vector<std::pair<int_t, int_t>> intervals;
+    int_t current_start = -1;
+    
+    for (size_t i = 0; i < LCP.size(); ++i) {
+        if (LCP[i] >= min_mem_length) {
+            if (current_start == -1) {
+                current_start = i;  // Início do intervalo
+            }
+        } else if (current_start != -1) {
+            intervals.push_back({current_start, i - 1});  // Adiciona o intervalo
+            current_start = -1;  // Resetando o intervalo
+        }
     }
     
-    int_t left = 0, right = 0;
-    bool found = false;
-
-    while (right < (int_t)n) {
-
-        if (lcp_array[right] >= threshold) {
-            if (lcp_array[right] == threshold) {
-                found = true;
-            }
-            right++;
-        } else {
-            if (found && right-left+1 >= min_cross_sequence) {
-                intervals.emplace_back(left, right);
-            }
-
-            left = right = right + 1;
-            found = false;
+    if (current_start != -1) {
+        intervals.push_back({current_start, LCP.size() - 1});  // Intervalo final
+    }
+    
+    // Filtrando os intervalos com base na cobertura de sequência mínima
+    std::vector<std::pair<int_t, int_t>> filtered_intervals;
+    for (auto& interval : intervals) {
+        if (interval.second - interval.first + 1 >= min_cross_sequence) {
+            filtered_intervals.push_back(interval);
         }
     }
 
-    if (found && right - left + 1 >= min_cross_sequence) {
-        intervals.emplace_back(left, right);
-    }
-    return intervals;
+    return filtered_intervals;
 }
 
 void draw_lcp_curve(int_t *LCP, uint_t n){
