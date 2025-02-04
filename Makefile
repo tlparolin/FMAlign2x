@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -Wall -std=c++11
+CXXFLAGS = -Wall -std=c++17
 CC = g++
 CFLAGS = 
 
@@ -19,13 +19,21 @@ else
 	CXXFLAGS += -lpthread -pthread -lrt
 	SRCS += src/thread_pool.cpp src/thread_condition.cpp
 endif
-OBJS = $(SRCS:.cpp=.o)
-OBJS += src/gsacak.o
 
 ifdef M64
+	LIBSAIS_OBJS = src/libsais64.o
 	CXXFLAGS += -DM64
 	CFLAGS += -DM64
+	LIBSAIS_SRC = src/libsais64.c
+	LIBSAIS_HDR = include/libsais64.h
+else
+	LIBSAIS_OBJS = src/libsais.o
+	LIBSAIS_SRC = src/libsais.c
+	LIBSAIS_HDR = include/libsais.h
 endif
+
+OBJS = $(SRCS:.cpp=.o)
+OBJS += $(LIBSAIS_OBJS)
 
 FMAlign2: $(OBJS)
 	$(CXX) $(CXXFLAGS) $(OBJS) -o FMAlign2
@@ -33,14 +41,14 @@ FMAlign2: $(OBJS)
 utils.o: src/utils.cpp include/utils.h include/common.h include/kseq.h
 	$(CXX) $(CXXFLAGS) -c src/utils.cpp -o $@
 
-mem_finder.o: src/mem_finder.cpp include/common.h include/gsacak.h include/thread_pool.h
+mem_finder.o: src/mem_finder.cpp include/common.h $(LIBSAIS_HDR) include/thread_pool.h
 	$(CXX) $(CXXFLAGS) -c src/mem_finder.cpp -o $@
 
 sequence_split_align.o: src/sequence_split_align.cpp include/common.h
 	$(CXX) $(CXXFLAGS) -c src/sequence_split_align.cpp -o $@
 
-gsacak.o: src/gsacak.c include/gsacak.h
-	$(C) $(CFLAGS)  -c src/gsacak.c -o $@
+$(LIBSAIS_OBJS): $(LIBSAIS_SRC) $(LIBSAIS_HDR)
+	$(C) $(CFLAGS) -c $(LIBSAIS_SRC) -o $@
 
 ifeq ($(OS),Windows_NT)
 else

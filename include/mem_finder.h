@@ -21,22 +21,28 @@
 #ifndef MEM_FINDER_H
 #define MEM_FINDER_H
 
-#include "common.h"
-#include "gsacak.h"
-#include "utils.h"
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <fstream>
+#include <iostream>
+#include <memory>
 #include <numeric>
+#include <ranges>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #ifdef __linux__
     #include <omp.h>
 #endif
-#include <sstream>
-#include <fstream>
-#include <cmath>
-#include <algorithm>
-#include <vector>
-#include <unordered_map>
-#include <sstream>
+
+#include "common.h"
+#include "gsacak.h"
+#include "utils.h"
+
 struct sub_string {
     int_t sequence_index; // the sequence index that substring in
     uint_t position; // the begin position in the seqence

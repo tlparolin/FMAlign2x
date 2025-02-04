@@ -296,13 +296,12 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<me
  * @param data A vector of strings representing the sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data){
+std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data) {
     if (global_args.verbose) {
         std::cout << "#                    Finding MEM...                         #" << std::endl;
         print_table_divider();
     }
     
-    std::string output = "";
     Timer timer;
     uint_t n = 0;
 
@@ -316,80 +315,60 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         global_args.min_mem_length = l;
         
     }
+
     if (global_args.verbose) {
-        output = "Minimal MEM length is set to " + std::to_string(global_args.min_mem_length);
-        print_table_line(output);
+        print_table_line("Minimal MEM length is set to " + std::to_string(global_args.min_mem_length));
     }
 
     if (global_args.filter_mode == "default") {
-        if (data.size() < 100) {
-            global_args.filter_mode = "local";
-        }
-        else {
-            global_args.filter_mode = "global";
-        }
-        
+        global_args.filter_mode = (data.size() < 100) ? "local" : "global";
     }
 
     if (global_args.verbose) {
-        output = "Filter mode is set to " + global_args.filter_mode;
-        print_table_line(output);
+        print_table_line("Filter mode is set to " + global_args.filter_mode);
     }
 
     if (global_args.min_seq_coverage < 0) {
-        if (data.size() < 100) {
-            global_args.min_seq_coverage = 1;
-        }
-        else {
-            global_args.min_seq_coverage = 0.7;
-        }
-       
+        global_args.min_seq_coverage = (data.size() < 100) ? 1 : 0.7;
     }
+
     if (global_args.verbose) {
-        output = "Minimal sequence coverage is set to " + std::to_string(global_args.min_seq_coverage);
-        print_table_line(output);
+        print_table_line("Minimal sequence coverage is set to " + std::to_string(global_args.min_seq_coverage));
     }
-    
+
     uint_t *SA = NULL;
     SA = (uint_t*) malloc(n*sizeof(uint_t));
-    // LCP[0] = 0, LCP[i] = lcp(concat_data[SA[i]], concat_data[SA[i-1]])
     int_t *LCP = NULL;
     LCP = (int_t*) malloc(n*sizeof(int_t));
     int32_t *DA = NULL;
     DA = (int32_t*) malloc(n*sizeof(int32_t));
-#if DEBUG
-    output = "Suffix is constructing...\n";
-    print_table_line(output);
-#endif
+
     timer.reset();
-    gsacak((unsigned char *)concat_data, (uint_t*)SA, LCP, DA, n);
+    // gsacak((unsigned char *)concat_data, (uint_t*)SA, LCP, DA, n);
+
     double suffix_construction_time = timer.elapsed_time();
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << suffix_construction_time;
     if (global_args.verbose) {
-    output = "Suffix construction time: " + s.str() + " seconds";
-    print_table_line(output);
+        print_table_line("Suffix construction time: " + s.str() + " seconds");
     }
     
-
     timer.reset();
-    int_t min_mem_length = global_args.min_mem_length;
-    int_t min_cross_sequence = ceil(global_args.min_seq_coverage * data.size());
+    const int_t min_mem_length = global_args.min_mem_length;
+    const int_t min_cross_sequence = std::ceil(global_args.min_seq_coverage * data.size());
+
     std::vector<uint_t> joined_sequence_bound;
     uint_t total_length = 0;
-    for (uint_t i = 0; i < data.size(); i++) {
+    for (const auto& seq : data) {
         joined_sequence_bound.push_back(total_length);
-        total_length += data[i].length() + 1;
+        total_length += seq.length() + 1;
     }
-    // Find all intervals with an LCP >= min_mem_length and <= min_cross_sequence
-    std::vector<std::pair<uint_t, uint_t>> intervals = get_lcp_intervals(LCP, min_mem_length, min_cross_sequence, n);
 
+    auto intervals = get_lcp_intervals(LCP, min_mem_length, min_cross_sequence, n);
+    const uint_t interval_size = intervals.size();
     free(LCP);
 
-    uint_t interval_size = intervals.size();
-
-    std::vector<mem> mems;
-    mems.resize(interval_size);
+    std::vector<mem> mems(interval_size);
     // Convert each interval to a MEM in parallel
     IntervalToMemConversionParams* params = new IntervalToMemConversionParams[interval_size];
 #if (defined(__linux__))
@@ -404,7 +383,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         params[i].min_mem_length = min_mem_length;
         params[i].joined_sequence_bound = joined_sequence_bound;
 
-        threadpool_add_task(&pool, interval2mem, params+i);
+        threadpool_add_task(&pool, interval2mem, params + i);
     }
     threadpool_destroy(&pool);
 #else
@@ -421,41 +400,22 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     }
 #endif
 
-    if (mems.size() <= 0 && global_args.verbose) {
-        output = "Warning: There is no MEMs, please adjust your paramters.";
-        print_table_line(output);
-       
-    }
+    if (mems.size() <= 0 && global_args.verbose) print_table_line("Warning: There is no MEMs, please adjust your paramters.");
 
-    // Sort the MEMs based on their average positions and assign their indices
     sort_mem(mems, data);
 
-    free(SA);
-    free(DA);
-    free(concat_data);
-    delete[] params;
-
     uint_t sequence_num = data.size();
-    std::vector<std::vector<std::pair<int_t, int_t>>> split_point_on_sequence;
-    if (global_args.filter_mode == "global") {
-        split_point_on_sequence = filter_mem_fast(mems, sequence_num);
-    }
-    else {
-        split_point_on_sequence = filter_mem_accurate(mems, sequence_num);
-    }
-    
-    global_args.avg_file_size = (n / (split_point_on_sequence[0].size() + 1)) / pow(2, 20);
-    double mem_process_time = timer.elapsed_time();
+    auto split_point_on_sequence = (global_args.filter_mode == "global") 
+        ? filter_mem_fast(mems, sequence_num) 
+        : filter_mem_accurate(mems, sequence_num);
+
+    global_args.avg_file_size = (n / (split_point_on_sequence[0].size() + 1)) / std::pow(2, 20);
+
     if (global_args.verbose) {
-        output = "Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1);
-        print_table_line(output);
-        s.str("");
-        s << std::fixed << std::setprecision(3) << mem_process_time;
-        output = "MEM process time: " + s.str() + " seconds.";
-        print_table_line(output);
+        print_table_line("Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1));
+        print_table_line("MEM process time: " + std::to_string(timer.elapsed_time()) + " seconds");
         print_table_divider();
     }
-   
 
     return split_point_on_sequence;
 }
@@ -468,39 +428,25 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
  * @note The returned string must be deleted by the caller.
 */
 unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n) {
-    // Calculate total length of concatenated string
-    uint_t total_length = 0;
-    for (uint_t i = 0; i < strings.size(); i++) {
-        total_length += strings[i].length() + 1;
-    }
-   
-    total_length++;  // Add 1 for the terminating 0
+    // Calculate total size required (including separators and terminator)
+    n = std::accumulate(strings.begin(), strings.end(), std::size_t(1), 
+                        [](std::size_t sum, const std::string& s) { return sum + s.size() + 1; });
 
-    // Allocate memory for concatenated string
-    unsigned char* concat_data = new unsigned char[total_length];
+    // Allocate buffer
+    auto concat_data = std::make_unique<unsigned char[]>(n);
 
-    if (!concat_data) {
-        std::string out = "concat_data could not allocate enough space\n";
-        print_table_line(out);
-        exit(1);
-    }
-
-    // Concatenate all strings with 1 as separator
-    uint_t index = 0;
+    // Copy strings to buffer
+    std::size_t index = 0;
     for (const auto& s : strings) {
-        std::copy(s.begin(), s.end(), concat_data + index);
-        index += s.length();
-        concat_data[index] = 1;
-        index++;
+        std::memcpy(concat_data.get() + index, s.data(), s.size());
+        index += s.size();
+        concat_data[index++] = 1; // Separador
     }
 
-    // Set the terminating 0
-    concat_data[total_length - 1] = 0;
+    // Add terminator 0
+    concat_data[n - 1] = 0;
 
-    n = total_length;
-
-    return concat_data;
-
+    return concat_data.release(); // Transferência de propriedade para o chamador
 }
 
 /**
