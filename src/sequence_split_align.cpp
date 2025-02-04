@@ -1107,7 +1107,7 @@ void refinement(std::vector<std::string>& data1, std::vector<std::string>& data2
             ++spaceCount1;
         }
         // Count the number of leading spaces in str2.
-        while (spaceCount2 < str2.size() && str2[spaceCount2] == '-') {
+        while (static_cast<size_t>(spaceCount2) < str2.size() && str2[spaceCount2] == '-') {
             ++spaceCount2;
         }
 

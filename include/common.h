@@ -42,6 +42,7 @@
 // Considering that the concatenated input sequence can be too long and to save memory.
 // different data types are defined through conditional compilation for different sizes of data.
 // if data is larger than 2GB, M64 should be selected.
+#pragma once
 #if M64
 	typedef int64_t	int_t;
 	typedef uint64_t uint_t;

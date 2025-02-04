@@ -303,7 +303,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     }
     
     Timer timer;
-    uint_t n = 0;
+    size_t n = 0;
 
     unsigned char* concat_data = concat_strings(data, n); 
 
@@ -311,9 +311,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         int_t l = ceil(pow(n, 1/(global_args.degree+2)));
         l = l > 30 ? l : 30;
         l = l < 2000 ? l : 2000;
-
         global_args.min_mem_length = l;
-        
     }
 
     if (global_args.verbose) {
@@ -336,14 +334,23 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         print_table_line("Minimal sequence coverage is set to " + std::to_string(global_args.min_seq_coverage));
     }
 
-    uint_t *SA = NULL;
-    SA = (uint_t*) malloc(n*sizeof(uint_t));
-    int_t *LCP = NULL;
-    LCP = (int_t*) malloc(n*sizeof(int_t));
-    int32_t *DA = NULL;
-    DA = (int32_t*) malloc(n*sizeof(int32_t));
+
 
     timer.reset();
+    std::vector<int_t> SA(n);
+    std::vector<int_t> PLCP(n);
+    std::vector<int_t> LCP(n);
+    std::vector<int_t> DA(n);
+
+#ifdef M64
+    libsais64_omp(concat_data, SA.data(), n, 0, NULL, global_args.thread);
+    libsais64_plcp_omp(concat_data, SA.data(), PLCP.data(), n, global_args.thread);
+    libsais64_lcp_omp(PLCP.data(), SA.data(), LCP.data(), n, global_args.thread);
+#else
+    libsais_omp(concat_data, SA.data(), n, 0, NULL, global_args.thread);
+    libsais_plcp_omp(concat_data, SA.data(), PLCP.data(), n, global_args.thread);
+    libsais_lcp_omp(PLCP.data(), SA.data(), LCP.data(), n, global_args.thread);
+#endif
     // gsacak((unsigned char *)concat_data, (uint_t*)SA, LCP, DA, n);
 
     double suffix_construction_time = timer.elapsed_time();
@@ -364,9 +371,9 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         total_length += seq.length() + 1;
     }
 
-    auto intervals = get_lcp_intervals(LCP, min_mem_length, min_cross_sequence, n);
+    auto intervals = get_lcp_intervals(LCP.data(), min_mem_length, min_cross_sequence, n);
     const uint_t interval_size = intervals.size();
-    free(LCP);
+    // free(LCP);
 
     std::vector<mem> mems(interval_size);
     // Convert each interval to a MEM in parallel
@@ -375,8 +382,8 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     threadpool pool;
     threadpool_init(&pool, global_args.thread);
     for (uint_t i = 0; i < interval_size; i++) {
-        params[i].SA = SA;
-        params[i].DA = DA;
+        params[i].SA = &SA;
+        params[i].DA = &DA;
         params[i].interval = intervals[i];
         params[i].concat_data = concat_data;
         params[i].result_store = mems.begin() + i;
@@ -427,7 +434,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
  * @return A pointer to the concatenated string.
  * @note The returned string must be deleted by the caller.
 */
-unsigned char* concat_strings(const std::vector<std::string>& strings, uint_t &n) {
+unsigned char* concat_strings(const std::vector<std::string>& strings, size_t &n) {
     // Calculate total size required (including separators and terminator)
     n = std::accumulate(strings.begin(), strings.end(), std::size_t(1), 
                         [](std::size_t sum, const std::string& s) { return sum + s.size() + 1; });
@@ -538,8 +545,8 @@ void* interval2mem(void* arg) {
     // Cast the input parameters to the correct struct type
     IntervalToMemConversionParams* ptr = static_cast<IntervalToMemConversionParams*>(arg);
     // Extract the necessary variables from the struct
-    const uint_t* SA = ptr->SA;
-    const int32_t* DA = ptr->DA;
+    const uint_t* SA = ptr->SA->data();
+    const int32_t* DA = ptr->DA->data();
     const int_t min_mem_length = ptr->min_mem_length;
     const unsigned char* concat_data = ptr->concat_data;
     const std::vector<uint_t> joined_sequence_bound = ptr->joined_sequence_bound;

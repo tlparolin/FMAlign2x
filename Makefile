@@ -1,7 +1,7 @@
 CXX = g++
-CXXFLAGS = -Wall -std=c++17
+CXXFLAGS = -Wall -std=c++17 -fopenmp -DLIBSAIS_OPENMP
 CC = g++
-CFLAGS = 
+CFLAGS = -fopenmp -DLIBSAIS_OPENMP
 
 SRCS = main.cpp src/utils.cpp src/mem_finder.cpp src/sequence_split_align.cpp ext/SW/ssw.cpp ext/SW/ssw_cpp.cpp
 
@@ -9,21 +9,20 @@ ifdef DEBUG
 	CXXFLAGS += -O0 -g -DDEBUG
 	CFLAGS += -O0 -g
 else
-	CXXFLAGS += -O2
-	CFLAGS += -O2
+	CXXFLAGS += -O3
+	CFLAGS += -O3
 endif
 
 ifeq ($(OS),Windows_NT)
-    CXXFLAGS +=  -fopenmp
 else
 	CXXFLAGS += -lpthread -pthread -lrt
 	SRCS += src/thread_pool.cpp src/thread_condition.cpp
 endif
 
 ifdef M64
-	LIBSAIS_OBJS = src/libsais64.o
 	CXXFLAGS += -DM64
 	CFLAGS += -DM64
+	LIBSAIS_OBJS = src/libsais64.o
 	LIBSAIS_SRC = src/libsais64.c
 	LIBSAIS_HDR = include/libsais64.h
 else
@@ -48,7 +47,7 @@ sequence_split_align.o: src/sequence_split_align.cpp include/common.h
 	$(CXX) $(CXXFLAGS) -c src/sequence_split_align.cpp -o $@
 
 $(LIBSAIS_OBJS): $(LIBSAIS_SRC) $(LIBSAIS_HDR)
-	$(C) $(CFLAGS) -c $(LIBSAIS_SRC) -o $@
+	$(CC) $(CFLAGS) -c $(LIBSAIS_SRC) -o $@
 
 ifeq ($(OS),Windows_NT)
 else
@@ -56,7 +55,7 @@ thread_pool.o: src/thread_pool.cpp include/thread_pool.h include/thread_conditio
 	$(CXX) $(CXXFLAGS) -c src/thread_pool.cpp -o $@
 
 thread_condition.o: src/thread_condition.cpp include/thread_condition.h
-	$(CXX) $(CXXFLAGS) -c src/thread_conition.cpp -o $@
+	$(CXX) $(CXXFLAGS) -c src/thread_condition.cpp -o $@
 endif
 
 ssw.o: ext/SW/ssw.cpp ext/SW/ssw.h
@@ -74,4 +73,3 @@ ifeq ($(OS),Windows_NT)
 else
 	rm -f $(OBJS) FMAlign2
 endif
-	
