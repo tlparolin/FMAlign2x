@@ -342,15 +342,15 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     std::vector<int_t> LCP(n);
     std::vector<int_t> DA(n);
 
-#ifdef M64
-    libsais64_omp(concat_data, SA.data(), n, 0, NULL, global_args.thread);
-    libsais64_plcp_omp(concat_data, SA.data(), PLCP.data(), n, global_args.thread);
-    libsais64_lcp_omp(PLCP.data(), SA.data(), LCP.data(), n, global_args.thread);
-#else
+// #ifdef M64
+//     libsais64_omp(concat_data, SA.data(), n, 0, NULL, global_args.thread);
+//     libsais64_plcp_omp(concat_data, SA.data(), PLCP.data(), n, global_args.thread);
+//     libsais64_lcp_omp(PLCP.data(), SA.data(), LCP.data(), n, global_args.thread);
+// #else
     libsais_omp(concat_data, SA.data(), n, 0, NULL, global_args.thread);
     libsais_plcp_omp(concat_data, SA.data(), PLCP.data(), n, global_args.thread);
     libsais_lcp_omp(PLCP.data(), SA.data(), LCP.data(), n, global_args.thread);
-#endif
+// #endif
     // gsacak((unsigned char *)concat_data, (uint_t*)SA, LCP, DA, n);
 
     double suffix_construction_time = timer.elapsed_time();
@@ -370,7 +370,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         joined_sequence_bound.push_back(total_length);
         total_length += seq.length() + 1;
     }
-
+std::cout << LCP.size() << std::endl;
     auto intervals = get_lcp_intervals(LCP.data(), min_mem_length, min_cross_sequence, n);
     const uint_t interval_size = intervals.size();
     // free(LCP);
@@ -472,7 +472,9 @@ std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* lcp_array, int_t
         std::string output = "Minimal cross sequence number: " + std::to_string(min_cross_sequence);
         print_table_line(output);
     }
-    
+for (uint_t i = 0; i < 20; ++i) {
+    std::cout << "LCP[" << i << "] = " << lcp_array[i] << std::endl;
+}
     int_t left = 0, right = 0;
     bool found = false;
 
@@ -545,8 +547,8 @@ void* interval2mem(void* arg) {
     // Cast the input parameters to the correct struct type
     IntervalToMemConversionParams* ptr = static_cast<IntervalToMemConversionParams*>(arg);
     // Extract the necessary variables from the struct
-    const uint_t* SA = ptr->SA->data();
-    const int32_t* DA = ptr->DA->data();
+    const int_t* SA = ptr->SA->data();
+    const int_t* DA = ptr->DA->data();
     const int_t min_mem_length = ptr->min_mem_length;
     const unsigned char* concat_data = ptr->concat_data;
     const std::vector<uint_t> joined_sequence_bound = ptr->joined_sequence_bound;

@@ -41,11 +41,11 @@
 
 #include "common.h"
 #include "utils.h"
-#ifdef M64
-    #include "libsais64.h"
-#else
-    #include "libsais.h"
-#endif
+// #ifdef M64
+    // #include "libsais64.h"
+// #else
+#include "libsais.h"
+// #endif
 
 struct sub_string {
     int_t sequence_index; // the sequence index that substring in
@@ -61,8 +61,8 @@ struct mem {
 };
 
 struct IntervalToMemConversionParams {
-    std::vector<int_t>* SA;
-    std::vector<int_t>* DA;
+    const std::vector<int_t>* SA;
+    const std::vector<int_t>* DA;
     const unsigned char* concat_data;
     std::vector<mem>::iterator result_store;
     int_t min_mem_length;

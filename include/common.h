@@ -30,9 +30,9 @@
 #if (defined(__linux__))
 #include "thread_pool.h"
 #else
-#include <omp.h>
 #include <windows.h>
 #endif
+#include <omp.h>
 #include <iomanip>
 #include <thread>
 
