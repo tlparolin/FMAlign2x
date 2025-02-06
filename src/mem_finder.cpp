@@ -334,22 +334,13 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
         print_table_line("Minimal sequence coverage is set to " + std::to_string(global_args.min_seq_coverage));
     }
 
-
-
     timer.reset();
+
     std::vector<int_t> SA(n);
     std::vector<int_t> PLCP(n);
-    std::vector<int_t> LCP(n);
-    std::vector<int_t> DA(n);
 
-// #ifdef M64
-//     libsais64_omp(concat_data, SA.data(), n, 0, NULL, global_args.thread);
-//     libsais64_plcp_omp(concat_data, SA.data(), PLCP.data(), n, global_args.thread);
-//     libsais64_lcp_omp(PLCP.data(), SA.data(), LCP.data(), n, global_args.thread);
-// #else
     libsais_omp(concat_data, SA.data(), n, 0, NULL, global_args.thread);
     libsais_plcp_omp(concat_data, SA.data(), PLCP.data(), n, global_args.thread);
-// #endif
 
     double suffix_construction_time = timer.elapsed_time();
     std::stringstream s;
@@ -404,6 +395,9 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     if (mems.size() <= 0 && global_args.verbose) print_table_line("Warning: There is no MEMs, please adjust your paramters.");
 
     sort_mem(mems, data);
+
+    free(concat_data);
+    delete[] params;
 
     uint_t sequence_num = data.size();
     auto split_point_on_sequence = (global_args.filter_mode == "global") 
@@ -464,6 +458,7 @@ unsigned char* concat_strings(const std::vector<std::string>& strings, size_t &n
 */
 std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* plcp_array, int_t* sa, int_t threshold, int_t min_cross_sequence, uint_t n) {
     std::vector<std::pair<uint_t, uint_t>> intervals;
+    intervals.reserve(n / (min_cross_sequence > 0 ? min_cross_sequence : 1) + 1);
 
     if (global_args.verbose) {
         print_table_line("Minimal cross sequence number: " + std::to_string(min_cross_sequence));
@@ -473,8 +468,9 @@ std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* plcp_array, int_
     bool found = false;
 
     while (right < (int_t)n) {
-        if (plcp_array[sa[right]] >= threshold) {  // Changed from LCP to PLCP[SA]
-            if (plcp_array[sa[right]] == threshold) {
+        int_t current_val = plcp_array[sa[right]];
+        if (current_val >= threshold) {  // Changed from LCP to PLCP[SA]
+            if (current_val == threshold) {
                 found = true;
             }
             right++;
@@ -482,8 +478,8 @@ std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* plcp_array, int_
             if (found && right - left + 1 >= min_cross_sequence) {
                 intervals.emplace_back(left, right);
             }
-
-            left = right = right + 1;
+            ++right;
+            left = right;
             found = false;
         }
     }
