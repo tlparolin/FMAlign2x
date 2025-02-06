@@ -349,21 +349,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
 // #else
     libsais_omp(concat_data, SA.data(), n, 0, NULL, global_args.thread);
     libsais_plcp_omp(concat_data, SA.data(), PLCP.data(), n, global_args.thread);
-    // libsais_lcp_omp(PLCP.data(), SA.data(), LCP.data(), n, global_args.thread);
-    
-    // int current_position = 0;
-    // #pragma omp parallel for num_threads(global_args.thread)
-    // for (int doc_id = 0; doc_id < data.size(); doc_id++) {
-    //     int doc_length = data[doc_id].size() + 1; // Inclui o delimitador
-    //     for (int i = 0; i < SA.size(); i++) {
-    //         if (SA[i] >= current_position && SA[i] < current_position + doc_length) {
-    //             DA[i] = doc_id;
-    //         }
-    //     }
-    //     current_position += doc_length;
-    // }
 // #endif
-    // gsacak((unsigned char *)concat_data, (uint_t*)SA, LCP, DA, n);
 
     double suffix_construction_time = timer.elapsed_time();
     std::stringstream s;
