@@ -9,8 +9,8 @@ ifdef DEBUG
 	CXXFLAGS += -O0 -g -DDEBUG
 	CFLAGS += -O0 -g
 else
-	CXXFLAGS += -O2
-	CFLAGS += -O2
+	CXXFLAGS += -O3 -march=native
+	CFLAGS += -O3 -march=native
 endif
 
 ifeq ($(OS),Windows_NT)

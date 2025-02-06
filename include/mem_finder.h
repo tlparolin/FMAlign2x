@@ -119,7 +119,7 @@ unsigned char* concat_strings(const std::vector<std::string>& strings, size_t &n
  * @param min_cross_sequence the min number of crossed sequence
  * @return  The output vector of pairs representing the LCP intervals
 */
-std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* lcp_array, int_t threshold, int_t min_cross_sequence, uint_t n);
+std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* plcp_array, int_t* sa, int_t threshold, int_t min_cross_sequence, uint_t n);
 
 /**
 *@brief This function converts an LCP interval to a MEM (Maximal Exact Match).
