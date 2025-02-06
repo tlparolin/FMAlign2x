@@ -18,6 +18,9 @@
 // Contact: zpl010720@gmail.com
 // Created: 2023-02-24
 
+// Some sections and functions were changed in February/2025
+// Thiago Luiz Parolin
+// Contact: thiago.parolin@unesp.br
 
 #include "../include/utils.h"
 
@@ -71,7 +74,6 @@ void read_data(const char* data_path, std::vector<std::string>& data, std::vecto
         std::cerr << "Program Exit!" << std::endl;
         exit(1);
     }
-    
 
     FILE* f_pointer = fopen(data_path, "r");
     kseq_t* file_t = kseq_init(fileno(f_pointer));
@@ -143,32 +145,22 @@ bool access_file(const char* data_path){
  * @param sequence The input DNA sequence to be cleaned.
  * @return The cleaned DNA sequence as a new string.
 */
-std::string clean_sequence(std::string sequence){
-    std::string result;
-    result.reserve(sequence.size());
-    for (char& c : sequence) {
-        if (c == 'a' || c == 'A') {
-            c = 'A';
-            result.push_back(c);
-        } else if (c == 'c' || c == 'C') {
-            c = 'C';
-            result.push_back(c);
-        } else if (c == 'g' || c == 'G') {
-            c = 'G';
-            result.push_back(c);
-        } else if (c == 't' || c == 'T') {
-            c = 'T';
-            result.push_back(c);
+std::string clean_sequence(std::string sequence) {
+    std::string result(sequence.size(), '-'); // Initialize with '-'
+    
+    std::transform(std::execution::par, sequence.begin(), sequence.end(), result.begin(),
+        [](char c) -> char {
+            switch (c) {
+                case 'a': case 'A': return 'A';
+                case 'c': case 'C': return 'C';
+                case 'g': case 'G': return 'G';
+                case 't': case 'T': return 'T';
+                case 'u': case 'U': return 'U';
+                default: return '-';
+            }
         }
-        else if (c == 'u' || c == 'U') {
-            c = 'U';
-            result.push_back(c);
-        }
-        else {
-            c = '-';
-            result.push_back(c);
-        }
-    } 
+    );
+
     return result;
 }
 
@@ -235,7 +227,7 @@ void ArgParser::parse_args(int argc, char** argv) {
     }
     for (auto& p : args_) {
         if (p.second.required && p.second.value == "") {
-            throw std::invalid_argument("Missing required argument: -" + p.first);  // ÐÞ¸ÄÕâÀï£¬¸ÄÎªµ¥¸öÆÆÕÛºÅ
+            throw std::invalid_argument("Missing required argument: -" + p.first);  // ï¿½Þ¸ï¿½ï¿½ï¿½ï¿½ï£¬ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ûºï¿½
         }
         if (p.second.required == false && p.second.value == "") {
             p.second.value = p.second.default_value;

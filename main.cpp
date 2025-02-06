@@ -18,6 +18,10 @@
 // Contact: zpl010720@gmail.com
 // Created: 2023-02-25
 
+// Some sections and functions were changed in February/2025
+// Thiago Luiz Parolin
+// Contact: thiago.parolin@unesp.br
+
 // The main function is the entry point of the program. It is where the program starts executing. 
 // the program starts executing. 
 #include "include/common.h"
@@ -133,8 +137,10 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
     try {
         // Read data from the input file and store in data and name vectors
         read_data(global_args.data_path.c_str(), data, name, true);
+
         // Find MEMs in the sequences and split the sequences into fragments for parallel alignment.
         std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data);
+
         split_and_parallel_align(data, name, split_points_on_sequence);
     }
     catch (const std::bad_alloc& e) { // Catch any bad allocations and print an error message.
@@ -148,8 +154,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << total_time;
     if (global_args.verbose) {
-        output = "FMAlign2 total time: " + s.str() + " seconds.";
-        print_table_line(output);
+        print_table_line("FMAlign2 total time: " + s.str() + " seconds.");
         print_table_bound();
     }
 

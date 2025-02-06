@@ -18,6 +18,10 @@
 // Contact: zpl010720@gmail.com
 // Created: 2023-02-25
 
+// Some sections and functions were changed in February/2025
+// Thiago Luiz Parolin
+// Contact: thiago.parolin@unesp.br
+
 #ifndef SEQUENCE_SPLIT_ALIGN_H
 #define SEQUENCE_SPLIT_ALIGN_H
 

@@ -18,6 +18,10 @@
 // Contact: zpl010720@gmail.com
 // Created: 2023-02-25
 
+// Some sections and functions were changed in February/2025
+// Thiago Luiz Parolin
+// Contact: thiago.parolin@unesp.br
+
 #include "../include/mem_finder.h"
 
 void* find_optimal_chain(void* arg) {
@@ -130,7 +134,6 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vecto
     }
 #endif
 
-
     // remove column that too much -1
     std::vector<int_t> selected_cols;
     for (uint_t j = 0; j < split_point_on_sequence[0].size(); j++) {
@@ -178,7 +181,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<me
     std::vector<double> dp(mem_num, 0);
     std::vector<int_t> prev(mem_num, -1);
     // Iterate over all "mem" objects and calculate their size and update dynamic programming tables
-    for (uint_t i = 0; i < mem_num; i++) {
+    for (uint_t i = 0; i < mem_num; ++i) {
         double size = mems[i].mem_length * mems[i].substrings.size();
         dp[i] += size;
         for (uint_t j = i + 1; j < mem_num; j++) {
