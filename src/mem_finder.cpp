@@ -342,13 +342,8 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     std::vector<int_t> SA(n);
     std::vector<int_t> PLCP(n);
 
-#ifdef M64
-    libsais64_omp(concat_data, SA.data(), n, 0, NULL, global_args.thread);
-    libsais64_plcp_omp(concat_data, SA.data(), PLCP.data(), n, global_args.thread);
-#else
-    libsais_omp(concat_data, SA.data(), n, 0, NULL, global_args.thread);
-    libsais_plcp_omp(concat_data, SA.data(), PLCP.data(), n, global_args.thread);
-#endif
+    LIBSAIS_OMP(concat_data, SA.data(), n, 0, NULL, global_args.thread);
+    LIBSAIS_PLCP_OMP(concat_data, SA.data(), PLCP.data(), n, global_args.thread);
 
     double suffix_construction_time = timer.elapsed_time();
     std::stringstream s;

@@ -21,7 +21,7 @@ Please see the file LICENSE for full copyright information.
 
 --*/
 
-#include "../include/libsais16.h"
+#include "libsais16.h"
 
 #include <stddef.h>
 #include <stdint.h>

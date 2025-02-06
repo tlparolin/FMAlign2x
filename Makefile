@@ -9,8 +9,8 @@ ifdef DEBUG
 	CXXFLAGS += -O0 -g -DDEBUG
 	CFLAGS += -O0 -g
 else
-	CXXFLAGS += -O3 -march=native
-	CFLAGS += -O3 -march=native
+	CXXFLAGS += -O3
+	CFLAGS += -O3
 endif
 
 ifeq ($(OS),Windows_NT)
@@ -22,13 +22,13 @@ endif
 ifdef M64
 	CXXFLAGS += -DM64
 	CFLAGS += -DM64
-	LIBSAIS_OBJS = src/libsais64.o
-	LIBSAIS_SRC = src/libsais64.c
-	LIBSAIS_HDR = include/libsais64.h
+	LIBSAIS_OBJS = ext/libsais/libsais64.o
+	LIBSAIS_SRC = ext/libsais/libsais64.c
+	LIBSAIS_HDR = ext/libsais/libsais64.h
 else
-	LIBSAIS_OBJS = src/libsais.o
-	LIBSAIS_SRC = src/libsais.c
-	LIBSAIS_HDR = include/libsais.h
+	LIBSAIS_OBJS = ext/libsais/libsais.o
+	LIBSAIS_SRC = ext/libsais/libsais.c
+	LIBSAIS_HDR = ext/libsais/libsais.h
 endif
 
 OBJS = $(SRCS:.cpp=.o)
