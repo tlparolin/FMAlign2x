@@ -45,11 +45,11 @@
 
 #include "common.h"
 #include "utils.h"
-// #ifdef M64
-    // #include "libsais64.h"
-// #else
-#include "libsais.h"
-// #endif
+#ifdef M64
+    #include "libsais64.h"
+#else
+    #include "libsais.h"
+#endif
 
 struct sub_string {
     int_t sequence_index; // the sequence index that substring in

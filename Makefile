@@ -19,17 +19,17 @@ else
 	SRCS += src/thread_pool.cpp src/thread_condition.cpp
 endif
 
-#ifeq ($(M64), 1)
-	# CXXFLAGS += -DM64
-	# CFLAGS += -DM64
-	# LIBSAIS_OBJS = src/libsais64.o
-	# LIBSAIS_SRC = src/libsais64.c
-	# LIBSAIS_HDR = include/libsais64.h
-# else
-LIBSAIS_OBJS = src/libsais.o
-LIBSAIS_SRC = src/libsais.c
-LIBSAIS_HDR = include/libsais.h
-# endif
+ifdef M64
+	CXXFLAGS += -DM64
+	CFLAGS += -DM64
+	LIBSAIS_OBJS = src/libsais64.o
+	LIBSAIS_SRC = src/libsais64.c
+	LIBSAIS_HDR = include/libsais64.h
+else
+	LIBSAIS_OBJS = src/libsais.o
+	LIBSAIS_SRC = src/libsais.c
+	LIBSAIS_HDR = include/libsais.h
+endif
 
 OBJS = $(SRCS:.cpp=.o)
 OBJS += $(LIBSAIS_OBJS)
