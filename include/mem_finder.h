@@ -62,7 +62,6 @@ struct mem {
 
 struct IntervalToMemConversionParams {
     const std::vector<int_t>* SA;
-    const std::vector<int_t>* DA;
     const unsigned char* concat_data;
     std::vector<mem>::iterator result_store;
     int_t min_mem_length;

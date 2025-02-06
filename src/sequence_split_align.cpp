@@ -659,9 +659,6 @@ void* parallel_align(void* arg) {
     for (uint_t i = 0; i < aligned_seq_index.size(); i++) {
         final_aligned_seq[aligned_seq_index[i]] = aligned_seq[i];
     }
-    for (uint_t i = 0; i < aligned_seq_index.size(); i++) {
-        final_aligned_seq[aligned_seq_index[i]] = aligned_seq[i];
-    }
     // Store the aligned sequences in the result storage
     *(ptr->result_store) = final_aligned_seq;
 

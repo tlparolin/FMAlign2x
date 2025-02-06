@@ -393,7 +393,6 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     threadpool_init(&pool, global_args.thread);
     for (uint_t i = 0; i < interval_size; i++) {
         params[i].SA = &SA;
-        params[i].DA = &DA;
         params[i].interval = intervals[i];
         params[i].concat_data = concat_data;
         params[i].result_store = mems.begin() + i;
@@ -407,7 +406,6 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
 #pragma omp parallel for num_threads(global_args.thread)
     for (uint_t i = 0; i < interval_size; i++) {
         params[i].SA = SA;
-        params[i].DA = DA;
         params[i].interval = intervals[i];
         params[i].concat_data = concat_data;
         params[i].result_store = mems.begin() + i;
@@ -428,9 +426,12 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
 
     global_args.avg_file_size = (n / (split_point_on_sequence[0].size() + 1)) / std::pow(2, 20);
 
+    double mem_time = timer.elapsed_time();
+    std::stringstream ss;
+    ss << std::fixed << std::setprecision(3) << mem_time;
     if (global_args.verbose) {
         print_table_line("Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1));
-        print_table_line("MEM process time: " + std::to_string(timer.elapsed_time()) + " seconds");
+        print_table_line("MEM process time: " + ss.str() + " seconds");
         print_table_divider();
     }
 
@@ -558,9 +559,9 @@ void* interval2mem(void* arg) {
     const int_t min_mem_length = ptr->min_mem_length;
     const unsigned char* concat_data = ptr->concat_data;
     const std::vector<uint_t>& joined_sequence_bound = ptr->joined_sequence_bound;
+    std::pair<uint_t, uint_t> interval = ptr->interval;
 
     // Initialize the result variables
-    std::pair<uint_t, uint_t> interval = ptr->interval;
     mem result;
     uint_t* mem_index = new uint_t;
     *mem_index = 0;
