@@ -1,5 +1,7 @@
 /* The MIT License
+
    Copyright (c) 2012-2015 Boston College.
+
    Permission is hereby granted, free of charge, to any person obtaining
    a copy of this software and associated documentation files (the
    "Software"), to deal in the Software without restriction, including
@@ -7,8 +9,10 @@
    distribute, sublicense, and/or sell copies of the Software, and to
    permit persons to whom the Software is furnished to do so, subject to
    the following conditions:
+
    The above copyright notice and this permission notice shall be
    included in all copies or substantial portions of the Software.
+
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -20,7 +24,9 @@
 */
 
 /* The 2-clause BSD License
+
    Copyright 2006 Michael Farrar.  
+
    Redistribution and use in source and binary forms, with or without
    modification, are permitted provided that the following conditions are
    met:
@@ -50,8 +56,8 @@
  *
  *  Created by Mengyao Zhao on 6/22/10.
  *  Copyright 2010 Boston College. All rights reserved.
- *	Version 1.2.4
- *	Last revision by Mengyao Zhao on 2022-Apr-17.
+ *	Version 1.2.6
+ *	Last revision by Mengyao Zhao on 2024-Jul-03.
  *
  *  The lazy-F loop implementation was derived from SWPS3, which is
  *  MIT licensed under ETH Zürich, Institute of Computational Science.
@@ -302,7 +308,9 @@ static alignment_end* sw_sse2_byte (const int8_t* ref,
 				_mm_store_si128(pvHStore + j, vH);
 				vH = _mm_subs_epu8(vH, vGapO);
 				vF = _mm_subs_epu8(vF, vGapE);
-				if (UNLIKELY(! _mm_movemask_epi8(_mm_cmpgt_epi8(vF, vH)))) goto end;
+                vTemp = _mm_subs_epu8(vF, vH);
+                vTemp = _mm_cmpeq_epi8 (vTemp, vZero);
+                if (UNLIKELY(_mm_movemask_epi8(vTemp) == 0xffff)) goto end;
 			}
 		}
 
@@ -852,6 +860,11 @@ s_align* ssw_align (const s_profile* prof,
 		free(r);
 		return NULL;
 	}
+	if (bests[0].score <= 0) {
+		free(bests);
+		goto end;
+	}
+
 	r->score1 = bests[0].score;
 	r->ref_end1 = bests[0].ref; // 0_based, always count from the input seq begin
 	r->read_end1 = bests[0].read;   // 0_based, count from the alignment begin (aligned length of the read)
