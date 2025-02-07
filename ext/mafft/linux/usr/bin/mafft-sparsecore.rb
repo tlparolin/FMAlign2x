@@ -1,7 +1,7 @@
 #! /usr/bin/env ruby
 require 'optparse'
 
-mafftpath = "/usr/bin/mafft"
+mafftpath = "/home/thiago/Downloads/mafft/bin/mafft"
 
 def cleartempfiles( filenames )
 	for f in filenames
@@ -149,8 +149,8 @@ infp.close
 lenhash = {}
 
 if outnum then
-	for i in 0..(tin-1)
-		tname[i] = "_numo_s_#{i}_numo_e_" + tname[i]
+	for i in 1..(tin)
+		tname[i-1] = "_numo_s_0#{i}_numo_e_" + tname[i-1]
 	end
 end
 
