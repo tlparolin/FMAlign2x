@@ -24,12 +24,12 @@
 
 // The main function is the entry point of the program. It is where the program starts executing. 
 // the program starts executing. 
-#include "include/common.h"
-#include "include/utils.h"
-#include "include/mem_finder.h"
-#include "include/sequence_split_align.h"
+#include "common.h"
+#include "utils.h"
+#include "mem_finder.h"
+#include "sequence_split_align.h"
 #if defined(__linux__)
-#include "include/thread_pool.h"
+#include "thread_pool.h"
 #endif
 #include <thread>
 

@@ -22,7 +22,7 @@
 // Thiago Luiz Parolin
 // Contact: thiago.parolin@unesp.br
 
-#include "../include/sequence_split_align.h"
+#include "sequence_split_align.h"
 
 /**
 * @brief Generates a random string of the specified length.

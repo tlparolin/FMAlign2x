@@ -22,7 +22,7 @@
 // Thiago Luiz Parolin
 // Contact: thiago.parolin@unesp.br
 
-#include "../include/mem_finder.h"
+#include "mem_finder.h"
 
 void* find_optimal_chain(void* arg) {
     FindOptimalChainParams* ptr = static_cast<FindOptimalChainParams*>(arg);

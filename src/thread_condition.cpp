@@ -1,4 +1,4 @@
-#include "../include/thread_condition.h"
+#include "thread_condition.h"
 // This file is from project https://github.com/malabz/WMSA and has been used with the author's permission.
 // initialization
 int condition_init(condition_t* cond)

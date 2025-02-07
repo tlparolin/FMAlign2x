@@ -25,6 +25,8 @@
 #ifndef MEM_FINDER_H
 #define MEM_FINDER_H
 
+#pragma once
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -47,13 +49,13 @@
 #include "utils.h"
 
 #ifdef M64
-#include "../ext/libsais/libsais64.h"
-#define LIBSAIS_OMP libsais64_omp
-#define LIBSAIS_PLCP_OMP libsais64_plcp_omp
+    #include "libsais64.h"
+    #define LIBSAIS_OMP libsais64_omp
+    #define LIBSAIS_PLCP_OMP libsais64_plcp_omp
 #else
-#include "../ext/libsais/libsais.h"
-#define LIBSAIS_OMP libsais_omp
-#define LIBSAIS_PLCP_OMP libsais_plcp_omp
+    #include "libsais.h"
+    #define LIBSAIS_OMP libsais_omp
+    #define LIBSAIS_PLCP_OMP libsais_plcp_omp
 #endif
 
 struct sub_string {

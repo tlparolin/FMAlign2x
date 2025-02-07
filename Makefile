@@ -1,7 +1,7 @@
 CXX = g++
-CXXFLAGS = -Wall -std=c++17 -fopenmp -DLIBSAIS_OPENMP
+CXXFLAGS = -Wall -std=c++17 -fopenmp -DLIBSAIS_OPENMP -Iinclude -Iext/libsais
 CC = g++
-CFLAGS = -fopenmp -DLIBSAIS_OPENMP
+CFLAGS = -fopenmp -DLIBSAIS_OPENMP -Iinclude -Iext/libsais
 
 SRCS = main.cpp src/utils.cpp src/mem_finder.cpp src/sequence_split_align.cpp ext/SW/ssw.cpp ext/SW/ssw_cpp.cpp
 
@@ -31,8 +31,7 @@ else
 	LIBSAIS_HDR = ext/libsais/libsais.h
 endif
 
-OBJS = $(SRCS:.cpp=.o)
-OBJS += $(LIBSAIS_OBJS)
+OBJS = $(SRCS:.cpp=.o) $(LIBSAIS_OBJS)
 
 FMAlign2: $(OBJS)
 	$(CXX) $(CXXFLAGS) $(OBJS) -o FMAlign2
@@ -69,7 +68,7 @@ main.o: main.cpp include/utils.h include/common.h include/mem_finder.h include/s
 
 clean:
 ifeq ($(OS),Windows_NT)
-	del -f $(subst /,\\,$(OBJS)) FMAlign2.exe
+	del /F /Q $(OBJS) FMAlign2.exe 2> NUL || cmd /c exit 0
 else
 	rm -f $(OBJS) FMAlign2
 endif

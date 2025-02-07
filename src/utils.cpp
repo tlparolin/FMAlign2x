@@ -22,7 +22,7 @@
 // Thiago Luiz Parolin
 // Contact: thiago.parolin@unesp.br
 
-#include "../include/utils.h"
+#include "utils.h"
 
 KSEQ_INIT(int, read)
 
