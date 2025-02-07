@@ -37,3 +37,4 @@ output.fmaligned2.fasta
 /src/gsacak.o
 *.o
 /bug
+build/
