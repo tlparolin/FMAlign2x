@@ -24,6 +24,14 @@
 
 #include "mem_finder.h"
 
+#if defined(M64) && M64 == 1
+    #define LIBSAIS_OMP libsais64_omp
+    #define LIBSAIS_PLCP_OMP libsais64_plcp_omp
+#else
+    #define LIBSAIS_OMP libsais_omp
+    #define LIBSAIS_PLCP_OMP libsais_plcp_omp
+#endif
+
 void* find_optimal_chain(void* arg) {
     FindOptimalChainParams* ptr = static_cast<FindOptimalChainParams*>(arg);
     std::vector<std::pair<int_t, int_t>> chains = *(ptr->chains);

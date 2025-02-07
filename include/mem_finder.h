@@ -48,14 +48,10 @@
 #include "common.h"
 #include "utils.h"
 
-#ifndef M64
-    #include "libsais.h"
-    #define LIBSAIS_OMP libsais_omp
-    #define LIBSAIS_PLCP_OMP libsais_plcp_omp
-#else
+#if defined(M64) && M64 == 1
     #include "libsais64.h"
-    #define LIBSAIS_OMP libsais64_omp
-    #define LIBSAIS_PLCP_OMP libsais64_plcp_omp
+#else
+    #include "libsais.h"
 #endif
 
 struct sub_string {

@@ -4,8 +4,8 @@ project(FMAlign2)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-option(DEBUG "Enable debugging" 0)
-option(M64 "Use 64-bit" 0)
+option(DEBUG "Enable debugging" OFF)
+option(M64 "Use 64-bit" OFF)
 
 # Compiler config
 set(CMAKE_CXX_FLAGS "-Wall -fopenmp -DLIBSAIS_OPENMP")
@@ -17,6 +17,11 @@ if(DEBUG)
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
+endif()
+
+if(M64)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -DM64")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m64 -DM64")
 endif()
 
 if(NOT WIN32)
@@ -39,22 +44,29 @@ if(NOT WIN32)
     list(APPEND SOURCES src/thread_pool.cpp src/thread_condition.cpp)
 endif()
 
-# Libsais Config
-if(M64)
-    set(LIBSAIS_SRC ext/libsais/libsais64.c)
-    set(LIBSAIS_HDR ext/libsais/libsais64.h)
-else()
-    set(LIBSAIS_SRC ext/libsais/libsais.c)
-    set(LIBSAIS_HDR ext/libsais/libsais.h)
-endif()
+file(
+  DOWNLOAD
+  https://github.com/cpm-cmake/CPM.cmake/releases/download/v0.38.3/CPM.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake
+  EXPECTED_HASH SHA256=cc155ce02e7945e7b8967ddfaff0b050e958a723ef7aad3766d368940cb15494
+)
+include(${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake)
 
-add_library(libsais STATIC ${LIBSAIS_SRC})
+# Libsais Config
+CPMAddPackage(
+  NAME libsais
+  GITHUB_REPOSITORY IlyaGrebnov/libsais
+  GIT_TAG v2.8.7
+  OPTIONS
+    "LIBSAIS_USE_OPENMP ON"
+    "LIBSAIS_BUILD_SHARED_LIB OFF"
+)
 
 add_executable(FMAlign2 ${SOURCES})
-target_link_libraries(FMAlign2 PRIVATE libsais)
+target_link_libraries(FMAlign2 libsais)
 
 # Clean Rules
-add_custom_target(clean_all
+add_custom_target(clean-all
     COMMAND ${CMAKE_COMMAND} -E rm -rf FMAlign2
     COMMAND ${CMAKE_COMMAND} -E rm -rf CMakeCache.txt CMakeFiles
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}

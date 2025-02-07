@@ -43,7 +43,7 @@
 // different data types are defined through conditional compilation for different sizes of data.
 // if data is larger than 2GB, M64 should be selected.
 #pragma once
-#ifdef M64
+#if defined(M64) && M64 == 1
 	typedef int64_t	int_t;
 	typedef uint64_t uint_t;
 	#define U_MAX	UINT64_MAX
