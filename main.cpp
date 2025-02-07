@@ -32,6 +32,7 @@
 #include "thread_pool.h"
 #endif
 #include <thread>
+#include <set>
 
 GlobalArgs global_args;
 int main(int argc, char** argv) {
@@ -51,7 +52,7 @@ int main(int argc, char** argv) {
     parser.add_argument_help("c", "A floating-point parameter that specifies the minimum coverage across all sequences, with values ranging from 0 to 1. The default \
 setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7.");
     parser.add_argument("p", false, "mafft");
-    parser.add_argument_help("p", "The MSA method used in parallel align. for example, halign3, halign2 and mafft.");
+    parser.add_argument_help("p", "The MSA method used in parallel align. for example, halign3, halign2, kalign and mafft.");
     parser.add_argument("o", false, "output.fmaligned2.fasta");
     parser.add_argument_help("o", "The path to the output file.");
     parser.add_argument("d", false, "0");
@@ -115,8 +116,9 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         }
 
         global_args.package = parser.get("p");
-        if (global_args.package != "halign2" && global_args.package != "halign3" && global_args.package != "mafft") {
-            throw ("Error: " + global_args.package + " is a invalid method!");
+        std::set<std::string> valid_methods = {"halign2", "halign3", "mafft", "kalign"};
+        if (valid_methods.find(global_args.package) == valid_methods.end()) {
+            throw std::invalid_argument("Error: " + global_args.package + " is an invalid method!");
         }
 
         global_args.output_path = parser.get("o");
