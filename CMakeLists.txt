@@ -4,8 +4,8 @@ project(FMAlign2)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-option(DEBUG "Enable debugging" OFF)
-option(M64 "Use 64-bit" OFF)
+option(DEBUG "Enable debugging" 0)
+option(M64 "Use 64-bit" 0)
 
 # Compiler config
 set(CMAKE_CXX_FLAGS "-Wall -fopenmp -DLIBSAIS_OPENMP")
@@ -55,7 +55,7 @@ target_link_libraries(FMAlign2 PRIVATE libsais)
 
 # Clean Rules
 add_custom_target(clean_all
-    COMMAND ${CMAKE_COMMAND} -E rm -f FMAlign2
-    COMMAND ${CMAKE_COMMAND} -E rm -f CMakeCache.txt CMakeFiles
+    COMMAND ${CMAKE_COMMAND} -E rm -rf FMAlign2
+    COMMAND ${CMAKE_COMMAND} -E rm -rf CMakeCache.txt CMakeFiles
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
