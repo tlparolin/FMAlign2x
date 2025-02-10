@@ -335,34 +335,34 @@ Finally, the function stores the aligned fragments in the result_store vector.
 void* expand_chain(void* arg) {
     // Cast the input parameters to the correct struct type
     ExpandChainParams* ptr = static_cast<ExpandChainParams*>(arg);
+
     // Get data, chain, and chain_index from the input parameters
-    const std::vector<std::string> data = *(ptr->data);
-    std::vector<std::vector<std::pair<int_t, int_t>>> chain = *(ptr->chain);
+    const std::vector<std::string>& data = *(ptr->data);
+    std::vector<std::vector<std::pair<int_t, int_t>>>& chain = *(ptr->chain);
     const uint_t chain_index = ptr->chain_index;
-    // std::cout << "in" << chain_index << '\n';
-    // Get the number of sequences in the data vector and the number of chains in the current chain
+
     uint_t seq_num = data.size();
     uint_t chain_num = chain[0].size();
     
-    // Declares a default Aligner
+    // Declare a default Aligner and reuse it
     StripedSmithWaterman::Aligner aligner;
-    // Declares a default filter
+    // Declare a default filter
     StripedSmithWaterman::Filter filter;
-    // Declares an alignment that stores the result
+    // Declare an alignment that stores the result
     StripedSmithWaterman::Alignment alignment;
 
     uint_t query_length = 0;
-    std::string query = "";
+    std::string_view query = "";
     std::vector<std::string> aligned_fragment(seq_num);
+    
     // Find the query sequence and its length in the current chain
     for (uint_t i = 0; i < seq_num; i++) {
         if (chain[i][chain_index].first != -1) {
             query_length = chain[i][chain_index].second;
-            query = data[i].substr(chain[i][chain_index].first, query_length);
+            query = std::string_view(data[i]).substr(chain[i][chain_index].first, query_length);
             break;
         }
     }
-    
 
     for (uint_t i = 0; i < seq_num; i++) {
         int_t begin_pos = chain[i][chain_index].first;
@@ -375,34 +375,36 @@ void* expand_chain(void* arg) {
             int_t maskLen = query_length / 2;
             maskLen = maskLen < 15 ? 15 : maskLen;
 
+            // Find the first valid chain position before the current one
             for (; tmp_index > 0 && chain[i][tmp_index - 1].first == -1; --tmp_index);
-
             ref_begin_pos = tmp_index <= 0 ? 0 : chain[i][tmp_index-1].first + chain[i][tmp_index - 1].second;
 
+            // Find the first valid chain position after the current one
             tmp_index = chain_index;
             for (; tmp_index < chain_num - 1 && chain[i][tmp_index + 1].first == -1; ++tmp_index);
-
             ref_end_pos = tmp_index >= chain_num - 1 ? data[i].length() - 1 : chain[i][tmp_index + 1].first;
 
-            std::string ref = data[i].substr(ref_begin_pos, ref_end_pos - ref_begin_pos);
+            // Use std::string_view to avoid unnecessary allocation
+            std::string_view ref = std::string_view(data[i]).substr(ref_begin_pos, ref_end_pos - ref_begin_pos);
 
             // Get the reference subsequence and align it with the query subsequence
-            aligner.Align(query.c_str(), ref.c_str(), ref.size(), filter, &alignment, maskLen);
+            aligner.Align(query.data(), ref.data(), ref.size(), filter, &alignment, maskLen);
 
+            // Store the result of the alignment
             std::pair<int_t, int_t> p = store_sw_alignment(alignment, ref, query, aligned_fragment, i);
        
             if (p.first != -1) {
                 p.first += ref_begin_pos;
                 (*(ptr->chain))[i][chain_index] = p;
             }
-           
-        }
-        else {
-            aligned_fragment[i] = query;
+        } else {
+            aligned_fragment[i] = std::string(query);  // Already aligned fragment is directly assigned
         }
     }
+
+    // Store the result for the current chain
     *(ptr->result_store) = aligned_fragment;
- 
+
     return NULL;
 }
 
@@ -418,8 +420,12 @@ void* expand_chain(void* arg) {
 * @param seq_index The index of the query sequence in the vector of aligned sequences.
 * @return A pair of integers representing the alignment start and length.
 */
-std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment alignment, std::string& ref, std::string& query,
-    std::vector<std::string>& res_store, uint_t seq_index)
+std::pair<int_t, int_t> store_sw_alignment(
+    StripedSmithWaterman::Alignment alignment, 
+    std::string_view ref, 
+    std::string_view query,
+    std::vector<std::string>& res_store, 
+    uint_t seq_index) 
 {
     // Extract cigar string from the alignment
     std::vector<unsigned int> cigar = alignment.cigar;
@@ -440,33 +446,36 @@ std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment align
     int_t total_length = alignment.query_end;
     int_t new_ref_begin = ref_begin;
     uint_t new_ref_end = ref_end;
+
     if (cigar_int_to_op(cigar[0]) == 'S') {
         S_count += cigar_int_to_len(cigar[0]);
         if (new_ref_begin - cigar_int_to_len(cigar[0]) < 0) {
             new_ref_begin = 0;
-        }
-        else {
+        } else {
             new_ref_begin = new_ref_begin - cigar_int_to_len(cigar[0]);
         }
-
     }
+    
     if (cigar_int_to_op(cigar[cigar.size() - 1]) == 'S') {
         S_count += cigar_int_to_len(cigar[cigar.size() - 1]);
         total_length += cigar_int_to_len(cigar[cigar.size() - 1]);
         if (new_ref_end + cigar_int_to_len(cigar[cigar.size() - 1]) > (uint_t)ref.length() - 1) {
             new_ref_end = ref.length() - 1;
-        }
-        else {
+        } else {
             new_ref_end = new_ref_end + cigar_int_to_len(cigar[cigar.size() - 1]);
         }
     }
 
     if (S_count > ceil(0.8 * total_length)) {
-            res_store[seq_index] = aligned_result;
-            return std::make_pair(-1, -1);
+        res_store[seq_index] = aligned_result;
+        return std::make_pair(-1, -1);
     }
+
     uint_t p_ref = 0;
     uint_t p_query = 0;
+
+    // Convert query to std::string for modifying the query (inserting gaps)
+    std::string query_str = std::string(query);
 
     for (uint_t i = 0; i < cigar.size(); i++) {
         char op = cigar_int_to_op(cigar[i]);
@@ -482,15 +491,15 @@ std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment align
                     while (tmp_len > ref_begin) {
                         aligned_result += "-";
                         tmp_len--;
-                    }                 
+                    }
                 }
                 for (int_t j = ref_begin - tmp_len; j < ref_begin; j++) {
                     aligned_result += ref[j];
-                }        
+                }
             }
             else {
                 int_t tmp_len = len;
-                for (uint_t j = ref_end+1; j < ref.length() && tmp_len > 0; j++) {
+                for (uint_t j = ref_end + 1; j < ref.length() && tmp_len > 0; j++) {
                     aligned_result += ref[j];
                     tmp_len--;
                 }
@@ -506,38 +515,29 @@ std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment align
         case 'X':
         case '=': {
             // Handle match, mismatch, and substitution operations
-            for (int_t j = 0; j < len; j++) {
-                aligned_result += ref[ref_begin + p_ref + j];
-            }
+            aligned_result.append(ref.substr(ref_begin + p_ref, len));
             p_ref += len;
             p_query += len;
             break;
         }
         case 'I': {
             // Handle insertion operations
-            for (int_t j = 0; j < len; j++) {
-                aligned_result += '-';
-            }
+            aligned_result.append(len, '-');
             p_query += len;
             break;
         }
         case 'D': {
             // Handle deletion operations
-            std::string gaps = "";
-            for (int_t j = 0; j < len; j++) {
-                gaps += '-';
-            }
-            for (int_t j = 0; j < len; j++) {
-                aligned_result += ref[ref_begin + p_ref + j];
-            }
-            p_ref += len;
-
-            query.insert(query_begin + p_query, gaps);
+            aligned_result.append(len, '-');
+            
+            // Convert query_str back to std::string and insert gaps
+            query_str.insert(query_begin + p_query, len, '-');
+            
+            // Apply the change to all sequences in res_store
             for (uint_t j = 0; j < seq_index; j++) {
                 if (res_store[j].length() != 0) {
-                    res_store[j].insert(query_begin + p_query, gaps);
+                    res_store[j].insert(query_begin + p_query, len, '-');
                 }
-                
             }
             p_query += len;
             break;
@@ -547,6 +547,7 @@ std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment align
             break;
         }
     }
+
     res_store[seq_index] = aligned_result;
 
     std::pair<int, int> p(new_ref_begin, new_ref_end - new_ref_begin + 1);
@@ -559,59 +560,59 @@ std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment align
  * @param chain The vector of chains representing the alignment
  * @return The vector of ranges for each sequence in the alignment
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(std::vector<std::string> data, std::vector<std::vector<std::pair<int_t, int_t>>> chain) {
-    // Get the number of sequences and chains
+std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const std::vector<std::string>& data,
+                                                                            const std::vector<std::vector<std::pair<int_t, int_t>>>& chain) {
     uint_t seq_num = data.size();
     uint_t chain_num = chain[0].size();
-    // Initialize the vector to store the ranges
+    
+    // Pre-allocate memory to avoid resizing during push_back
     std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range(seq_num);
+    parallel_align_range.reserve(seq_num);  // Reserve space to avoid reallocations
 
     // Iterate through each sequence
     for (uint_t i = 0; i < seq_num; i++) {
-        // Initialize the last position as 0 and a temporary vector to store the ranges
         int_t last_pos = 0;
-        std::vector<std::pair<int_t, int_t>> tmp_range;
+        std::vector<std::pair<int_t, int_t>>& tmp_range = parallel_align_range[i];
+        tmp_range.reserve(chain_num + 1);  // Reserve enough space for the ranges
+
         // Iterate through each chain for the current sequence
         for (uint_t j = 0; j < chain_num; j++) {
-            // Get the begin position for the current chain
             int_t begin_pos = chain[i][j].first;
-            // If the chain cannot be aligned, add (-1,-1) to the range and set the last position as -1
+
             if (begin_pos == -1) {
-                tmp_range.push_back(std::make_pair(-1, -1));
+                tmp_range.push_back({-1, -1});
                 last_pos = -1;
-            }
-            else {
-                // If the last chain could not be aligned, add (-1,-1) to the range
+            } else {
                 if (last_pos == -1) {
-                    tmp_range.push_back(std::make_pair(-1, -1));
+                    tmp_range.push_back({-1, -1});
+                } else {
+                    tmp_range.push_back({last_pos, begin_pos - last_pos});
                 }
-                else {
-                    // Add the range between the last position and the current chain's begin position
-                    tmp_range.push_back(std::make_pair(last_pos, begin_pos - last_pos));
-                }
-                // Update the last position to the end of the current chain
                 last_pos = begin_pos + chain[i][j].second;
             }
         }
-        // If the last chain could not be aligned, add (-1,-1) to the range
+
+        // Handle the end of the sequence after the last chain
         if (last_pos == -1) {
-            tmp_range.push_back(std::make_pair(-1, -1));
-        }
-        else {
-            // Add the range between the last position and the end of the sequence
-            tmp_range.push_back(std::make_pair(last_pos, data[i].length() - last_pos));
-        }
-        // Add the ranges for the current sequence to the vector of ranges
-        parallel_align_range[i] = tmp_range;
-    }
-    std::vector<std::vector<std::pair<int_t, int_t>>> transpose_res(parallel_align_range[0].size(), std::vector<std::pair<int_t, int_t>>(seq_num));
-    for (uint_t i = 0; i < seq_num; i++) {
-        for (uint_t j = 0; j < parallel_align_range[0].size(); j++) {
-            transpose_res[j][i] = parallel_align_range[i][j];
+            tmp_range.push_back({-1, -1});
+        } else {
+            tmp_range.push_back({last_pos, data[i].length() - last_pos});
         }
     }
-    parallel_align_range.clear();
-    // Return the vector of ranges
+
+    // Allocate transpose result vector
+    std::vector<std::vector<std::pair<int_t, int_t>>> transpose_res;
+    transpose_res.reserve(chain_num);
+
+    // Transpose parallel_align_range into transpose_res
+    for (uint_t j = 0; j < chain_num; j++) {
+        std::vector<std::pair<int_t, int_t>> transposed_row(seq_num);
+        for (uint_t i = 0; i < seq_num; i++) {
+            transposed_row[i] = parallel_align_range[i][j];
+        }
+        transpose_res.push_back(std::move(transposed_row));  // Move to avoid copies
+    }
+
     return transpose_res;
 }
 
@@ -623,58 +624,67 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(std::
 * @return NULL
 */
 void* parallel_align(void* arg) {
-    // Cast the input parameters to the correct struct type
+    // Cast input parameters to the correct struct type.
     ParallelAlignParams* ptr = static_cast<ParallelAlignParams*>(arg);
-    // Get data, chain, and chain_index from the input parameters
-    const std::vector<std::string> data = *(ptr->data);
-    std::vector<std::pair<int_t, int_t>> parallel_range = *(ptr->parallel_range);
+    
+    // Use references to avoid copying the vectors.
+    const std::vector<std::string>& data = *(ptr->data);
+    const std::vector<std::pair<int_t, int_t>>& parallel_range = *(ptr->parallel_range);
     const uint_t task_index = ptr->task_index;
-    // Get the number of sequences in the data vector and the number of chains in the current chain
-    uint_t seq_num = data.size();
-    std::string file_name = TMP_FOLDER + "task-" + std::to_string(task_index)+"_"+ random_file_end + ".fasta";
-    std::ofstream file;
-    file.open(file_name);
+    const uint_t seq_num = data.size();
 
+    // Construct the file name.
+    std::string file_name = TMP_FOLDER + "task-" + std::to_string(task_index) + "_" + random_file_end + ".fasta";
+
+    // Open the output file.
+    std::ofstream file(file_name);
     if (!file.is_open()) {
-        std::cerr << file_name << " fail to open!" << std::endl;
+        std::cerr << file_name << " failed to open!" << std::endl;
         exit(1);
     }
 
+    // Reserve space in the vector to avoid reallocations.
     std::vector<uint_t> aligned_seq_index;
+    aligned_seq_index.reserve(seq_num);
+
+    // Write directly to the file.
     for (uint_t i = 0; i < seq_num; i++) {  
+        // Check if the sequence should be aligned.
         if (parallel_range[i].first >= 0) {
-            // Get a subset of the sequence to align
+            // Extract the desired substring from the sequence.
             std::string seq_content = data[i].substr(parallel_range[i].first, parallel_range[i].second);
-            std::stringstream sstreasm;
-            sstreasm << ">SEQENCE" << i << "\n" << seq_content << "\n";
-            file << sstreasm.str();
+            // Write the header and sequence directly to the file.
+            file << ">SEQUENCE" << i << "\n" << seq_content << "\n";
             aligned_seq_index.push_back(i);
         }       
     }
     file.close();
-    // Call the align_fasta function to align the sequences in the file
+
+    // Call the align_fasta function to align the sequences in the file.
     std::string res_file_name = align_fasta(file_name);
 
-
+    // Read the alignment results.
     std::vector<std::string> aligned_seq;
     std::vector<std::string> aligned_name;
     read_data(res_file_name.c_str(), aligned_seq, aligned_name, false);
+
+    // Map the aligned sequences back to their original indices.
     std::vector<std::string> final_aligned_seq(seq_num, "");
-    // Map the aligned sequences back to their original indices in the input data vector
-    for (uint_t i = 0; i < aligned_seq_index.size(); i++) {
-        final_aligned_seq[aligned_seq_index[i]] = aligned_seq[i];
+    for (size_t i = 0; i < aligned_seq_index.size(); i++) {
+        final_aligned_seq[aligned_seq_index[i]] = std::move(aligned_seq[i]);
     }
-    // Store the aligned sequences in the result storage
-    *(ptr->result_store) = final_aligned_seq;
+    // Store the final aligned sequences with move semantics to avoid unnecessary copies.
+    *(ptr->result_store) = std::move(final_aligned_seq);
 
     return NULL;
 }
+
 /**
 * @brief Align sequences in a FASTA file using either halign or mafft package.
 * @param file_name The name of the FASTA file to align.
 * @return The name of the resulting aligned FASTA file.
 */
-std::string align_fasta(std::string file_name) {
+std::string align_fasta(const std::string &file_name) {
 
     std::ifstream file(file_name, std::ios::binary | std::ios::ate);
     int_t size = file.tellg() / (1024 * 1024);
@@ -710,7 +720,7 @@ std::string align_fasta(std::string file_name) {
 #endif
     } else if (global_args.package == "kalign") {
         cmnd.append("./ext/kalign/bin/kalign -i ")
-            .append(file_name).append(" -n ").append(t).append(" -o ").append(res_file_name);
+            .append(file_name).append(" -o ").append(res_file_name);
             
 #if (defined(__linux__))
         cmnd.append(" 2> /dev/null");

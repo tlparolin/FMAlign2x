@@ -120,8 +120,11 @@ void* expand_chain(void* arg);
 * @param seq_index The index of the query sequence in the vector of aligned sequences.
 * @return A pair of integers representing the alignment start and length.
 */
-std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment alignment, std::string& ref, std::string& query,
-	std::vector<std::string>& res_store, uint_t seq_index);
+std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment alignment, 
+	std::string_view ref, 
+	std::string_view query,
+	std::vector<std::string>& res_store, 
+	uint_t seq_index);
 
 /**
  * @brief Get the range of each sequence in parallel alignment
@@ -129,7 +132,8 @@ std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment align
  * @param chain The vector of chains representing the alignment
  * @return The vector of ranges for each sequence in the alignment
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(std::vector<std::string> data, std::vector<std::vector<std::pair<int_t, int_t>>> chain);
+std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const std::vector<std::string>& data,
+	const std::vector<std::vector<std::pair<int_t, int_t>>>& chain);
 
 /**
 * @brief Function for parallel alignment of sequences.
@@ -145,7 +149,7 @@ void* parallel_align(void* arg);
 * @param file_name The name of the FASTA file to align.
 * @return The name of the resulting aligned FASTA file.
 */
-std::string align_fasta(std::string file_name);
+std::string align_fasta(const std::string &file_name);
 
 /**
 * @brief Deletes temporary files generated during sequence alignment tasks.
