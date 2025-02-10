@@ -307,7 +307,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<me
  * @param data A vector of strings representing the sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data) {
+std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std::string>& data) {
     if (global_args.verbose) {
         std::cout << "#                    Finding MEM...                         #" << std::endl;
         print_table_divider();
@@ -364,7 +364,9 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     const int_t min_mem_length = global_args.min_mem_length;
     const int_t min_cross_sequence = std::ceil(global_args.min_seq_coverage * data.size());
 
+    // Build a vector of joined sequence boundaries.
     std::vector<uint_t> joined_sequence_bound;
+    joined_sequence_bound.reserve(data.size());
     uint_t total_length = 0;
     for (const auto& seq : data) {
         joined_sequence_bound.push_back(total_length);
@@ -373,6 +375,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     auto intervals = get_lcp_intervals(PLCP.data(), SA.data(), min_mem_length, min_cross_sequence, n);
     const uint_t interval_size = intervals.size();
 
+    // Allocate space for MEMs and conversion parameters.
     std::vector<mem> mems(interval_size);
     // Convert each interval to a MEM in parallel
     IntervalToMemConversionParams* params = new IntervalToMemConversionParams[interval_size];
@@ -403,8 +406,11 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::stri
     }
 #endif
 
-    if (mems.size() <= 0 && global_args.verbose) print_table_line("Warning: There is no MEMs, please adjust your paramters.");
+    if (mems.empty() && global_args.verbose) {
+        print_table_line("Warning: There is no MEMs, please adjust your parameters.");
+    }
 
+    // Sort the MEMs and map them to the original data.
     sort_mem(mems, data);
 
     free(concat_data);
@@ -544,10 +550,10 @@ void draw_lcp_curve(int_t *LCP, uint_t n){
 *@return void* A void pointer to the result, which is stored in the input parameters structure.
 */
 void* interval2mem(void* arg) {
-    // Parameters cast
+    // Cast the input parameters to the correct struct type
     IntervalToMemConversionParams* ptr = static_cast<IntervalToMemConversionParams*>(arg);
 
-    // Get the input parameters
+    // Extract the necessary variables from the struct
     const int_t* SA = ptr->SA->data();
     const int_t min_mem_length = ptr->min_mem_length;
     const unsigned char* concat_data = ptr->concat_data;

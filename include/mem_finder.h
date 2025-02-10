@@ -105,7 +105,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vecto
  * @param data A vector of strings representing the sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(std::vector<std::string> data);
+std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std::string>& data);
 
 /**
  * @brief Concatenates a vector of strings with separator 1 and a terminating 0.
@@ -125,7 +125,7 @@ unsigned char* concat_strings(const std::vector<std::string>& strings, size_t &n
  * @param min_cross_sequence the min number of crossed sequence
  * @return  The output vector of pairs representing the LCP intervals
 */
-std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* plcp_array, int_t* sa, int_t threshold, int_t min_cross_sequence, uint_t n);
+std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(const int_t* plcp_array, const int_t* sa, int_t threshold, int_t min_cross_sequence, uint_t n);
 
 /**
 *@brief This function converts an LCP interval to a MEM (Maximal Exact Match).
