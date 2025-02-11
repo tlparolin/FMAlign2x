@@ -301,7 +301,6 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<me
     return chain;
 }
 
-
 /**
  * @brief Find MEMs in a set of sequences.
  * @param data A vector of strings representing the sequences.
@@ -473,7 +472,7 @@ unsigned char* concat_strings(const std::vector<std::string>& strings, size_t &n
  * @param min_cross_sequence the min number of crossed sequence
  * @return  The output vector of pairs representing the LCP intervals
 */
-std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* plcp_array, int_t* sa, int_t threshold, int_t min_cross_sequence, uint_t n) {
+std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(const int_t* plcp_array, int_t* sa, int_t threshold, int_t min_cross_sequence, uint_t n) {
     std::vector<std::pair<uint_t, uint_t>> intervals;
     intervals.reserve(n / (min_cross_sequence > 0 ? min_cross_sequence : 1) + 1);
 
@@ -507,76 +506,33 @@ std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(int_t* plcp_array, int_
     return intervals;
 }
 
-void draw_lcp_curve(int_t *LCP, uint_t n){
-    std::ofstream outfile("tmp/lcp.bin", std::ios::out | std::ios::binary);
-    
-    // Write the number of elements in the array
-    outfile.write(reinterpret_cast<const char*>(&n), sizeof(n));
-
-    // Write the LCP array
-    outfile.write(reinterpret_cast<const char*>(LCP), n * sizeof(int_t));
-
-    outfile.close();
-
-    // corresponding python code
-    // import struct
-    // import numpy as np
-    // import matplotlib.pyplot as plt
-
-    // def read_lcp_array(filename):
-    //     with open(filename, "rb") as f:
-    //         # Read the number of elements in the array
-    //         n_bytes = f.read(4)
-    //         n = struct.unpack("I", n_bytes)[0]
-
-    //         # Read the LCP array
-    //         lcp_bytes = f.read(n * 4)
-    //         lcp_array = np.frombuffer(lcp_bytes, dtype=np.int32)
-
-    //         return lcp_array
-
-    // # Example usage
-    // lcp_array = read_lcp_array("tmp/lcp.bin")
-
-    // # Plot the LCP array histogram
-    // plt.hist(lcp_array, bins=100)
-    // plt.show()
-
-}
-
 /**
 *@brief This function converts an LCP interval to a MEM (Maximal Exact Match).
 *@param arg A void pointer to the input parameters.
 *@return void* A void pointer to the result, which is stored in the input parameters structure.
 */
 void* interval2mem(void* arg) {
-    // Cast the input parameters to the correct struct type
     IntervalToMemConversionParams* ptr = static_cast<IntervalToMemConversionParams*>(arg);
 
-    // Extract the necessary variables from the struct
     const int_t* SA = ptr->SA->data();
     const int_t min_mem_length = ptr->min_mem_length;
     const unsigned char* concat_data = ptr->concat_data;
     const std::vector<uint_t>& joined_sequence_bound = ptr->joined_sequence_bound;
     std::pair<uint_t, uint_t> interval = ptr->interval;
 
-    // Initialize the result variables
     mem result;
-    uint_t* mem_index = new uint_t;
-    *mem_index = 0;
+    uint_t* mem_index = new uint_t(0);
     result.mem_index = mem_index;
-    std::vector<sub_string> res_substrings;
     result.mem_length = 0;
     std::vector<uint_t> mem_position;
+    mem_position.reserve(interval.second - interval.first + 1); // Reservar espaço para evitar realocações
 
-    // Create the MEM from the input PLCP interval
     for (uint_t i = interval.first - 1; i < interval.second; i++) {
         sub_string tmp_substring;
 
-        // Find the sequence index of the current suffix array index
         auto it = std::upper_bound(joined_sequence_bound.begin(), joined_sequence_bound.end(), SA[i]);
         uint_t sequence_index = std::distance(joined_sequence_bound.begin(), it) - 1;
-        
+
         tmp_substring.sequence_index = sequence_index;
         tmp_substring.position = SA[i] - joined_sequence_bound[sequence_index];
         mem_position.push_back(SA[i]);
@@ -584,70 +540,54 @@ void* interval2mem(void* arg) {
         tmp_substring.mem_index = mem_index;
         result.substrings.push_back(tmp_substring);
     }
-    // Compute the offset of the MEM and adjust the positions of the substrings accordingly
-    // Set an initial offset value of 1 and a flag indicating whether all characters are the same
+
     uint_t offset = 1;
     bool all_char_same = true;
 
-    // While loop to iterate through the offset values until a non-matching character is found or the end of the string is reached
     while (true) {
-        // Get the current character by looking back from the first MEM position by the current offset
-        char current_char = 0;
-        if (mem_position[0] >= offset) {
-            current_char = concat_data[mem_position[0] - offset];
-        } else {
-            break;
-        }
+        if (mem_position[0] < offset) break;
+        char current_char = concat_data[mem_position[0] - offset];
 
-        // Check if all characters at the current offset are the same
         all_char_same = true;
         for (uint_t i = 1; i < mem_position.size(); i++) {
-            // If the current MEM position is before the current offset, set the flag to false and break
-            if (mem_position[i] < offset) {
+            if (mem_position[i] < offset || current_char != concat_data[mem_position[i] - offset]) {
                 all_char_same = false;
                 break;
-            } else { // Otherwise, compare the character at the current MEM position to the current character and set the flag accordingly
-                if (current_char != concat_data[mem_position[i] - offset]) {
-                    all_char_same = false;
-                    break;
-                }
             }
         }
 
-        // If all characters at the current offset are the same, increment the offset and continue
-        if (all_char_same == false) {
-            break;
-        }
+        if (!all_char_same) break;
         offset++;
     }
 
-    // Decrement the offset by 1 to get the last offset where all characters were the same
-    offset -= 1;
+    if (offset > 0) offset--;
 
     result.mem_length = min_mem_length + offset;
-    for (uint_t i = 0; i < result.substrings.size(); i++) {
-        result.substrings[i].position -= offset;
+    for (auto& substring : result.substrings) {
+        substring.position -= offset;
     }
+
     uint_t gap_count = 0;
+    uint_t base_position = result.substrings[0].position + joined_sequence_bound[result.substrings[0].sequence_index];
     for (int_t i = 0; i < result.mem_length; i++) {
-        uint_t tmp_pos = result.substrings[0].position + i + joined_sequence_bound[result.substrings[0].sequence_index];
-        if (concat_data[tmp_pos] == '-') {
+        if (concat_data[base_position + i] == '-') {
             gap_count++;
         }
     }
+
     if (gap_count > ceil(0.8 * result.mem_length)) {
         result.mem_length = -1;
     }
-    // Store the result in the input parameters structure
+
     *(ptr->result_store) = result;
-  
+
     return NULL;
 }
 
 // function to compute average position of a mem in sequences
 void compute_mem_avg_pos(mem& m) {
     float_t sum_pos = 0;
-    for (auto& s : m.substrings) {
+    for (const auto& s : m.substrings) {
         sum_pos += s.position;
     }
     m.avg_pos = sum_pos / m.substrings.size();
@@ -660,32 +600,24 @@ void compute_mem_avg_pos(mem& m) {
 *@param mems The vector of MEMs to be sorted.
 *@param data The vector of sequences used to compute the MEMs.
 */
-void sort_mem(std::vector<mem> &mems, std::vector<std::string> data) {
-    
-    auto it = std::remove_if(mems.begin(), mems.end(), [&](const mem& m) {
-        if (m.substrings[0].position + m.mem_length < data[m.substrings[0].sequence_index].length()) {
-            return false;
-        }
-        else {
+void sort_mem(std::vector<mem>& mems, const std::vector<std::string>& data) {
+    // Remove MEMs inválidos e computa a posição média em uma única passagem
+    auto it = std::remove_if(mems.begin(), mems.end(), [&](mem& m) {
+        if (m.substrings[0].position + m.mem_length >= data[m.substrings[0].sequence_index].length()) {
             return true;
         }
-       
-        });
+        compute_mem_avg_pos(m);
+        return false;
+    });
     mems.erase(it, mems.end());
 
-    // compute average position of each mem
-    for (auto& m : mems) {
-        compute_mem_avg_pos(m);
-    }
-    // sort mems by average position
-    std::sort(mems.begin(), mems.end(), [](const mem& m1, const mem& m2) {
+    // Ordena os MEMs pela posição média
+    std::sort(std::execution::par, mems.begin(), mems.end(), [](const mem& m1, const mem& m2) {
         return m1.avg_pos < m2.avg_pos;
-        });
-    // assign mem_index based on position in sorted vector
+    });
+
+    // Atribui mem_index com base na posição no vetor ordenado
     for (uint_t i = 0; i < mems.size(); i++) {
         *mems[i].mem_index = i;
     }
-    return;
 }
-
-
