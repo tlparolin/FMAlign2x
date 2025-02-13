@@ -718,15 +718,6 @@ std::string align_fasta(const std::string &file_name) {
 #else
         cmnd.append(" > NUL");
 #endif
-    } else if (global_args.package == "kalign") {
-        cmnd.append("./ext/kalign/bin/kalign -i ")
-            .append(file_name).append(" -o ").append(res_file_name);
-            
-#if (defined(__linux__))
-        cmnd.append(" 2> /dev/null");
-#else
-        cmnd.append(" > NUL");
-#endif
     }
     else if (global_args.package == "mafft") {
         
