@@ -62,12 +62,30 @@ CPMAddPackage(
     "LIBSAIS_BUILD_SHARED_LIB OFF"
 )
 
+# MAFFT Directories
+set(MAFFT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/ext/mafft/mafft-7.525-without-extensions)
+set(MAFFT_INSTALL_DIR ${CMAKE_SOURCE_DIR}/ext/mafft/linux/usr)
+
+# Create target for mafft
+add_custom_target(mafft
+    COMMAND make clean
+    COMMAND make
+    COMMAND make install
+    COMMAND chmod 777 ${MAFFT_INSTALL_DIR}/libexec/mafft/disttbfast
+    WORKING_DIRECTORY ${MAFFT_SOURCE_DIR}/core
+    COMMENT "Building, installing, and setting permissions for MAFFT"
+)
+
 add_executable(FMAlign2 ${SOURCES})
 target_link_libraries(FMAlign2 libsais)
+
+# FMAlign2 depends on mafft
+add_dependencies(FMAlign2 mafft)
 
 # Clean Rules
 add_custom_target(clean-all
     COMMAND ${CMAKE_COMMAND} -E rm -rf FMAlign2
     COMMAND ${CMAKE_COMMAND} -E rm -rf CMakeCache.txt CMakeFiles
+    COMMAND ${CMAKE_COMMAND} -E rm -rf ${CMAKE_SOURCE_DIR}/ext/mafft/linux
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
