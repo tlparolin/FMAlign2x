@@ -82,12 +82,46 @@ std::string generateRandomString(int length);
 */
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence);
 
+/**
+* @brief Preprocesses alignment blocks between MEMs to reduce load on external aligners.
+* This function attempts to resolve alignment blocks (typically between MEMs) in a fast and memory-efficient
+* way, before falling back to more expensive external aligners such as MAFFT or HAlign. It operates by
+* analyzing each block defined in `parallel_align_range` and choosing one of three strategies:
+* 1. **Exact Match**: If all sequences in the block are identical, simply copies the fragment.
+* 2. **SPOA Alignment**: If average fragment length is small (< 2000 bp), applies SPOA for fast in-memory MSA.
+* 3. **Fallback Flag**: For long or divergent blocks, defers to external aligners by setting a fallback flag.
+* @param data The original vector of sequences (one string per sequence).
+* @param parallel_align_range A vector of alignment ranges (start, length pairs) per sequence, per block.
+*        Each element defines the intervals to be extracted from `data` for one alignment block.
+* @return A pair:
+* - First: A 2D vector of strings containing aligned fragments (SPOA-aligned or copied directly).
+* - Second: A boolean vector where `true` indicates the block must be aligned by an external aligner.
+* @note This function assumes that `spoa_align()` is implemented and available in scope.
+*       It is intended to be used directly after `get_parallel_align_range()` in the FMAlign2 pipeline.
+*/
 std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>
 preprocess_parallel_blocks(
     const std::vector<std::string>& data,
     const std::vector<std::vector<std::pair<int_t, int_t>>>& parallel_align_range
 );
 
+/**
+* @brief Performs multiple sequence alignment using SPOA (Partial Order Alignment).
+* This function leverages the SPOA library to construct a partial order graph and
+* progressively align input sequences to it. It uses the global alignment model 
+* (Needleman-Wunsch) with linear gap penalties, optimized for short to medium-length 
+* sequence blocks (e.g., between MEMs). Empty sequences are ignored during the alignment process. 
+* The final output is a multiple sequence alignment with gaps introduced as necessary to maintain consistency.
+* Scoring parameters used:
+* - Match: +4
+* - Mismatch: -10
+* - Gap (linear): -8
+* @param sequences A vector of input sequences to be aligned. Each sequence is a std::string.
+* @return A vector of aligned sequences (same size as input), each padded with '-' where needed.
+* @note This function is designed for fast in-memory alignment and is suitable as a lightweight
+* alternative to full external aligners (e.g., MAFFT, HAlign) in internal blocks of ultralong sequences.
+* @see https://github.com/rvaser/spoa for more details on the SPOA library.
+*/
 std::vector<std::string> spoa_align(const std::vector<std::string>& sequences);
 
 /**
