@@ -29,6 +29,7 @@
 #include "../ext/SW/ssw_cpp.h"
 #include "../ext/SW/ssw.h"
 #include "utils.h"
+#include <spoa/spoa.hpp>
 #include <algorithm>
 #include <sstream>
 #ifdef __linux__

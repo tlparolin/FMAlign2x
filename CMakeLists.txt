@@ -62,6 +62,16 @@ CPMAddPackage(
     "LIBSAIS_BUILD_SHARED_LIB OFF"
 )
 
+# SPOA ConfigAdd commentMore actions
+CPMAddPackage(
+  NAME spoa
+  GITHUB_REPOSITORY rvaser/spoa
+  GIT_TAG 4.1.0
+  OPTIONS
+    "SPOA_BUILD_SHARED OFF"
+    "SPOA_ENABLE_CPU_DISPATCH ON"
+)
+
 # MAFFT Directories
 set(MAFFT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/ext/mafft/mafft-7.525-without-extensions)
 set(MAFFT_INSTALL_DIR ${CMAKE_SOURCE_DIR}/ext/mafft/linux/usr)
@@ -77,7 +87,7 @@ add_custom_target(mafft
 )
 
 add_executable(FMAlign2 ${SOURCES})
-target_link_libraries(FMAlign2 libsais)
+target_link_libraries(FMAlign2 libsais spoa)
 
 # FMAlign2 depends on mafft
 add_dependencies(FMAlign2 mafft)

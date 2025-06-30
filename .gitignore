@@ -38,3 +38,4 @@ output.fmaligned2.fasta
 *.o
 /bug
 build/
+ext/mafft/linux/usr
