@@ -90,7 +90,7 @@ add_executable(FMAlign2 ${SOURCES})
 target_link_libraries(FMAlign2 libsais spoa)
 
 # FMAlign2 depends on mafft
-add_dependencies(FMAlign2 mafft)
+add_dependencies(FMAlign2 mafft spoa)
 
 # Clean Rules
 add_custom_target(clean-all

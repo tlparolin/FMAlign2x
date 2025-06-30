@@ -39,6 +39,9 @@
 #endif
 #include <random>
 #include <climits>
+#include <tuple>
+#include <utility>
+#include <string_view>
 
 const std::string TMP_FOLDER = "./temp/";
 
@@ -78,6 +81,15 @@ std::string generateRandomString(int length);
 * @return void
 */
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence);
+
+std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>
+preprocess_parallel_blocks(
+    const std::vector<std::string>& data,
+    const std::vector<std::vector<std::pair<int_t, int_t>>>& parallel_align_range
+);
+
+std::vector<std::string> spoa_align(const std::vector<std::string>& sequences);
+
 /**
 * @brief Selects columns from a sequence of split points to enable multi thread.
 * @param split_points_on_sequence A vector of vectors of pairs, where each pair represents the start and mem length

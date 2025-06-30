@@ -150,6 +150,10 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     }
     // Calculate parallel alignment ranges and perform parallel alignment for each range
     std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range = get_parallel_align_range(data, chain);
+
+    // Nova etapa: tentar resolver blocos em memória com SPOA ou cópia direta
+    auto [fast_parallel_string, fallback_needed] = preprocess_parallel_blocks(data, parallel_align_range);
+
     uint_t parallel_num = parallel_align_range.size();
     std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
@@ -158,6 +162,8 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     threadpool pool;
     threadpool_init(&pool, global_args.thread);
     for (uint_t i = 0; i < parallel_num; i++) {
+        if (!fallback_needed[i]) continue;
+
         parallel_params[i].data = &data;
         parallel_params[i].parallel_range = parallel_align_range.begin()+i;
         parallel_params[i].task_index = i;
@@ -165,9 +171,11 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         threadpool_add_task(&pool, parallel_align, &parallel_params[i]);
     }
     threadpool_destroy(&pool);
-#else // Otherwise, use OpenMP for parallel execution
+#else
 #pragma omp parallel for num_threads(global_args.thread)
     for (uint_t i = 0; i < parallel_num; i++) {
+        if (!fallback_needed[i]) continue;
+
         parallel_params[i].data = &data;
         parallel_params[i].parallel_range = parallel_align_range.begin() + i;
         parallel_params[i].task_index = i;
@@ -175,6 +183,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         parallel_align(&parallel_params[i]);
     }
 #endif
+
     // Remove temporary files created during parallel execution
     delete_tmp_folder(parallel_num);
     // Calculate the time taken for parallel alignment and print the output
@@ -189,6 +198,13 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     timer.reset();
     // Concatenate the chains and parallel ranges
     std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
+
+    for (uint_t i = 0; i < parallel_num; ++i) {
+        if (!fallback_needed[i]) {
+            parallel_string[i] = std::move(fast_parallel_string[i]);
+        }
+    }
+
     // Concatenate the chain strings and parallel strings
     std::vector<std::vector<std::string>> concat_string = concat_chain_and_parallel(chain_string, parallel_string);
     std::vector<uint_t> fragment_len = get_first_nonzero_lengths(concat_string);
@@ -206,6 +222,79 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         print_table_divider();
     }
     return;
+}
+
+std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>
+preprocess_parallel_blocks(
+    const std::vector<std::string>& data,
+    const std::vector<std::vector<std::pair<int_t, int_t>>>& parallel_align_range
+) {
+    uint_t parallel_num = parallel_align_range.size();
+    uint_t seq_num = data.size();
+
+    std::vector<std::vector<std::string>> fast_parallel_string(parallel_num, std::vector<std::string>(seq_num));
+    std::vector<bool> fallback_needed(parallel_num, false);
+
+    for (uint_t i = 0; i < parallel_num; ++i) {
+        auto& range = parallel_align_range[i];
+
+        // Coletar fragmentos
+        std::vector<std::string> fragments(seq_num);
+        size_t total_len = 0;
+        bool all_equal = true;
+
+        for (uint_t s = 0; s < seq_num; ++s) {
+            auto [start, len] = range[s];
+            if (start != -1 && len > 0) {
+                fragments[s] = data[s].substr(start, len);
+                total_len += len;
+
+                if (s > 0 && fragments[s] != fragments[0]) {
+                    all_equal = false;
+                }
+            } else {
+                fragments[s] = "";
+            }
+        }
+
+        size_t avg_len = total_len / seq_num;
+
+        if (all_equal) {
+            for (uint_t s = 0; s < seq_num; ++s)
+                fast_parallel_string[i][s] = fragments[0]; // copiar
+            continue;
+        }
+
+        // Se é um bloco pequeno, use SPOA (a função spoa_align() deve estar definida)
+        if (avg_len < 2000) {
+            fast_parallel_string[i] = spoa_align(fragments); // assume função já implementada
+            continue;
+        }
+
+        // Caso não resolvido, marca fallback
+        fallback_needed[i] = true;
+    }
+
+    return {fast_parallel_string, fallback_needed};
+}
+
+std::vector<std::string> spoa_align(const std::vector<std::string>& sequences) {
+    if (sequences.empty()) return {};
+
+    // Cria o alinhador SPOA com scoring simples (sem gap extendido)
+    auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 3, -5, -3);  // linear gaps
+
+    spoa::Graph graph{};
+
+    // Alinha todas as sequências progressivamente ao grafo
+    for (const auto& seq : sequences) {
+        if (seq.empty()) continue;
+        auto alignment = alignment_engine->Align(seq, graph);
+        graph.AddAlignment(alignment, seq);
+    }
+
+    // Gera o alinhamento múltiplo
+    return graph.GenerateMultipleSequenceAlignment();
 }
 
 /**
