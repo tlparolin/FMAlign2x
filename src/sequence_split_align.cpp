@@ -185,7 +185,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 #endif
 
     // Remove temporary files created during parallel execution
-    delete_tmp_folder(parallel_num);
+    delete_tmp_folder(parallel_num, fallback_needed);
     // Calculate the time taken for parallel alignment and print the output
     double parallel_align_time = timer.elapsed_time();
     s.str("");
@@ -906,15 +906,20 @@ std::string align_fasta(const std::string &file_name) {
 /**
 * @brief Deletes temporary files generated during sequence alignment tasks.
 * @param task_count The number of tasks for which temporary files were created.
+* @param fallback_needed A boolean value that identifies if the file needs to be deleted
 */
-void delete_tmp_folder(uint_t task_count) {
+void delete_tmp_folder(uint_t task_count, const std::vector<bool>& fallback_needed) {
     for (uint_t i = 0; i < task_count; i++) {
-        std::string file_name = TMP_FOLDER +"task-" + std::to_string(i) + "_" + random_file_end + ".fasta";
+        if (!fallback_needed[i]) continue; // just del if the file was created
+
+        std::string file_name = TMP_FOLDER + "task-" + std::to_string(i) + "_" + random_file_end + ".fasta";
         std::string res_file_name = TMP_FOLDER + "task-" + std::to_string(i) + "_" + random_file_end + ".aligned.fasta";
-        if (remove(file_name.c_str()) != 0) {
+
+        if (std::remove(file_name.c_str()) != 0) {
             std::cerr << "Error deleting file " << file_name << std::endl;
         }
-        if (remove(res_file_name.c_str()) != 0) {
+
+        if (std::remove(res_file_name.c_str()) != 0) {
             std::cerr << "Error deleting file " << res_file_name << std::endl;
         }
     }

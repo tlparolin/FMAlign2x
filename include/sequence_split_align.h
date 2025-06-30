@@ -201,8 +201,9 @@ std::string align_fasta(const std::string &file_name);
 /**
 * @brief Deletes temporary files generated during sequence alignment tasks.
 * @param task_count The number of tasks for which temporary files were created.
+* @param fallback_needed A boolean value that identifies if the file needs to be deleted
 */
-void delete_tmp_folder(uint_t task_count);
+void delete_tmp_folder(uint_t task_count, const std::vector<bool>& fallback_needed);
 
 /**
 * @brief Concatenate multiple sequence alignments into a single alignment and write the result to an output file.
