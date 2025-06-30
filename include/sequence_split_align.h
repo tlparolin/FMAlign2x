@@ -57,6 +57,7 @@ struct ParallelAlignParams {
 	std::vector<std::vector<std::pair<int_t, int_t>>>::iterator parallel_range;
 	uint_t task_index;
 	std::vector<std::vector<std::string>>::iterator result_store;
+	const std::vector<bool>* fallback_needed;
 };
 
 /**

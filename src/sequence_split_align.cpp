@@ -18,7 +18,7 @@
 // Contact: zpl010720@gmail.com
 // Created: 2023-02-25
 
-// Some sections and functions were changed in February/2025
+// Some sections and functions were changed in June/2025
 // Thiago Luiz Parolin
 // Contact: thiago.parolin@unesp.br
 
@@ -66,6 +66,7 @@ std::string generateRandomString(int length) {
     return ss.str();
 #endif
 }
+
 /**
 * @brief Split and parallel align multiple sequences using a vector of chain pairs.
 * This function takes in three parameters: a vector of input sequences (data), a vector of sequence names (name),
@@ -168,6 +169,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         parallel_params[i].parallel_range = parallel_align_range.begin()+i;
         parallel_params[i].task_index = i;
         parallel_params[i].result_store = parallel_string.begin() + i;
+        parallel_params[i].fallback_needed = &fallback_needed;
         threadpool_add_task(&pool, parallel_align, &parallel_params[i]);
     }
     threadpool_destroy(&pool);
@@ -180,6 +182,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         parallel_params[i].parallel_range = parallel_align_range.begin() + i;
         parallel_params[i].task_index = i;
         parallel_params[i].result_store = parallel_string.begin() + i;
+        parallel_params[i].fallback_needed = &fallback_needed;
         parallel_align(&parallel_params[i]);
     }
 #endif
@@ -316,7 +319,7 @@ std::vector<std::string> spoa_align(const std::vector<std::string>& sequences) {
     if (sequences.empty()) return {};
 
     // Create the SPOA alignment engine with linear gap penalties
-    auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 4, -10, -8);  // linear gaps
+    auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8); 
 
     spoa::Graph graph{};
 
@@ -751,6 +754,11 @@ void* parallel_align(void* arg) {
     // Cast input parameters to the correct struct type.
     ParallelAlignParams* ptr = static_cast<ParallelAlignParams*>(arg);
     
+    // if not fallback_needed, the block was resolved by SPOA directly. Nothing to do.
+    if (!(*ptr->fallback_needed)[ptr->task_index]) {
+        return nullptr;
+    }
+
     // Use references to avoid copying the vectors.
     const std::vector<std::string>& data = *(ptr->data);
     const std::vector<std::pair<int_t, int_t>>& parallel_range = *(ptr->parallel_range);
