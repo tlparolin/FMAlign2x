@@ -258,7 +258,7 @@ preprocess_parallel_blocks(
     for (uint_t i = 0; i < parallel_num; ++i) {
         auto& range = parallel_align_range[i];
 
-        // Coletar fragmentos
+        // Colect fragments
         std::vector<std::string> fragments(seq_num);
         size_t total_len = 0;
         bool all_equal = true;
@@ -285,13 +285,13 @@ preprocess_parallel_blocks(
             continue;
         }
 
-        // Se é um bloco pequeno, use SPOA (a função spoa_align() deve estar definida)
+        // If small block, use SPOA
         if (avg_len < 2000) {
-            fast_parallel_string[i] = spoa_align(fragments); // assume função já implementada
+            fast_parallel_string[i] = spoa_align(fragments);
             continue;
         }
 
-        // Caso não resolvido, marca fallback
+        // Not solved, flag as fallback (mafft, halign2, halign3 etc)
         fallback_needed[i] = true;
     }
 

@@ -56,7 +56,7 @@ include(${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake)
 CPMAddPackage(
   NAME libsais
   GITHUB_REPOSITORY IlyaGrebnov/libsais
-  GIT_TAG v2.8.7
+  GIT_TAG v2.10.2
   OPTIONS
     "LIBSAIS_USE_OPENMP ON"
     "LIBSAIS_BUILD_SHARED_LIB OFF"
