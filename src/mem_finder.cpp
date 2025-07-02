@@ -426,7 +426,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
     std::stringstream ss;
     ss << std::fixed << std::setprecision(3) << mem_time;
     if (global_args.verbose) {
-        print_table_line("Sequence divide parts: " + std::to_string(split_point_on_sequence[0].size() + 1));
+        print_table_line("Sequence divide parts (MEMs): " + std::to_string(split_point_on_sequence[0].size() + 1));
         print_table_line("MEM process time: " + ss.str() + " seconds");
         print_table_divider();
     }

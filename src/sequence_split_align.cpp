@@ -152,8 +152,17 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     // Calculate parallel alignment ranges and perform parallel alignment for each range
     std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range = get_parallel_align_range(data, chain);
 
-    // Nova etapa: tentar resolver blocos em memória com SPOA ou cópia direta
+    // Try to solve block in memory
     auto [fast_parallel_string, fallback_needed] = preprocess_parallel_blocks(data, parallel_align_range);
+
+    // Calculate the time taken for in memory parallel alignment and print the output
+    double parallel_memory_align_time = timer.elapsed_time();
+    s.str("");
+    s << std::fixed << std::setprecision(2) << parallel_memory_align_time;
+    if (global_args.verbose) {
+        output = "In memory align time: " + s.str() + " seconds.";
+        print_table_line(output);
+    }
 
     uint_t parallel_num = parallel_align_range.size();
     std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
@@ -254,6 +263,10 @@ preprocess_parallel_blocks(
 
     std::vector<std::vector<std::string>> fast_parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<bool> fallback_needed(parallel_num, false);
+    
+    uint_t count_exact = 0;
+    uint_t count_spoa = 0;
+    uint_t count_fallback = 0;
 
     for (uint_t i = 0; i < parallel_num; ++i) {
         auto& range = parallel_align_range[i];
@@ -281,18 +294,27 @@ preprocess_parallel_blocks(
 
         if (all_equal) {
             for (uint_t s = 0; s < seq_num; ++s)
-                fast_parallel_string[i][s] = fragments[0]; // copiar
+                fast_parallel_string[i][s] = fragments[0]; // copy
+            ++count_exact;
             continue;
         }
 
         // If small block, use SPOA
         if (avg_len < 2000) {
             fast_parallel_string[i] = spoa_align(fragments);
+            ++count_spoa;
             continue;
         }
 
         // Not solved, flag as fallback (mafft, halign2, halign3 etc)
         fallback_needed[i] = true;
+        ++count_fallback;
+    }
+
+    if (global_args.verbose) {
+        print_table_line("Blocks resolved by copy: " + std::to_string(count_exact));
+        print_table_line("Blocks aligned in memory: " + std::to_string(count_spoa));
+        print_table_line("Blocks sent to " + global_args.package + ": " + std::to_string(count_fallback));
     }
 
     return {fast_parallel_string, fallback_needed};
