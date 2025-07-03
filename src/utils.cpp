@@ -295,6 +295,9 @@ void print_algorithm_info() {
 
     print_table_line(c_output);
 
+    std::string x_output = "Extra SPOA: " + std::string(global_args.extra_spoa ? "enabled" : "disabled");
+    print_table_line(x_output);
+
     std::string p_output = "Parallel align method: " + global_args.package;
     print_table_line(p_output);
 

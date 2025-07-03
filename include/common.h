@@ -18,6 +18,10 @@
 // Contact: zpl010720@gmail.com
 // Created: 2023-02-24
 
+// Some sections and functions were changed in June/2025
+// Thiago Luiz Parolin
+// Contact: thiago.parolin@unesp.br
+
 //This file defines data types, data structures, and various parameters.
 #ifndef COMMON_H
 #define COMMON_H
@@ -72,6 +76,7 @@ struct GlobalArgs {
 	std::string filter_mode;
 	int_t verbose;
 	double avg_file_size;
+	bool extra_spoa = false;
 };
 extern GlobalArgs global_args;
 
