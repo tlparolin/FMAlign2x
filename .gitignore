@@ -39,3 +39,4 @@ output.fmaligned2.fasta
 /bug
 build/
 ext/mafft/linux/usr
+ext/mafft/mafft-*/binaries/*

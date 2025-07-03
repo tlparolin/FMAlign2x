@@ -85,6 +85,7 @@ add_custom_command(
     COMMAND make clean
     COMMAND make
     COMMAND make install
+    COMMAND make clean
     COMMAND chmod 777 ${MAFFT_BINARY}
     WORKING_DIRECTORY ${MAFFT_SOURCE_DIR}/core
     COMMENT "Building MAFFT"
