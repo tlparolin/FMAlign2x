@@ -76,15 +76,22 @@ CPMAddPackage(
 set(MAFFT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/ext/mafft/mafft-7.525-without-extensions)
 set(MAFFT_INSTALL_DIR ${CMAKE_SOURCE_DIR}/ext/mafft/linux/usr)
 
+# MAFFT binary path (to check if mafft was compiled and exists)
+set(MAFFT_BINARY ${MAFFT_INSTALL_DIR}/libexec/mafft/disttbfast)
+
 # Create target for mafft
-add_custom_target(mafft
+add_custom_command(
+    OUTPUT ${MAFFT_BINARY}
     COMMAND make clean
     COMMAND make
     COMMAND make install
-    COMMAND chmod 777 ${MAFFT_INSTALL_DIR}/libexec/mafft/disttbfast
+    COMMAND chmod 777 ${MAFFT_BINARY}
     WORKING_DIRECTORY ${MAFFT_SOURCE_DIR}/core
-    COMMENT "Building, installing, and setting permissions for MAFFT"
+    COMMENT "Building MAFFT"
+    DEPENDS ${MAFFT_SOURCE_DIR}/core/Makefile
 )
+
+add_custom_target(mafft DEPENDS ${MAFFT_BINARY})
 
 add_executable(FMAlign2 ${SOURCES})
 target_link_libraries(FMAlign2 libsais spoa)
