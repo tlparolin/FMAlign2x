@@ -160,10 +160,12 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     s.str("");
     s << std::fixed << std::setprecision(2) << parallel_memory_align_time;
     if (global_args.verbose) {
-        output = "In memory align time: " + s.str() + " seconds.";
+        output = "In memory parallel align time: " + s.str() + " seconds.";
         print_table_line(output);
     }
 
+    timer.reset();
+    
     uint_t parallel_num = parallel_align_range.size();
     std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
@@ -203,7 +205,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     s.str("");
     s << std::fixed << std::setprecision(2) << parallel_align_time;
     if (global_args.verbose) {
-        output = "Parallel align time: " + s.str() + " seconds.";
+        output = "MSA Tool parallel align time: " + s.str() + " seconds.";
         print_table_line(output);
     }
     
@@ -237,6 +239,39 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 }
 
 /**
+ * @brief Executes a SPOA (Simd Partial Order Alignment) task on a set of DNA sequence fragments.
+ * This function is designed to be run as a thread. It extracts subsequences from the input data
+ * based on the provided ranges, constructs a vector of fragments, and performs multiple sequence
+ * alignment using the SPOA algorithm. The result is stored in the location pointed to by
+ * `params->result_store`.
+ * @param arg A pointer to a `SpoaTaskParams` structure containing:
+ *  - the number of sequences (`seq_num`),
+ *  - the input data (`data`),
+ *  - the ranges to extract from each sequence (`range`),
+ *  - and a pointer to where the alignment result should be stored (`result_store`).
+ * @return Always returns `nullptr`. The result of the alignment is stored via the pointer in `params`.
+ * @note If a sequence has an invalid range (start == -1 or length <= 0), an empty string is used.
+ */
+void* spoa_task(void* arg) {
+    SpoaTaskParams* params = static_cast<SpoaTaskParams*>(arg);
+
+    std::vector<std::string> fragments(params->seq_num);
+
+    for (uint_t s = 0; s < params->seq_num; ++s) {
+        auto [start, len] = (*params->range)[s];
+        if (start != -1 && len > 0) {
+            fragments[s] = (*params->data)[s].substr(start, len);
+        } else {
+            fragments[s] = "";
+        }
+    }
+
+    *(params->result_store) = spoa_align(fragments);
+
+    return nullptr;
+}
+
+/**
 * @brief Preprocesses alignment blocks between MEMs to reduce load on external aligners.
 * This function attempts to resolve alignment blocks (typically between MEMs) in a fast and memory-efficient
 * way, before falling back to more expensive external aligners such as MAFFT or HAlign. It operates by
@@ -253,8 +288,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 * @note This function assumes that `spoa_align()` is implemented and available in scope.
 *       It is intended to be used directly after `get_parallel_align_range()` in the FMAlign2 pipeline.
 */
-std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>
-preprocess_parallel_blocks(
+std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>preprocess_parallel_blocks(
     const std::vector<std::string>& data,
     const std::vector<std::vector<std::pair<int_t, int_t>>>& parallel_align_range
 ) {
@@ -267,11 +301,16 @@ preprocess_parallel_blocks(
     uint_t count_exact = 0;
     uint_t count_spoa = 0;
     uint_t count_fallback = 0;
+    
+    // Vectors to store indexes of blocks that will use spoa for in memory alignment
+    std::vector<uint_t> spoa_indices;
+    std::vector<SpoaTaskParams> spoa_params;
 
+    // First pass: identify block types and prepare SPOA parameters
     for (uint_t i = 0; i < parallel_num; ++i) {
         auto& range = parallel_align_range[i];
 
-        // Colect fragments
+        // Collect fragments for analysis
         std::vector<std::string> fragments(seq_num);
         size_t total_len = 0;
         bool all_equal = true;
@@ -293,27 +332,52 @@ preprocess_parallel_blocks(
         size_t avg_len = total_len / seq_num;
 
         if (all_equal) {
+            // Case 1: Exact copy
             for (uint_t s = 0; s < seq_num; ++s)
-                fast_parallel_string[i][s] = fragments[0]; // copy
+                fast_parallel_string[i][s] = fragments[0];
             ++count_exact;
-            continue;
-        }
-
-        // If small block, use SPOA
-        if (avg_len < 2000) {
-            fast_parallel_string[i] = spoa_align(fragments);
+        } else if (avg_len < 2000) {
+            // Case 2: SPOA (will be run in parallel)
+            spoa_indices.push_back(i);
+            SpoaTaskParams params;
+            params.data = &data;
+            params.range = &parallel_align_range[i];
+            params.task_index = i;
+            params.seq_num = seq_num;
+            params.result_store = &fast_parallel_string[i];
+            spoa_params.push_back(params);
             ++count_spoa;
-            continue;
+        } else {
+            // Case 3: Fallback to msa tools
+            fallback_needed[i] = true;
+            ++count_fallback;
         }
+    }
 
-        // Not solved, flag as fallback (mafft, halign2, halign3 etc)
-        fallback_needed[i] = true;
-        ++count_fallback;
+    // Run SPOA in parallel
+    // Linux: use threadpool
+    if (!spoa_params.empty()) {
+#if (defined(__linux__))
+        threadpool pool;
+        threadpool_init(&pool, global_args.thread);
+        
+        for (auto& params : spoa_params) {
+            threadpool_add_task(&pool, spoa_task, &params);
+        }
+        
+        threadpool_destroy(&pool);
+#else
+        // Others (Windows): use OpenMP
+#pragma omp parallel for num_threads(global_args.thread)
+        for (size_t idx = 0; idx < spoa_params.size(); ++idx) {
+            spoa_task(&spoa_params[idx]);
+        }
+#endif
     }
 
     if (global_args.verbose) {
         print_table_line("Blocks resolved by copy: " + std::to_string(count_exact));
-        print_table_line("Blocks aligned in memory: " + std::to_string(count_spoa));
+        print_table_line("Blocks aligned in memory (parallel): " + std::to_string(count_spoa));
         print_table_line("Blocks sent to " + global_args.package + ": " + std::to_string(count_fallback));
     }
 
@@ -341,6 +405,7 @@ std::vector<std::string> spoa_align(const std::vector<std::string>& sequences) {
     if (sequences.empty()) return {};
 
     // Create the SPOA alignment engine with linear gap penalties
+    // Note: Each thread creates its own engine instance for thread safety
     auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8); 
 
     spoa::Graph graph{};

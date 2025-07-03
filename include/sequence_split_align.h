@@ -60,6 +60,14 @@ struct ParallelAlignParams {
 	const std::vector<bool>* fallback_needed;
 };
 
+struct SpoaTaskParams {
+    const std::vector<std::string>* data;
+    const std::vector<std::pair<int_t, int_t>>* range;
+    uint_t task_index;
+    uint_t seq_num;
+    std::vector<std::string>* result_store;
+};
+
 /**
 * @brief Generates a random string of the specified length.
 * This function generates a random string of the specified length. The generated string
@@ -100,8 +108,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 * @note This function assumes that `spoa_align()` is implemented and available in scope.
 *       It is intended to be used directly after `get_parallel_align_range()` in the FMAlign2 pipeline.
 */
-std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>
-preprocess_parallel_blocks(
+std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>preprocess_parallel_blocks(
     const std::vector<std::string>& data,
     const std::vector<std::vector<std::pair<int_t, int_t>>>& parallel_align_range
 );
