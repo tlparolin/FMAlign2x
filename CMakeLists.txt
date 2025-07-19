@@ -62,7 +62,7 @@ CPMAddPackage(
     "LIBSAIS_BUILD_SHARED_LIB OFF"
 )
 
-# SPOA ConfigAdd commentMore actions
+# SPOA Config
 CPMAddPackage(
   NAME spoa
   GITHUB_REPOSITORY rvaser/spoa
@@ -77,22 +77,22 @@ set(MAFFT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/ext/mafft/mafft-7.525-without-extension
 set(MAFFT_INSTALL_DIR ${CMAKE_SOURCE_DIR}/ext/mafft/linux/usr)
 
 # MAFFT binary path (to check if mafft was compiled and exists)
-set(MAFFT_BINARY ${MAFFT_INSTALL_DIR}/libexec/mafft/disttbfast)
+set(MAFFT_BINARIES ${MAFFT_INSTALL_DIR}/libexec/mafft/disttbfast)
 
 # Create target for mafft
 add_custom_command(
-    OUTPUT ${MAFFT_BINARY}
+    OUTPUT ${MAFFT_BINARIES}
     COMMAND make clean
     COMMAND make
     COMMAND make install
     COMMAND make clean
-    COMMAND chmod 777 ${MAFFT_BINARY}
+    COMMAND chmod 777 ${MAFFT_BINARIES}
     WORKING_DIRECTORY ${MAFFT_SOURCE_DIR}/core
     COMMENT "Building MAFFT"
     DEPENDS ${MAFFT_SOURCE_DIR}/core/Makefile
 )
 
-add_custom_target(mafft DEPENDS ${MAFFT_BINARY})
+add_custom_target(mafft DEPENDS ${MAFFT_BINARIES})
 
 add_executable(FMAlign2 ${SOURCES})
 target_link_libraries(FMAlign2 libsais spoa)
