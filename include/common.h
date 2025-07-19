@@ -18,7 +18,7 @@
 // Contact: zpl010720@gmail.com
 // Created: 2023-02-24
 
-// Some sections and functions were changed in June/2025
+// FMAlign2x - An extended version of FMAlign2 for aligning multiple ultra-long sequences
 // Author: Thiago Luiz Parolin
 // Contact: thiago.parolin@unesp.br
 // July 2025

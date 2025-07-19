@@ -1,42 +1,40 @@
 ﻿################################################################################
-# 此 .gitignore 文件已由 Microsoft(R) Visual Studio 自动创建。
+# .gitignore
 ################################################################################
 
-/.vs
-/.vscode
-/bin
-/Debug
-/x64/Debug
-/obj
-/fig
-/x64/Release
-/trace
-/pthread.dll
-/PropertySheet.props
-/pre
-/order
-/实验记录.xlsx
-/draw.py
-/FMAlign2.sln
-/FMAlign2.vcxproj.filters
-/FMAlign2.vcxproj
-FMAlign2
-/run_2.py
-/run_1.py
-/result.txt
-/remove_gap.py
-/output.fasta
-/output.aligned.fasta
-output.fmaligned2.fasta
-/FMAlign2.vcxproj.user
-/chr1_h.fasta
-/chain.o
-/exp
-/temp
-/test
-/src/gsacak.o
+# Build directories
+/build/
+/cmake-build*/
+
+# CMake files
+CMakeFiles/
+CMakeCache.txt
+Makefile
+cmake_install.cmake
+compile_commands.json
+
+# Binaries and objects
+*.out
 *.o
-/bug
-build/
+*.a
+*.so
+*.exe
+
+# Conda, logs and environments
+*.conda
+*.log
+.env
+
+# IDE/editor folders
+.vscode/
+.idea/
+
+# Specific files and directories
 ext/mafft/linux/usr
 ext/mafft/mafft-*/binaries/*
+output.fmaligned2.fasta
+FMAlign2*
+order
+pre
+trace
+temp/

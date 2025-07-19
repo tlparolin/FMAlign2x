@@ -1,0 +1,17 @@
+name: fmalign2x
+channels:
+  - conda-forge
+dependencies:
+  - gcc=13
+  - gxx=13
+  - cmake
+  - make
+  - binutils
+  - ld_impl_linux-64
+  - libgcc-devel_linux-64
+  - libstdcxx-devel_linux-64
+  - sysroot_linux-64
+  - openmp
+  - git
+  - curl
+  - wget

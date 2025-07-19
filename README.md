@@ -1,74 +1,63 @@
-# FMAlign2: A novel fast multiple nucleotide sequence alignment method for ultra-long datasets
+# FMAlign2x - An extended version of FMAlign2 for aligning multiple ultra-long sequences
 
-[FMAlign2](https://academic.oup.com/bioinformatics/advance-article/doi/10.1093/bioinformatics/btae014/7515251?searchresult=1) is a novel multiple sequence alignment algorithm based on [FMAlign](https://github.com/iliuh/FMAlign). It is designed to efficiently align ultra-long nucleotide sequences fast and accurately.
+FMAlign2x is an extended version of [FMAlign2](https://academic.oup.com/bioinformatics/advance-article/doi/10.1093/bioinformatics/btae014/7515251?searchresult=1) that enables in-memory alignment of segments found between MEMs using the SPOA library (SIMD partial order alignment tool). This feature aims to reduce the computational load of the selected primary alignment method (MAFFT, HAlign2, or HAlign3).
 
 ## Table of Contents
 - [Installation](#Installation)
 - [Usage](#Usage)
 - [Data](#Data)
 - [Issue](#Issue)
+- [Uninstall](#Uninstall)
 - [Related](#Related)
 - [Citation](#Citation)
 - [License](#License)
 
 ## Installation
+We recommend using [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://www.anaconda.com/) to manage the build environment for FMAlign2x.
 
-The program is supported both on Linux and Windows(**Linux is strongly recommended for its convenience and better performance**). Please make sure your computer meets the following requirements:
+This ensures that all dependencies are correctly isolated and reproducible.
 
-- To compile the executable program for the entire project, **please ensure that you have the `make` command available.**
+### Requirements
 
-  - Verify `make` availability: Open your command-line interface and type ```make --version``` to check if the `make` command is installed on your system. If it is installed, you will see the version information. If not, you need to install it before proceeding.
-  - Install `make` on Windows: If you are using Windows, you may need to install the appropriate tool to enable `make` functionality. One popular option is GNU Make for Windows , which provides a Windows-compatible version of `make`. You can download it from the [official website](https://www.gnu.org/software/make/) and follow the installation instructions.
+- **Linux** (See note below)
+- **CMake**
+- **GNU Make**
+- **g++** (version with OpenMP and C++23 support)
 
-- To compile the project, **you need to have the `g++` compiler available on your system.** Here are the steps to ensure `g++` support:
-
-  - Check `g++` availability: Open your command-line interface and type `g++ --version` to check if the `g++` command is installed. If it is installed, you will see the version information. If not, you need to install it before proceeding.
-
-  - Install `g++` on Windows: If you are using Windows, you can install `g++` by using a compiler suite such as MinGW or Cygwin. These packages provide a Windows-compatible version of `g++` along with other essential tools. You can download MinGW from the official website (https://mingw-w64.org/) or Cygwin from their official website (https://www.cygwin.com/). Follow the installation instructions provided by the respective package to set up `g++` on your system.
-
-  - Install `g++` on Linux: On most Linux distributions, the `g++` compiler is included as part of the GNU Compiler Collection (GCC). To install `g++`, open your terminal and run the following command:
-
-    ```
-    sudo apt-get install g++
-    ```
-
-    This will install `g++` and its dependencies on your system.
-
-  - Verify `g++` installation: After installation, run `g++ --version` again to verify that `g++` is installed correctly and accessible from the command line. Please note that if you are a Windows user, make sure that the installed version(>4.2) of `g++` supports OpenMP. On Windows systems, we utilize OpenMP for parallel computing.
+> Note: FMAlign2x can be built inside WSL, but native Linux is recommended for better performance and reliability. Compilation on WSL has not been extensively tested.
 
 ---
 
-If you have ensured that your system meets the requirements mentioned above, you can proceed with the following steps to compile the executable file. **However, you also have the option to directly use the pre-compiled executable file available in the [Release](https://github.com/metaphysicser/FMAlign2/releases/tag/v1.0).**
+### Conda-based Installation
 
-1. **DownLoad**
+1. **Clone the repository**
+   ```
+   git clone https://github.com/tlparolin/FMAlign2x.git
+   cd FMAlign2x
+   ``` 
 
-   ```shell
-   git clone https://github.com/metaphysicser/FMAlign2.git
-   cd FMAlign2
-   # for Linux
-   chmod 777 ./ext/mafft/linux/usr/libexec/mafft/disttbfast
+2. **Create the Conda environment**
+   ```
+   conda env create -f environment.yml
+   conda activate fmalign2x
    ```
 
-2. **Build**
-
-   ```shell
-   cd FMAlign2 && make [M64=1]
+3. **Build the project**
    ```
-
-   Switch to the FMAlign2 directory in your terminal and execute the above command to build the project. We provide two compilation modes: 32-bit and 64-bit. In most cases, the 32-bit mode is sufficient to handle most data. However, if the concatenated length of all sequences exceeds the range of uint32_t (4294967295), you should add the M64 parameter when compiling the program to generate a 64-bit executable.
-
-   - If you don't need the 64-bit mode, simply execute the `make` command.
-   - If you need the 64-bit mode, execute the `make M64=1` command.
-
-   During the compilation process, please be patient as the time required depends on the size and complexity of the project.
-
-   Once the compilation is complete, you will find the generated executable file in the specified output directory.
-
-   Note: If you want to remove all the generated `.o` files, you can execute the following command:
-   ```shell
-   make clean
+   mkdir build
+   cd build
+   cmake -DCMAKE_BUILD_TYPE=Release [-DM64=ON] ..
+   cmake --build .
    ```
-   This command will clean up the intermediate object files and leave only the source code and executable file in the project directory. Use this command when you want to start a fresh build or clean up unnecessary files to save disk space.
+> Note: We provide two compilation modes: 32-bit and 64-bit. In most cases, the 32-bit mode is sufficient to handle most data. However, if the concatenated length of all sequences exceeds the range of uint32_t (4294967295), you should add the -DM64=ON parameter when compiling the program to generate a 64-bit executable.
+
+4. **Run the program**
+
+    ./FMAlign2 [options]
+
+5. **🛠 Optional Features**
+
+   Use -x 0 to disable in-memory alignment of small blocks between MEMs.
 
 ---
 
@@ -80,16 +69,7 @@ java -version
 
 This will display the installed Java version information.
 
-If you don't have Java installed or if the installed version is not compatible, you can follow these steps to install Java:
-
-To install Java on Windows:
-
-1. Visit the official Java website at [java.com](https://www.java.com/) or the OpenJDK website at [openjdk.java.net](https://openjdk.java.net/).
-2. Download the appropriate Java Development Kit (JDK) for Windows.
-3. Run the downloaded installer and follow the on-screen instructions to complete the installation.
-4. After the installation is complete, open a new Command Prompt and run `java -version` to verify that Java is installed and the correct version is displayed.
-
-To install Java on Linux:
+If you don't have Java installed or if the installed version is not compatible, you can follow these steps to install Java on Linux:
 
 1. Update Package Lists: Run the command `sudo apt update` to update the package lists on your system.
 2. Install OpenJDK: Run the command `sudo apt install default-jdk` to install the default version of OpenJDK.
@@ -100,19 +80,11 @@ Once you have Java installed and verified the version, you should be able to use
 
 ## Usage
 
-> Reminder: Please ensure that all external files (such as MAFFT, HALIGN, etc.) are properly copied to their corresponding directories. Pay close attention to the relative paths between FMAlign2 and the ext folder to avoid issues during execution,
+> Reminder: Please ensure that all external files (such as MAFFT, HALIGN, etc.) are properly copied to their corresponding directories. Pay close attention to the relative paths between FMAlign2 and the ext folder to avoid issues during execution.
 
-if you are Linux user:
-
-   ```shell
-   ./FMAlign2 -i /path/to/data [other options]
-   ```
-
-if you are Windows user:
-
-   ```shell
-   ./FMAlign2.exe -i /path/to/data [other options]
-   ```
+```shell
+./FMAlign2x -i /path/to/data [other options]
+```
 
 if you want to show the parameters details:
 
@@ -129,13 +101,14 @@ if you want to show the parameters details:
    - -l [int] [default: square root of mean length] The minimum length of MEMs, the default value is square root of mean length.
    - -c [float] [default: 1] A floating-point parameter that specifies the minimum coverage across all sequences, with values ranging from 0 to 1.
    - -f [mode] [default: global or local] The filter MEMs mode. The default setting is that if sequence number less 100, **accurate** mode otherwise **global** mode.
+   - -x [int] [default:1] Enable in-memory alignment of small blocks between MEMs. Should be 0 or 1.
    - -d [int] [default:0] Depth of recursion, you could ignore it.
    - -v [int] [default:1] Verbose option, 0 or 1. You could ignore it.
    - -h [help] print help information
 
 -----
 
-We will demonstrate with the example data `mt1x.fasta`, assuming you are running on a Linux system.
+We will demonstrate with the example data `mt1x.fasta`.
 
 ```shell
 ./FMAlign2 -i ./data/mt1x.fasta -l 20 -c 1 -p mafft -f gloabl -o output.fmaligned2.fasta
@@ -165,7 +138,7 @@ By running this command, you will obtain the SP score, which provides an evaluat
 
 ## Data
 
-Data can be assessed in [data](https://github.com/metaphysicser/FMAlign2/tree/master/data) fold. All the data is compressed using xz compression. Before using it, please decompress the files.
+Data can be assessed in [data](https://github.com/tlparolin/FMAlign2x/tree/master/data) fold. All the data is compressed using xz compression. Before using it, please decompress the files.
 
 Here are the methods to decompress the files on different operating systems:
 
@@ -195,22 +168,50 @@ If you need more data, you can visit http://lab.malab.cn/~cjt/MSA/datasets.html 
 
 ## Issue
 
-FMAlign2 is supported by [ZOU's Lab](https://github.com/malabz). If you have any suggestions or feedback, we encourage you to provide them through the issue page on the project's repository. You can also reach out via email to zpl010720@gmail.com.
+FMAlign2x is supported by [Scientific Computing Group Lab](https://www.ibilce.unesp.br/gcc). If you have any suggestions or feedback, we encourage you to provide them through the issue page on the project's repository. You can also reach out via email to thiago.parolin@unesp.br.
 
 We value your input and appreciate your contribution to improving the project. Thank you for taking the time to provide feedback, and we will address your concerns as soon as possible.
 
+## Uninstall
+To completely uninstall **FMAlign2x** and clean up its build files, binaries, and the Conda environment, follow the steps below:
+
+1. **Delete the build directory (CMake cache, object files, etc.)**
+
+```bash
+rm -rf build
+```
+This will remove all temporary CMake files and compiled objects.
+
+2. **Remove the compiled binary**
+If you installed or copied the binary manually somewhere (e.g., bin/FMAlign2x or system-wide), remove it with:
+```
+rm -f FMAlign2x
+```
+Or if placed in a custom path:
+```
+rm -f /path/to/your/installation/FMAlign2x
+```
+
+3. **Remove the Conda environment**
+If you created a Conda environment specifically for FMAlign2x (e.g., named fmalign2x), deactivate and remove it:
+```
+conda deactivate
+conda env remove -n fmalign2x
+```
+
 ## Related
 
-- [FMAlign](https://github.com/iliuh/FMAlign): a fast multiple nucleotide sequence alignment method based on FM-index
+- [FMAlign2](https://github.com/metaphysicser/FMAlign2/): A novel fast multiple nucleotide sequence alignment method for ultra-long datasets
 - [HAlign3](https://github.com/malabz/HAlign-3) and [HAlign2](https://github.com/ShixiangWan/HAlign2.0)
+- [SPOA](https://github.com/rvaser/spoa): SIMD partial order alignment tool/library.
+- [LibSAIS](https://github.com/IlyaGrebnov/libsais): linear-time construction of suffix array (SA), generalized suffix array (GSA), longest common prefix (LCP) array, permuted LCP (PLCP) array, Burrows-Wheeler transform (BWT) and inverse BWT.
 - [WMSA](https://github.com/malabz/WMSA) and [WMSA2](https://github.com/malabz/WMSA2)
 - [TPRA](https://github.com/malabz/TPRA): A refinement tool for ensembling different multiple sequence alignment results
-- [MSATOOLS](https://github.com/malabz/MSATOOLS): Some tools for MSA, like SP score, Q score and so on.
 
 ## Citation
-
-Pinglu Zhang, Huan Liu, Yanming Wei, Yixiao Zhai, Qinzhong Tian, Quan Zou, FMAlign2: a novel fast multiple nucleotide sequence alignment method for ultralong datasets, *Bioinformatics*, 2024;, btae014, https://doi.org/10.1093/bioinformatics/btae014
+In progress.
 
 ## License
 
-[Apache 2.0](https://github.com/metaphysicser/FMAlign2/blob/master/LICENSE) © [[MALABZ_UESTC](https://github.com/malabz) [Pinglu Zhang](https://github.com/metaphysicser)]
+[Apache 2.0](https://github.com/tlparolin/FMAlign2x/blob/master/LICENSE).
+FMAlign2x is based on the original FMAlign2 version developed by [Pinglu Zhang](https://github.com/metaphysicser).
