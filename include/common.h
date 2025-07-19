@@ -19,8 +19,9 @@
 // Created: 2023-02-24
 
 // Some sections and functions were changed in June/2025
-// Thiago Luiz Parolin
+// Author: Thiago Luiz Parolin
 // Contact: thiago.parolin@unesp.br
+// July 2025
 
 //This file defines data types, data structures, and various parameters.
 #ifndef COMMON_H

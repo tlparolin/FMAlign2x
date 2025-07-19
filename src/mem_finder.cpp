@@ -19,8 +19,9 @@
 // Created: 2023-02-25
 
 // Some sections and functions were changed in February/2025
-// Thiago Luiz Parolin
+// Author: Thiago Luiz Parolin
 // Contact: thiago.parolin@unesp.br
+// July 2025
 
 #include "mem_finder.h"
 

@@ -18,9 +18,10 @@
 // Contact: zpl010720@gmail.com
 // Created: 2023-02-25
 
-// Some sections and functions were changed in February/2025
-// Thiago Luiz Parolin
+// FMAlign2x - An improved version of FMAlign2 for multiple ultralong sequence alignment.
+// Author: Thiago Luiz Parolin
 // Contact: thiago.parolin@unesp.br
+// July 2025
 
 // The main function is the entry point of the program. It is where the program starts executing. 
 // the program starts executing. 

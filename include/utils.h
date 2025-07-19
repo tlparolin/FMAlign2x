@@ -19,8 +19,9 @@
 // Created: 2023-02-24
 
 // Some sections and functions were changed in February/2025
-// Thiago Luiz Parolin
+// Author: Thiago Luiz Parolin
 // Contact: thiago.parolin@unesp.br
+// July 2025
 
 // This header file defines utility functions for reading and outputting data and so on.
 // These utility functions are designed to be reusable across different parts of the project and can be easily included in other source files.

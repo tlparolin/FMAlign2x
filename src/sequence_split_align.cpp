@@ -19,8 +19,9 @@
 // Created: 2023-02-25
 
 // Some sections and functions were changed in June/2025
-// Thiago Luiz Parolin
+// Author: Thiago Luiz Parolin
 // Contact: thiago.parolin@unesp.br
+// July 2025
 
 #include "sequence_split_align.h"
 
