@@ -46,9 +46,9 @@ endif()
 
 file(
   DOWNLOAD
-  https://github.com/cpm-cmake/CPM.cmake/releases/download/v0.38.3/CPM.cmake
+  https://github.com/cpm-cmake/CPM.cmake/releases/download/v0.42.0/CPM.cmake
   ${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake
-  EXPECTED_HASH SHA256=cc155ce02e7945e7b8967ddfaff0b050e958a723ef7aad3766d368940cb15494
+  EXPECTED_HASH SHA256=2020b4fc42dba44817983e06342e682ecfc3d2f484a581f11cc5731fbe4dce8a
 )
 include(${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake)
 
@@ -73,26 +73,26 @@ CPMAddPackage(
 )
 
 # MAFFT Directories
-set(MAFFT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/ext/mafft/mafft-7.525-without-extensions)
-set(MAFFT_INSTALL_DIR ${CMAKE_SOURCE_DIR}/ext/mafft/linux/usr)
+set(MAFFT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/ext/mafft/mafft-7.526)
+set(MAFFT_BINARIES ${CMAKE_SOURCE_DIR}/ext/mafft/linux/usr)
 
 # MAFFT binary path (to check if mafft was compiled and exists)
-set(MAFFT_BINARIES ${MAFFT_INSTALL_DIR}/libexec/mafft/disttbfast)
+set(MAFFT_BIN_CHECK ${MAFFT_BINARIES}/libexec/mafft/disttbfast)
 
 # Create target for mafft
 add_custom_command(
-    OUTPUT ${MAFFT_BINARIES}
+    OUTPUT ${MAFFT_BIN_CHECK}
     COMMAND make clean
     COMMAND make
     COMMAND make install
     COMMAND make clean
-    COMMAND chmod 777 ${MAFFT_BINARIES}
+    COMMAND chmod 777 ${MAFFT_BIN_CHECK}
     WORKING_DIRECTORY ${MAFFT_SOURCE_DIR}/core
     COMMENT "Building MAFFT"
     DEPENDS ${MAFFT_SOURCE_DIR}/core/Makefile
 )
 
-add_custom_target(mafft DEPENDS ${MAFFT_BINARIES})
+add_custom_target(mafft DEPENDS ${MAFFT_BIN_CHECK})
 
 add_executable(FMAlign2 ${SOURCES})
 target_link_libraries(FMAlign2 libsais spoa)

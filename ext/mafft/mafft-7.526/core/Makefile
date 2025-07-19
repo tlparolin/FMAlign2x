@@ -2,7 +2,7 @@ PREFIX =../../../mafft/linux/usr
 LIBDIR = $(PREFIX)/libexec/mafft
 BINDIR = $(PREFIX)/bin
 MANDIR = $(PREFIX)/share/man/man1
-DESTDIR = 
+DESTDIR =
 
 #MNO_CYGWIN = -mno-cygwin
 

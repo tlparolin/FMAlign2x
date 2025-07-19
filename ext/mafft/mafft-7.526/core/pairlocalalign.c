@@ -1634,7 +1634,7 @@ static void arguments( int argc, char *argv[] )
 	usenaivescoreinsteadofalignmentscore = 0;
 	specifictarget = 0;
 	nwildcard = 0;
-        distout = 'c'; // 2023/Jun; kyori gyouretsu wo tsuneni shutsuryoku.
+        distout = 'h'; // 2023/Jun, 2024/Apr; kyori gyouretsu wo tsuneni shutsuryoku.
 
 //	reporterr( "argc=%d\n", argc );
 //	reporterr( "*argv=%s\n", *argv );
