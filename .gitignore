@@ -32,6 +32,7 @@ compile_commands.json
 # Specific files and directories
 ext/mafft/linux/usr
 ext/mafft/mafft-*/binaries/*
+!ext/mafft/mafft-*/binaries/.gitkeep
 output.fmaligned2.fasta
 FMAlign2*
 order
