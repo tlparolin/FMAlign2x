@@ -784,7 +784,10 @@ std::pair<int_t, int_t> store_sw_alignment(
 std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const std::vector<std::string>& data,
                                                                             const std::vector<std::vector<std::pair<int_t, int_t>>>& chain) {
     uint_t seq_num = data.size();
-    uint_t chain_num = chain[0].size();
+    // Get maximum size for sequences
+    uint_t chain_num = std::max_element(chain.begin(), chain.end(),[](const auto& a, const auto& b) {
+        return a.size() < b.size();
+    })->size();
     
     // Pre-allocate memory to avoid resizing during push_back
     std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range(seq_num);
@@ -823,10 +826,10 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const
 
     // Allocate transpose result vector
     std::vector<std::vector<std::pair<int_t, int_t>>> transpose_res;
-    transpose_res.reserve(chain_num);
+    transpose_res.reserve(chain_num + 1);
 
     // Transpose parallel_align_range into transpose_res
-    for (uint_t j = 0; j < chain_num; j++) {
+    for (uint_t j = 0; j <= chain_num; j++) {
         std::vector<std::pair<int_t, int_t>> transposed_row(seq_num);
         for (uint_t i = 0; i < seq_num; i++) {
             transposed_row[i] = parallel_align_range[i][j];
