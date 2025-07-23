@@ -412,8 +412,7 @@ std::vector<std::string> spoa_align(const std::vector<std::string>& sequences) {
 
     // Create the SPOA alignment engine with linear gap penalties
     // Note: Each thread creates its own engine instance for thread safety
-    // auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8, -6); 
-    auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -6, -1); 
+    auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8); 
 
     spoa::Graph graph{};
 
