@@ -95,15 +95,15 @@ add_custom_command(
 
 add_custom_target(mafft DEPENDS ${MAFFT_BIN_CHECK})
 
-add_executable(FMAlign2 ${SOURCES})
-target_link_libraries(FMAlign2 libsais spoa)
+add_executable(FMAlign2x ${SOURCES})
+target_link_libraries(FMAlign2x libsais spoa)
 
 # FMAlign2 depends on mafft
-add_dependencies(FMAlign2 mafft spoa)
+add_dependencies(FMAlign2x mafft spoa)
 
 # Clean Rules
 add_custom_target(clean-all
-    COMMAND ${CMAKE_COMMAND} -E rm -rf FMAlign2
+    COMMAND ${CMAKE_COMMAND} -E rm -rf FMAlign2x
     COMMAND ${CMAKE_COMMAND} -E rm -rf CMakeCache.txt CMakeFiles
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${CMAKE_SOURCE_DIR}/ext/mafft/linux
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
