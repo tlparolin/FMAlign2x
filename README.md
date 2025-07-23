@@ -57,7 +57,7 @@ This ensures that all dependencies are correctly isolated and reproducible.
 
 5. **Optional Features**
 
-   Use -x to disable in-memory alignment of small blocks between MEMs.
+   Use -x 0 to disable in-memory alignment of small blocks between MEMs.
 
 ---
 
@@ -101,7 +101,7 @@ if you want to show the parameters details:
    - -l [int] [default: square root of mean length] The minimum length of MEMs, the default value is square root of mean length.
    - -c [float] [default: 1] A floating-point parameter that specifies the minimum coverage across all sequences, with values ranging from 0 to 1.
    - -f [mode] [default: global or local] The filter MEMs mode. The default setting is that if sequence number less 100, **accurate** mode otherwise **global** mode.
-   - -x [default:0] Disable in-memory alignment of small blocks between MEMs with SPOA.
+   - -x [int] [default:1] In-memory alignment of small blocks between MEMs with SPOA.
    - -d [int] [default:0] Depth of recursion, you could ignore it.
    - -v [int] [default:1] Verbose option, 0 or 1. You could ignore it.
    - -h [help] print help information
@@ -123,8 +123,6 @@ This command specifies the following options:
 - Output file: `output.fmaligned2.fasta` will be generated in the FMAlign2 directory.
 
 After running this command, you will obtain the aligned output in the `output.fmaligned2.fasta` file.
-
-> Note: Since the -x option was not used, some parts of the alignment can be performed in-memory using SPOA. Although this method is significantly faster than traditional alignment tools — as it avoids input/output (I/O) operations — the alignment quality may be slightly lower. To obtain a more accurate alignment (at the cost of longer execution time), use the -x option to disable SPOA step.
 
 -----
 

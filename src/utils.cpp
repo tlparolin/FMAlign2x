@@ -207,10 +207,6 @@ void ArgParser::parse_args(int argc, char** argv) {
                 print_help();
                 exit(0);
             }
-            if (name == "x"){
-                args_[name].value = "0";
-                continue;
-            }
             if (args_.count(name) == 0) {
                 throw std::invalid_argument("Invalid argument: " + arg);
             }
@@ -300,7 +296,7 @@ void print_algorithm_info() {
 
     print_table_line(c_output);
 
-    std::string x_output = "Extra SPOA: " + std::string(global_args.extended ? "enabled" : "disabled");
+    std::string x_output = "Align in memory: " + std::string(global_args.extended ? "enabled" : "disabled");
     print_table_line(x_output);
 
     std::string p_output = "Parallel align method: " + global_args.package;

@@ -157,7 +157,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     std::vector<std::vector<std::string>> fast_parallel_string(parallel_align_range.size());
     std::vector<bool> fallback_needed(parallel_align_range.size(), true);
 
-    if (!global_args.extended) {
+    if (global_args.extended) {
         std::tie(fast_parallel_string, fallback_needed) = preprocess_parallel_blocks(data, parallel_align_range);
 
         // Calculate the time taken for in memory parallel alignment and print the output

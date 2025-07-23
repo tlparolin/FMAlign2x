@@ -97,7 +97,10 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
             throw "filer mode --f parameter should be global or local!";
         }
 
-        global_args.extended = parser.get("x") == "0";
+        global_args.extended = parser.get("x") == "1";
+        if (global_args.extended != 0 && global_args.extended != 1) {
+            throw "extended (-x) should be 1 or 0";
+        }
 
         global_args.verbose = std::stoi(parser.get("v"));
         if (global_args.verbose != 0 && global_args.verbose != 1) {
