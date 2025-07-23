@@ -157,7 +157,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     std::vector<std::vector<std::string>> fast_parallel_string(parallel_align_range.size());
     std::vector<bool> fallback_needed(parallel_align_range.size(), true);
 
-    if (global_args.extra_spoa) {
+    if (!global_args.extended) {
         std::tie(fast_parallel_string, fallback_needed) = preprocess_parallel_blocks(data, parallel_align_range);
 
         // Calculate the time taken for in memory parallel alignment and print the output
@@ -412,7 +412,8 @@ std::vector<std::string> spoa_align(const std::vector<std::string>& sequences) {
 
     // Create the SPOA alignment engine with linear gap penalties
     // Note: Each thread creates its own engine instance for thread safety
-    auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8); 
+    // auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8, -6); 
+    auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -6, -1); 
 
     spoa::Graph graph{};
 

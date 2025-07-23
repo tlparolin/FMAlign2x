@@ -97,7 +97,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
             throw "filer mode --f parameter should be global or local!";
         }
 
-        global_args.extra_spoa = parser.get("x") == "1";
+        global_args.extended = parser.get("x") == "0";
 
         global_args.verbose = std::stoi(parser.get("v"));
         if (global_args.verbose != 0 && global_args.verbose != 1) {
@@ -161,7 +161,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
     std::stringstream s;
     s << std::fixed << std::setprecision(2) << total_time;
     if (global_args.verbose) {
-        print_table_line("FMAlign2 total time: " + s.str() + " seconds.");
+        print_table_line("FMAlign2x total time: " + s.str() + " seconds.");
         print_table_bound();
     }
 
