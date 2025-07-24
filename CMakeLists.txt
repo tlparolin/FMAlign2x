@@ -84,7 +84,7 @@ set(MAFFT_BIN_CHECK ${MAFFT_BINARIES}/libexec/mafft/disttbfast)
 add_custom_command(
     OUTPUT ${MAFFT_BIN_CHECK}
     COMMAND make clean
-    COMMAND make
+    COMMAND make -j
     COMMAND make install
     COMMAND make clean
     COMMAND chmod 777 ${MAFFT_BIN_CHECK}

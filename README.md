@@ -47,7 +47,7 @@ This ensures that all dependencies are correctly isolated and reproducible.
    mkdir build
    cd build
    cmake -DCMAKE_BUILD_TYPE=Release [-DM64=ON] ..
-   cmake --build .
+   cmake --build . -j
    ```
 > Note: We provide two compilation modes: 32-bit and 64-bit. In most cases, the 32-bit mode is sufficient to handle most data. However, if the concatenated length of all sequences exceeds the range of uint32_t (4294967295), you should add the -DM64=ON parameter when compiling the program to generate a 64-bit executable.
 
