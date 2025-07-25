@@ -165,7 +165,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         s.str("");
         s << std::fixed << std::setprecision(2) << parallel_memory_align_time;
         if (global_args.verbose) {
-            output = "In memory parallel align time: " + s.str() + " seconds.";
+            output = "In memory align time: " + s.str() + " seconds.";
             print_table_line(output);
         }
 
@@ -211,7 +211,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     s.str("");
     s << std::fixed << std::setprecision(2) << parallel_align_time;
     if (global_args.verbose) {
-        output = "MSA Tool parallel align time: " + s.str() + " seconds.";
+        output = "MSA Tool align time: " + s.str() + " seconds.";
         print_table_line(output);
     }
     
@@ -283,7 +283,7 @@ void* spoa_task(void* arg) {
 * way, before falling back to more expensive external aligners such as MAFFT or HAlign. It operates by
 * analyzing each block defined in `parallel_align_range` and choosing one of three strategies:
 * 1. **Exact Match**: If all sequences in the block are identical, simply copies the fragment.
-* 2. **SPOA Alignment**: If average fragment length is small (< 2000 bp), applies SPOA for fast in-memory MSA.
+* 2. **SPOA Alignment**: If average fragment length is small (< 10000 bp), applies SPOA for fast in-memory MSA.
 * 3. **Fallback Flag**: For long or divergent blocks, defers to external aligners by setting a fallback flag.
 * @param data The original vector of sequences (one string per sequence).
 * @param parallel_align_range A vector of alignment ranges (start, length pairs) per sequence, per block.
@@ -342,7 +342,7 @@ std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>preprocess_pa
             for (uint_t s = 0; s < seq_num; ++s)
                 fast_parallel_string[i][s] = fragments[0];
             ++count_exact;
-        } else if (avg_len < 2000) {
+        } else if (avg_len < 10000) {
             // Case 2: SPOA (will be run in parallel)
             spoa_indices.push_back(i);
             SpoaTaskParams params;
@@ -383,7 +383,7 @@ std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>preprocess_pa
 
     if (global_args.verbose) {
         print_table_line("Blocks resolved by copy: " + std::to_string(count_exact));
-        print_table_line("Blocks aligned in memory (parallel): " + std::to_string(count_spoa));
+        print_table_line("Blocks aligned in memory: " + std::to_string(count_spoa));
         print_table_line("Blocks sent to " + global_args.package + ": " + std::to_string(count_fallback));
     }
 
@@ -971,11 +971,11 @@ std::string align_fasta(const std::string &file_name) {
         // Execute the command and check for errors
         int res = system(cmnd.c_str());
         if (res != 0) {
-            std::string out = "Warning: Starts calling FMAlign2 recursively to align " + file_name;
+            std::string out = "Warning: Starts calling FMAlign2x recursively to align " + file_name;
             print_table_line(out);
             cmnd = "";
 #if (defined(__linux__))
-            cmnd.append("./FMAlign2 ")
+            cmnd.append("./FMAlign2x ")
                 .append("-i ").append(file_name)
                 .append(" -o ").append(res_file_name)
                 .append(" -p ").append(global_args.package)
@@ -984,7 +984,7 @@ std::string align_fasta(const std::string &file_name) {
                 .append(" -d ").append(std::to_string(global_args.degree+1));
             cmnd.append(" &> /dev/null");
 #else
-            cmnd.append("./FMAlign2.exe ")
+            cmnd.append("./FMAlign2x.exe ")
                 .append("-i ").append(file_name)
                 .append(" -o ").append(res_file_name)
                 .append(" -p ").append(global_args.package)
