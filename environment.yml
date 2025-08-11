@@ -2,8 +2,8 @@ name: fmalign2x
 channels:
   - conda-forge
 dependencies:
-  - gcc=13
-  - gxx=13
+  - gcc=14
+  - gxx=14
   - cmake
   - make
   - binutils
@@ -17,3 +17,5 @@ dependencies:
   - wget
   - python
   - pip
+  - pip:
+      - pyMSA

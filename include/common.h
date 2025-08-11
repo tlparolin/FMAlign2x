@@ -23,13 +23,13 @@
 // Contact: thiago.parolin@unesp.br
 // July 2025
 
-//This file defines data types, data structures, and various parameters.
+// This file defines data types, data structures, and various parameters.
 #ifndef COMMON_H
 #define COMMON_H
 
-#include <stdlib.h>
-#include <stdio.h>
 #include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string>
 #include <vector>
 #if (defined(__linux__))
@@ -37,49 +37,48 @@
 #else
 #include <windows.h>
 #endif
-#include <omp.h>
 #include <iomanip>
+#include <omp.h>
 #include <thread>
 
 #ifndef M64
-	#define M64 0
+#define M64 0
 #endif
 // Considering that the concatenated input sequence can be too long and to save memory.
 // different data types are defined through conditional compilation for different sizes of data.
 // if data is larger than 2GB, M64 should be selected.
 #pragma once
 #if defined(M64) && M64 == 1
-	typedef int64_t	int_t;
-	typedef uint64_t uint_t;
-	#define U_MAX	UINT64_MAX
-	#define I_MAX	INT64_MAX
-	#define I_MIN	INT64_MIN
+typedef int64_t int_t;
+typedef uint64_t uint_t;
+#define U_MAX UINT64_MAX
+#define I_MAX INT64_MAX
+#define I_MIN INT64_MIN
 #else
-	typedef int32_t int_t;
-	typedef uint32_t uint_t;
-	#define U_MAX	UINT32_MAX
-	#define I_MAX	INT32_MAX
-	#define I_MIN	INT32_MIN
+typedef int32_t int_t;
+typedef uint32_t uint_t;
+#define U_MAX UINT32_MAX
+#define I_MAX INT32_MAX
+#define I_MIN INT32_MIN
 #endif
 
 #ifndef DEBUG
-  #define DEBUG 0
+#define DEBUG 0
 #endif
 
 struct GlobalArgs {
-	std::string data_path;
-	int_t thread;
-	int_t min_mem_length;
-	float min_seq_coverage;
-	std::string package;
-	std::string output_path;
-	int_t degree;
-	std::string filter_mode;
-	int_t verbose;
-	double avg_file_size;
-	bool extended = false;
+    std::string data_path;
+    int_t thread;
+    int_t min_mem_length;
+    float min_seq_coverage;
+    std::string package;
+    std::string output_path;
+    int_t degree;
+    std::string filter_mode;
+    int_t verbose;
+    double avg_file_size;
+    bool extended = false;
 };
 extern GlobalArgs global_args;
-
 
 #endif

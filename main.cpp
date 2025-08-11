@@ -23,20 +23,20 @@
 // Contact: thiago.parolin@unesp.br
 // July 2025
 
-// The main function is the entry point of the program. It is where the program starts executing. 
-// the program starts executing. 
+// The main function is the entry point of the program. It is where the program starts executing.
+// the program starts executing.
 #include "common.h"
-#include "utils.h"
 #include "mem_finder.h"
 #include "sequence_split_align.h"
+#include "utils.h"
 #if defined(__linux__)
 #include "thread_pool.h"
 #endif
-#include <thread>
 #include <set>
+#include <thread>
 
 GlobalArgs global_args;
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     // Create a Timer object to record the execution time.
     Timer timer;
     // Create an ArgParser object to parse command line arguments.
@@ -50,7 +50,9 @@ int main(int argc, char** argv) {
     parser.add_argument("l", false, "default");
     parser.add_argument_help("l", "The minimum length of MEM, the default value is square root of mean length.");
     parser.add_argument("c", false, "1");
-    parser.add_argument_help("c", "A floating-point parameter that specifies the minimum coverage across all sequences, with values ranging from 0 to 1. The default \
+    parser.add_argument_help(
+        "c",
+        "A floating-point parameter that specifies the minimum coverage across all sequences, with values ranging from 0 to 1. The default \
 setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7.");
     parser.add_argument("x", false, "1");
     parser.add_argument_help("x", "Enable in-memory alignment of small blocks between MEMs. Should be 0 or 1. Default is 1.");
@@ -61,7 +63,8 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
     parser.add_argument("d", false, "0");
     parser.add_argument_help("d", "Depth of recursion, you could ignore it.");
     parser.add_argument("f", false, "default");
-    parser.add_argument_help("f", "The filter MEMs mode. The default setting is that if sequence number less 100, local mode otherwise global mode.");
+    parser.add_argument_help(
+        "f", "The filter MEMs mode. The default setting is that if sequence number less 100, local mode otherwise global mode.");
     parser.add_argument("v", false, "1");
     parser.add_argument_help("v", "Verbose option, 0 or 1. You could ignore it.");
     parser.add_argument("h", false, "help");
@@ -74,26 +77,22 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         std::string tmp_thread = parser.get("t");
         if (tmp_thread == "cpu_num") {
             global_args.thread = std::thread::hardware_concurrency();
-        }
-        else {
+        } else {
             global_args.thread = std::stoi(tmp_thread);
         }
         std::string tmp_len = parser.get("l");
         if (tmp_len != "default") {
             global_args.min_mem_length = std::stoi(parser.get("l"));
-        }
-        else {
+        } else {
             global_args.min_mem_length = -1;
         }
 
         std::string tmp_filter_mode = parser.get("f");
         if (tmp_filter_mode == "default") {
             global_args.filter_mode = tmp_filter_mode;
-        }
-        else if (tmp_filter_mode == "global" || tmp_filter_mode == "local") {
+        } else if (tmp_filter_mode == "global" || tmp_filter_mode == "local") {
             global_args.filter_mode = tmp_filter_mode;
-        }
-        else {
+        } else {
             throw "filer mode --f parameter should be global or local!";
         }
 
@@ -115,8 +114,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         std::string tmp_c = parser.get("c");
         if (tmp_c == "default") {
             global_args.min_seq_coverage = -1;
-        }
-        else {
+        } else {
             global_args.min_seq_coverage = std::stof(parser.get("c"));
             if (global_args.min_seq_coverage < 0 || global_args.min_seq_coverage > 1) {
                 throw "Error: min_seq_coverage should be ranged from 0 to 1!";
@@ -131,7 +129,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
 
         global_args.output_path = parser.get("o");
     } // Catch any invalid arguments and print the help message.
-    catch (const std::invalid_argument& e) {
+    catch (const std::invalid_argument &e) {
         std::cerr << "Error: " << e.what() << std::endl;
         std::cerr << "Program Exit!" << std::endl;
         parser.print_help();
@@ -152,8 +150,7 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data);
 
         split_and_parallel_align(data, name, split_points_on_sequence);
-    }
-    catch (const std::bad_alloc& e) { // Catch any bad allocations and print an error message.
+    } catch (const std::bad_alloc &e) { // Catch any bad allocations and print an error message.
         print_table_bound();
         std::cerr << "Error: " << e.what() << std::endl;
         std::cout << "Program Exit!" << std::endl;

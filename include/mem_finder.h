@@ -46,34 +46,34 @@
 #include <vector>
 
 #ifdef __linux__
-    #include <omp.h>
+#include <omp.h>
 #endif
 
 #include "common.h"
 #include "utils.h"
 
 #if defined(M64) && M64 == 1
-    #include "libsais64.h"
+#include "libsais64.h"
 #else
-    #include "libsais.h"
+#include "libsais.h"
 #endif
 
 struct sub_string {
     int_t sequence_index; // the sequence index that substring in
-    uint_t position; // the begin position in the seqence
-    uint_t* mem_index; // the unique index
+    uint_t position;      // the begin position in the seqence
+    uint_t *mem_index;    // the unique index
 };
 
 struct mem {
-    int_t mem_length; // substring length
-    uint_t* mem_index; // the unique index
-    float avg_pos = -1; // average position in sequences, initially set to -1
+    int_t mem_length;                   // substring length
+    uint_t *mem_index;                  // the unique index
+    float avg_pos = -1;                 // average position in sequences, initially set to -1
     std::vector<sub_string> substrings; // the substring set
 };
 
 struct IntervalToMemConversionParams {
-    const std::vector<int_t>* SA;
-    const unsigned char* concat_data;
+    const std::vector<int_t> *SA;
+    const unsigned char *concat_data;
     std::vector<mem>::iterator result_store;
     int_t min_mem_length;
     std::pair<uint_t, uint_t> interval;
@@ -85,31 +85,31 @@ struct FindOptimalChainParams {
 };
 
 /**
-* @brief DP Only Once!Filter out overlapping memory regions and generate split points for each sequence.
-* Given a vector of memory regions and the number of sequences, this function removes any
-* overlapping memory regions and generates split points for each sequence based on the non-overlapping regions.
-* @param mems Vector of memory regions.
-* @param sequence_num Number of sequences.
-* @return Vector of split points for each sequence.
-*/
-std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<mem>& mems, uint_t sequence_num);
+ * @brief DP Only Once!Filter out overlapping memory regions and generate split points for each sequence.
+ * Given a vector of memory regions and the number of sequences, this function removes any
+ * overlapping memory regions and generates split points for each sequence based on the non-overlapping regions.
+ * @param mems Vector of memory regions.
+ * @param sequence_num Number of sequences.
+ * @return Vector of split points for each sequence.
+ */
+std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<mem> &mems, uint_t sequence_num);
 
 /**
-* @brief DP sequence number times!Filter out overlapping memory regions and generate split points for each sequence.
-* Given a vector of memory regions and the number of sequences, this function removes any
-* overlapping memory regions and generates split points for each sequence based on the non-overlapping regions.
-* @param mems Vector of memory regions.
-* @param sequence_num Number of sequences.
-* @return Vector of split points for each sequence.
-*/
-std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vector<mem>& mems, uint_t sequence_num);
+ * @brief DP sequence number times!Filter out overlapping memory regions and generate split points for each sequence.
+ * Given a vector of memory regions and the number of sequences, this function removes any
+ * overlapping memory regions and generates split points for each sequence based on the non-overlapping regions.
+ * @param mems Vector of memory regions.
+ * @param sequence_num Number of sequences.
+ * @return Vector of split points for each sequence.
+ */
+std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vector<mem> &mems, uint_t sequence_num);
 
 /**
  * @brief Find MEMs in a set of sequences.
  * @param data A vector of strings representing the sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std::string>& data);
+std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std::string> &data);
 
 /**
  * @brief Concatenates a vector of strings with separator 1 and a terminating 0.
@@ -117,8 +117,8 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
  * @param n A reference to the total length of the concatenated string.
  * @return A pointer to the concatenated string.
  * @note The returned string must be deleted by the caller.
-*/
-unsigned char* concat_strings(const std::vector<std::string>& strings, size_t &n);
+ */
+unsigned char *concat_strings(const std::vector<std::string> &strings, size_t &n);
 
 /**
  * @brief an LCP (Longest Common Prefix) array and a threshold value,
@@ -128,22 +128,23 @@ unsigned char* concat_strings(const std::vector<std::string>& strings, size_t &n
  * @param threshold The threshold value
  * @param min_cross_sequence the min number of crossed sequence
  * @return  The output vector of pairs representing the LCP intervals
-*/
-std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(const int_t* plcp_array, int_t* sa, int_t threshold, int_t min_cross_sequence, uint_t n);
+ */
+std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(const int_t *plcp_array, int_t *sa, int_t threshold, int_t min_cross_sequence,
+                                                         uint_t n);
 
 /**
-*@brief This function converts an LCP interval to a MEM (Maximal Exact Match).
-*@param arg A void pointer to the input parameters.
-*@return void* A void pointer to the result, which is stored in the input parameters structure.
-*/
-void* interval2mem(void* arg);
+ *@brief This function converts an LCP interval to a MEM (Maximal Exact Match).
+ *@param arg A void pointer to the input parameters.
+ *@return void* A void pointer to the result, which is stored in the input parameters structure.
+ */
+void *interval2mem(void *arg);
 
 /**
-*Sorts the input vector of MEMs by the average position of each MEM's substrings along the sequences.
-*Removes any MEMs that span across multiple sequences.
-*Assigns a unique index to each MEM based on its position in the sorted vector.
-*@param mems The vector of MEMs to be sorted.
-*@param data The vector of sequences used to compute the MEMs.
-*/
-void sort_mem(std::vector<mem>& mems, const std::vector<std::string>& data);
+ *Sorts the input vector of MEMs by the average position of each MEM's substrings along the sequences.
+ *Removes any MEMs that span across multiple sequences.
+ *Assigns a unique index to each MEM based on its position in the sorted vector.
+ *@param mems The vector of MEMs to be sorted.
+ *@param data The vector of sequences used to compute the MEMs.
+ */
+void sort_mem(std::vector<mem> &mems, const std::vector<std::string> &data);
 #endif

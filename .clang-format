@@ -4,4 +4,3 @@ IndentWidth: 4
 TabWidth: 4
 UseTab: Never
 ContinuationIndentWidth: 4
-Standard: Cpp23

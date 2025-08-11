@@ -26,13 +26,13 @@
 #include "sequence_split_align.h"
 
 /**
-* @brief Generates a random string of the specified length.
-* This function generates a random string of the specified length. The generated string
-* consists of lowercase English letters ('a' to 'z') for Linux platforms, and random bytes
-* for Windows platforms.
-* @param length The length of the generated string.
-* @return A random string of the specified length, or an empty string if an error occurs.
-*/
+ * @brief Generates a random string of the specified length.
+ * This function generates a random string of the specified length. The generated string
+ * consists of lowercase English letters ('a' to 'z') for Linux platforms, and random bytes
+ * for Windows platforms.
+ * @param length The length of the generated string.
+ * @return A random string of the specified length, or an empty string if an error occurs.
+ */
 std::string generateRandomString(int length) {
 #if (defined(__linux__))
     static thread_local std::random_device rd;
@@ -69,19 +69,20 @@ std::string generateRandomString(int length) {
 }
 
 /**
-* @brief Split and parallel align multiple sequences using a vector of chain pairs.
-* This function takes in three parameters: a vector of input sequences (data), a vector of sequence names (name),
-* and a vector of chain pairs (chain) that represent initial pairwise alignments between sequences.
-* It then splits the chain pairs into smaller regions and performs parallel sequence alignment on these regions.
-* Finally, it concatenates the aligned regions and performs sequence-to-profile alignment to generate a final alignment.
-* @param data A vector of input sequences to be aligned
-* @param name A vector of sequence names corresponding to the input sequences
-* @param chain A vector of chain pairs representing initial pairwise alignments between sequences
-* @return void
-*/
+ * @brief Split and parallel align multiple sequences using a vector of chain pairs.
+ * This function takes in three parameters: a vector of input sequences (data), a vector of sequence names (name),
+ * and a vector of chain pairs (chain) that represent initial pairwise alignments between sequences.
+ * It then splits the chain pairs into smaller regions and performs parallel sequence alignment on these regions.
+ * Finally, it concatenates the aligned regions and performs sequence-to-profile alignment to generate a final alignment.
+ * @param data A vector of input sequences to be aligned
+ * @param name A vector of sequence names corresponding to the input sequences
+ * @param chain A vector of chain pairs representing initial pairwise alignments between sequences
+ * @return void
+ */
 std::string random_file_end;
 
-void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name, std::vector<std::vector<std::pair<int_t, int_t>>> chain){
+void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name,
+                              std::vector<std::vector<std::pair<int_t, int_t>>> chain) {
     // Print status message
     if (global_args.verbose) {
         std::cout << "#                Parallel Aligning...                       #" << std::endl;
@@ -122,10 +123,9 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
             expand_chain(&params[i]);
         }
     }
-    
 
     params.clear();
- 
+
     // Calculate SW expand time and print status message
     double SW_time = timer.elapsed_time();
     std::stringstream s;
@@ -134,16 +134,15 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         output = "SW expand time: " + s.str() + " seconds.";
         print_table_line(output);
     }
-    
+
     timer.reset();
 
     // Create temporary file folder (if it doesn't already exist)
-    if (0 != access(TMP_FOLDER.c_str(), 0))
-    {
+    if (0 != access(TMP_FOLDER.c_str(), 0)) {
 #ifdef __linux__
         if (0 != mkdir(TMP_FOLDER.c_str(), 0755)) {
             std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
-    }
+        }
 #else
         if (0 != mkdir(TMP_FOLDER.c_str())) {
             std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
@@ -180,10 +179,11 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     threadpool pool;
     threadpool_init(&pool, global_args.thread);
     for (uint_t i = 0; i < parallel_num; i++) {
-        if (!fallback_needed[i]) continue;
+        if (!fallback_needed[i])
+            continue;
 
         parallel_params[i].data = &data;
-        parallel_params[i].parallel_range = parallel_align_range.begin()+i;
+        parallel_params[i].parallel_range = parallel_align_range.begin() + i;
         parallel_params[i].task_index = i;
         parallel_params[i].result_store = parallel_string.begin() + i;
         parallel_params[i].fallback_needed = &fallback_needed;
@@ -193,7 +193,8 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 #else
 #pragma omp parallel for num_threads(global_args.thread)
     for (uint_t i = 0; i < parallel_num; i++) {
-        if (!fallback_needed[i]) continue;
+        if (!fallback_needed[i])
+            continue;
 
         parallel_params[i].data = &data;
         parallel_params[i].parallel_range = parallel_align_range.begin() + i;
@@ -214,7 +215,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         output = "MSA Tool align time: " + s.str() + " seconds.";
         print_table_line(output);
     }
-    
+
     timer.reset();
     // Concatenate the chains and parallel ranges
     std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
@@ -258,8 +259,8 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
  * @return Always returns `nullptr`. The result of the alignment is stored via the pointer in `params`.
  * @note If a sequence has an invalid range (start == -1 or length <= 0), an empty string is used.
  */
-void* spoa_task(void* arg) {
-    SpoaTaskParams* params = static_cast<SpoaTaskParams*>(arg);
+void *spoa_task(void *arg) {
+    SpoaTaskParams *params = static_cast<SpoaTaskParams *>(arg);
 
     std::vector<std::string> fragments(params->seq_num);
 
@@ -278,43 +279,42 @@ void* spoa_task(void* arg) {
 }
 
 /**
-* @brief Preprocesses alignment blocks between MEMs to reduce load on external aligners.
-* This function attempts to resolve alignment blocks (typically between MEMs) in a fast and memory-efficient
-* way, before falling back to more expensive external aligners such as MAFFT or HAlign. It operates by
-* analyzing each block defined in `parallel_align_range` and choosing one of three strategies:
-* 1. **Exact Match**: If all sequences in the block are identical, simply copies the fragment.
-* 2. **SPOA Alignment**: If average fragment length is small (< 10000 bp), applies SPOA for fast in-memory MSA.
-* 3. **Fallback Flag**: For long or divergent blocks, defers to external aligners by setting a fallback flag.
-* @param data The original vector of sequences (one string per sequence).
-* @param parallel_align_range A vector of alignment ranges (start, length pairs) per sequence, per block.
-*        Each element defines the intervals to be extracted from `data` for one alignment block.
-* @return A pair:
-* - First: A 2D vector of strings containing aligned fragments (SPOA-aligned or copied directly).
-* - Second: A boolean vector where `true` indicates the block must be aligned by an external aligner.
-* @note This function assumes that `spoa_align()` is implemented and available in scope.
-*       It is intended to be used directly after `get_parallel_align_range()` in the FMAlign2 pipeline.
-*/
-std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>preprocess_parallel_blocks(
-    const std::vector<std::string>& data,
-    const std::vector<std::vector<std::pair<int_t, int_t>>>& parallel_align_range
-) {
+ * @brief Preprocesses alignment blocks between MEMs to reduce load on external aligners.
+ * This function attempts to resolve alignment blocks (typically between MEMs) in a fast and memory-efficient
+ * way, before falling back to more expensive external aligners such as MAFFT or HAlign. It operates by
+ * analyzing each block defined in `parallel_align_range` and choosing one of three strategies:
+ * 1. **Exact Match**: If all sequences in the block are identical, simply copies the fragment.
+ * 2. **SPOA Alignment**: If average fragment length is small (< 10000 bp), applies SPOA for fast in-memory MSA.
+ * 3. **Fallback Flag**: For long or divergent blocks, defers to external aligners by setting a fallback flag.
+ * @param data The original vector of sequences (one string per sequence).
+ * @param parallel_align_range A vector of alignment ranges (start, length pairs) per sequence, per block.
+ *        Each element defines the intervals to be extracted from `data` for one alignment block.
+ * @return A pair:
+ * - First: A 2D vector of strings containing aligned fragments (SPOA-aligned or copied directly).
+ * - Second: A boolean vector where `true` indicates the block must be aligned by an external aligner.
+ * @note This function assumes that `spoa_align()` is implemented and available in scope.
+ *       It is intended to be used directly after `get_parallel_align_range()` in the FMAlign2 pipeline.
+ */
+std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>
+preprocess_parallel_blocks(const std::vector<std::string> &data,
+                           const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range) {
     uint_t parallel_num = parallel_align_range.size();
     uint_t seq_num = data.size();
 
     std::vector<std::vector<std::string>> fast_parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<bool> fallback_needed(parallel_num, false);
-    
+
     uint_t count_exact = 0;
     uint_t count_spoa = 0;
     uint_t count_fallback = 0;
-    
+
     // Vectors to store indexes of blocks that will use spoa for in memory alignment
     std::vector<uint_t> spoa_indices;
     std::vector<SpoaTaskParams> spoa_params;
 
     // First pass: identify block types and prepare SPOA parameters
     for (uint_t i = 0; i < parallel_num; ++i) {
-        auto& range = parallel_align_range[i];
+        auto &range = parallel_align_range[i];
 
         // Collect fragments for analysis
         std::vector<std::string> fragments(seq_num);
@@ -342,7 +342,7 @@ std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>preprocess_pa
             for (uint_t s = 0; s < seq_num; ++s)
                 fast_parallel_string[i][s] = fragments[0];
             ++count_exact;
-        } else if (avg_len < 10000) {
+        } else if (avg_len < 25000) {
             // Case 2: SPOA (will be run in parallel)
             spoa_indices.push_back(i);
             SpoaTaskParams params;
@@ -366,11 +366,11 @@ std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>preprocess_pa
 #if (defined(__linux__))
         threadpool pool;
         threadpool_init(&pool, global_args.thread);
-        
-        for (auto& params : spoa_params) {
+
+        for (auto &params : spoa_params) {
             threadpool_add_task(&pool, spoa_task, &params);
         }
-        
+
         threadpool_destroy(&pool);
 #else
         // Others (Windows): use OpenMP
@@ -391,34 +391,36 @@ std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>preprocess_pa
 }
 
 /**
-* @brief Performs multiple sequence alignment using SPOA (Partial Order Alignment).
-* This function leverages the SPOA library to construct a partial order graph and
-* progressively align input sequences to it. It uses the global alignment model 
-* (Needleman-Wunsch) with linear gap penalties, optimized for short to medium-length 
-* sequence blocks (e.g., between MEMs). Empty sequences are ignored during the alignment process. 
-* The final output is a multiple sequence alignment with gaps introduced as necessary to maintain consistency.
-* Scoring parameters used:
-* - Match: +4
-* - Mismatch: -10
-* - Gap (linear): -8
-* @param sequences A vector of input sequences to be aligned. Each sequence is a std::string.
-* @return A vector of aligned sequences (same size as input), each padded with '-' where needed.
-* @note This function is designed for fast in-memory alignment and is suitable as a lightweight
-* alternative to full external aligners (e.g., MAFFT, HAlign) in internal blocks of ultralong sequences.
-* @see https://github.com/rvaser/spoa for more details on the SPOA library.
-*/
-std::vector<std::string> spoa_align(const std::vector<std::string>& sequences) {
-    if (sequences.empty()) return {};
+ * @brief Performs multiple sequence alignment using SPOA (Partial Order Alignment).
+ * This function leverages the SPOA library to construct a partial order graph and
+ * progressively align input sequences to it. It uses the global alignment model
+ * (Needleman-Wunsch) with linear gap penalties, optimized for short to medium-length
+ * sequence blocks (e.g., between MEMs). Empty sequences are ignored during the alignment process.
+ * The final output is a multiple sequence alignment with gaps introduced as necessary to maintain consistency.
+ * Scoring parameters used:
+ * - Match: +4
+ * - Mismatch: -10
+ * - Gap (linear): -8
+ * @param sequences A vector of input sequences to be aligned. Each sequence is a std::string.
+ * @return A vector of aligned sequences (same size as input), each padded with '-' where needed.
+ * @note This function is designed for fast in-memory alignment and is suitable as a lightweight
+ * alternative to full external aligners (e.g., MAFFT, HAlign) in internal blocks of ultralong sequences.
+ * @see https://github.com/rvaser/spoa for more details on the SPOA library.
+ */
+std::vector<std::string> spoa_align(const std::vector<std::string> &sequences) {
+    if (sequences.empty())
+        return {};
 
     // Create the SPOA alignment engine with linear gap penalties
     // Note: Each thread creates its own engine instance for thread safety
-    auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8); 
+    auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8);
 
     spoa::Graph graph{};
 
     // Progressively align each sequence to the graph
-    for (const auto& seq : sequences) {
-        if (seq.empty()) continue;
+    for (const auto &seq : sequences) {
+        if (seq.empty())
+            continue;
         auto alignment = alignment_engine->Align(seq, graph);
         graph.AddAlignment(alignment, seq);
     }
@@ -428,11 +430,11 @@ std::vector<std::string> spoa_align(const std::vector<std::string>& sequences) {
 }
 
 /**
-* @brief Get a vector of integers that are not in the selected_cols vector and have a maximum value of n.
-* @param n The maximum value of the integers in the resulting vector.
-* @param selected_cols A vector of integers that are already selected.
-* @return A vector of integers that are not in selected_cols and have a maximum value of n.
-*/
+ * @brief Get a vector of integers that are not in the selected_cols vector and have a maximum value of n.
+ * @param n The maximum value of the integers in the resulting vector.
+ * @param selected_cols A vector of integers that are already selected.
+ * @return A vector of integers that are not in selected_cols and have a maximum value of n.
+ */
 std::vector<int_t> get_remaining_cols(int_t n, const std::vector<int_t> selected_cols) {
     // Initialize a boolean vector to indicate whether an integer is selected.
     std::vector<bool> is_selected(n, false);
@@ -453,10 +455,10 @@ std::vector<int_t> get_remaining_cols(int_t n, const std::vector<int_t> selected
 }
 
 /**
-* @brief Selects columns from a sequence of split points to enable multi thread.
-* @param split_points_on_sequence A vector of vectors of pairs, where each pair represents the start and mem length
-* @return A vector of indices of the selected columns.
-*/
+ * @brief Selects columns from a sequence of split points to enable multi thread.
+ * @param split_points_on_sequence A vector of vectors of pairs, where each pair represents the start and mem length
+ * @return A vector of indices of the selected columns.
+ */
 std::vector<int_t> select_columns(std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence) {
     // Get the number of columns and rows in the split points sequence.
     uint_t col_num = split_points_on_sequence[0].size();
@@ -496,7 +498,7 @@ std::vector<int_t> select_columns(std::vector<std::vector<std::pair<int_t, int_t
         }
         effect_col_num[i].first += 1;
 
-        if (has_left && i < col_num-1) {
+        if (has_left && i < col_num - 1) {
             effect_col_num[i + 1].first += 1;
         }
 
@@ -505,8 +507,9 @@ std::vector<int_t> select_columns(std::vector<std::vector<std::pair<int_t, int_t
         }
     }
     // Sort the columns based on the number of effect columns.
-    std::sort(effect_col_num.begin(), effect_col_num.end(), [](const std::pair<uint_t, uint_t>& a, const std::pair<uint_t, uint_t>& b) { return a.first > b.first; });
-    
+    std::sort(effect_col_num.begin(), effect_col_num.end(),
+              [](const std::pair<uint_t, uint_t> &a, const std::pair<uint_t, uint_t> &b) { return a.first > b.first; });
+
     for (uint_t i = 0; i < col_num; i++) {
         if (count <= 0) {
             break;
@@ -523,17 +526,18 @@ std::vector<int_t> select_columns(std::vector<std::vector<std::pair<int_t, int_t
             count--;
         }
         if (effect_num > 1) {
-            if ((col_index == 1 || (col_index >= 2 && col_need_change[col_index - 2]) == true) && (col_index >= 1 && col_need_change[col_index - 1] == false)) {
-            col_need_change[col_index - 1] = true;
-            count--;
+            if ((col_index == 1 || (col_index >= 2 && col_need_change[col_index - 2]) == true) &&
+                (col_index >= 1 && col_need_change[col_index - 1] == false)) {
+                col_need_change[col_index - 1] = true;
+                count--;
             }
 
-            if ((col_index == col_num - 2 || (col_index + 2 < col_num && col_need_change[col_index + 2]) == true) && (col_index + 1 < col_num && col_need_change[col_index + 1] == false)) {
+            if ((col_index == col_num - 2 || (col_index + 2 < col_num && col_need_change[col_index + 2]) == true) &&
+                (col_index + 1 < col_num && col_need_change[col_index + 1] == false)) {
                 col_need_change[col_index + 1] = true;
                 count--;
             }
         }
-        
     }
     return selected_cols;
 }
@@ -552,18 +556,18 @@ Finally, the function stores the aligned fragments in the result_store vector.
 @param arg A void pointer to input arguments.
 @return NULL
 */
-void* expand_chain(void* arg) {
+void *expand_chain(void *arg) {
     // Cast the input parameters to the correct struct type
-    ExpandChainParams* ptr = static_cast<ExpandChainParams*>(arg);
+    ExpandChainParams *ptr = static_cast<ExpandChainParams *>(arg);
 
     // Get data, chain, and chain_index from the input parameters
-    const std::vector<std::string>& data = *(ptr->data);
-    std::vector<std::vector<std::pair<int_t, int_t>>>& chain = *(ptr->chain);
+    const std::vector<std::string> &data = *(ptr->data);
+    std::vector<std::vector<std::pair<int_t, int_t>>> &chain = *(ptr->chain);
     const uint_t chain_index = ptr->chain_index;
 
     uint_t seq_num = data.size();
     uint_t chain_num = chain[0].size();
-    
+
     // Declare a default Aligner and reuse it
     StripedSmithWaterman::Aligner aligner;
     // Declare a default filter
@@ -574,7 +578,7 @@ void* expand_chain(void* arg) {
     uint_t query_length = 0;
     std::string_view query = "";
     std::vector<std::string> aligned_fragment(seq_num);
-    
+
     // Find the query sequence and its length in the current chain
     for (uint_t i = 0; i < seq_num; i++) {
         if (chain[i][chain_index].first != -1) {
@@ -596,12 +600,14 @@ void* expand_chain(void* arg) {
             maskLen = maskLen < 15 ? 15 : maskLen;
 
             // Find the first valid chain position before the current one
-            for (; tmp_index > 0 && chain[i][tmp_index - 1].first == -1; --tmp_index);
-            ref_begin_pos = tmp_index <= 0 ? 0 : chain[i][tmp_index-1].first + chain[i][tmp_index - 1].second;
+            for (; tmp_index > 0 && chain[i][tmp_index - 1].first == -1; --tmp_index)
+                ;
+            ref_begin_pos = tmp_index <= 0 ? 0 : chain[i][tmp_index - 1].first + chain[i][tmp_index - 1].second;
 
             // Find the first valid chain position after the current one
             tmp_index = chain_index;
-            for (; tmp_index < chain_num - 1 && chain[i][tmp_index + 1].first == -1; ++tmp_index);
+            for (; tmp_index < chain_num - 1 && chain[i][tmp_index + 1].first == -1; ++tmp_index)
+                ;
             ref_end_pos = tmp_index >= chain_num - 1 ? data[i].length() - 1 : chain[i][tmp_index + 1].first;
 
             // Use std::string_view to avoid unnecessary allocation
@@ -612,13 +618,13 @@ void* expand_chain(void* arg) {
 
             // Store the result of the alignment
             std::pair<int_t, int_t> p = store_sw_alignment(alignment, ref, query, aligned_fragment, i);
-       
+
             if (p.first != -1) {
                 p.first += ref_begin_pos;
                 (*(ptr->chain))[i][chain_index] = p;
             }
         } else {
-            aligned_fragment[i] = std::string(query);  // Already aligned fragment is directly assigned
+            aligned_fragment[i] = std::string(query); // Already aligned fragment is directly assigned
         }
     }
 
@@ -629,24 +635,19 @@ void* expand_chain(void* arg) {
 }
 
 /**
-* @brief Store the Smith-Waterman alignment results in a vector of aligned sequences.
-* This function takes the alignment results generated by the StripedSmithWaterman algorithm and
-* stores the aligned sequences in a vector of strings. The function also returns the alignment
-* start and length as a pair of integers. If the alignment failed, the function returns (-1,-1).
-* @param alignment The alignment results generated by StripedSmithWaterman algorithm.
-* @param ref The reference sequence.
-* @param query The query sequence.
-* @param res_store A vector of aligned sequences.
-* @param seq_index The index of the query sequence in the vector of aligned sequences.
-* @return A pair of integers representing the alignment start and length.
-*/
-std::pair<int_t, int_t> store_sw_alignment(
-    StripedSmithWaterman::Alignment alignment, 
-    std::string_view ref, 
-    std::string_view query,
-    std::vector<std::string>& res_store, 
-    uint_t seq_index) 
-{
+ * @brief Store the Smith-Waterman alignment results in a vector of aligned sequences.
+ * This function takes the alignment results generated by the StripedSmithWaterman algorithm and
+ * stores the aligned sequences in a vector of strings. The function also returns the alignment
+ * start and length as a pair of integers. If the alignment failed, the function returns (-1,-1).
+ * @param alignment The alignment results generated by StripedSmithWaterman algorithm.
+ * @param ref The reference sequence.
+ * @param query The query sequence.
+ * @param res_store A vector of aligned sequences.
+ * @param seq_index The index of the query sequence in the vector of aligned sequences.
+ * @return A pair of integers representing the alignment start and length.
+ */
+std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment alignment, std::string_view ref, std::string_view query,
+                                           std::vector<std::string> &res_store, uint_t seq_index) {
     // Extract cigar string from the alignment
     std::vector<unsigned int> cigar = alignment.cigar;
     // Extract the start and end positions of the alignment on the reference sequence
@@ -675,7 +676,7 @@ std::pair<int_t, int_t> store_sw_alignment(
             new_ref_begin = new_ref_begin - cigar_int_to_len(cigar[0]);
         }
     }
-    
+
     if (cigar_int_to_op(cigar[cigar.size() - 1]) == 'S') {
         S_count += cigar_int_to_len(cigar[cigar.size() - 1]);
         total_length += cigar_int_to_len(cigar[cigar.size() - 1]);
@@ -701,8 +702,7 @@ std::pair<int_t, int_t> store_sw_alignment(
         char op = cigar_int_to_op(cigar[i]);
         int_t len = cigar_int_to_len(cigar[i]);
 
-        switch (op)
-        {
+        switch (op) {
         case 'S': {
             // Handle soft clipping at the beginning and end of the alignment
             if (i == 0) {
@@ -716,8 +716,7 @@ std::pair<int_t, int_t> store_sw_alignment(
                 for (int_t j = ref_begin - tmp_len; j < ref_begin; j++) {
                     aligned_result += ref[j];
                 }
-            }
-            else {
+            } else {
                 int_t tmp_len = len;
                 for (uint_t j = ref_end + 1; j < ref.length() && tmp_len > 0; j++) {
                     aligned_result += ref[j];
@@ -749,10 +748,10 @@ std::pair<int_t, int_t> store_sw_alignment(
         case 'D': {
             // Handle deletion operations
             aligned_result.append(len, '-');
-            
+
             // Convert query_str back to std::string and insert gaps
             query_str.insert(query_begin + p_query, len, '-');
-            
+
             // Apply the change to all sequences in res_store
             for (uint_t j = 0; j < seq_index; j++) {
                 if (res_store[j].length() != 0) {
@@ -780,23 +779,22 @@ std::pair<int_t, int_t> store_sw_alignment(
  * @param chain The vector of chains representing the alignment
  * @return The vector of ranges for each sequence in the alignment
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const std::vector<std::string>& data,
-                                                                            const std::vector<std::vector<std::pair<int_t, int_t>>>& chain) {
+std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const std::vector<std::string> &data,
+                                                                           const std::vector<std::vector<std::pair<int_t, int_t>>> &chain) {
     uint_t seq_num = data.size();
     // Get maximum size for sequences
-    uint_t chain_num = std::max_element(chain.begin(), chain.end(),[](const auto& a, const auto& b) {
-        return a.size() < b.size();
-    })->size();
-    
+    uint_t chain_num =
+        std::max_element(chain.begin(), chain.end(), [](const auto &a, const auto &b) { return a.size() < b.size(); })->size();
+
     // Pre-allocate memory to avoid resizing during push_back
     std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range(seq_num);
-    parallel_align_range.reserve(seq_num);  // Reserve space to avoid reallocations
+    parallel_align_range.reserve(seq_num); // Reserve space to avoid reallocations
 
     // Iterate through each sequence
     for (uint_t i = 0; i < seq_num; i++) {
         int_t last_pos = 0;
-        std::vector<std::pair<int_t, int_t>>& tmp_range = parallel_align_range[i];
-        tmp_range.reserve(chain_num + 1);  // Reserve enough space for the ranges
+        std::vector<std::pair<int_t, int_t>> &tmp_range = parallel_align_range[i];
+        tmp_range.reserve(chain_num + 1); // Reserve enough space for the ranges
 
         // Iterate through each chain for the current sequence
         for (uint_t j = 0; j < chain_num; j++) {
@@ -833,31 +831,31 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const
         for (uint_t i = 0; i < seq_num; i++) {
             transposed_row[i] = parallel_align_range[i][j];
         }
-        transpose_res.push_back(std::move(transposed_row));  // Move to avoid copies
+        transpose_res.push_back(std::move(transposed_row)); // Move to avoid copies
     }
 
     return transpose_res;
 }
 
 /**
-* @brief Function for parallel alignment of sequences.
-* This function aligns a subset of input sequences in parallel using multiple threads.
-* @param arg Pointer to a ParallelAlignParams struct which contains the input data, the range of sequences to align,
-* the index of the current task, and a pointer to the storage for the aligned sequences.
-* @return NULL
-*/
-void* parallel_align(void* arg) {
+ * @brief Function for parallel alignment of sequences.
+ * This function aligns a subset of input sequences in parallel using multiple threads.
+ * @param arg Pointer to a ParallelAlignParams struct which contains the input data, the range of sequences to align,
+ * the index of the current task, and a pointer to the storage for the aligned sequences.
+ * @return NULL
+ */
+void *parallel_align(void *arg) {
     // Cast input parameters to the correct struct type.
-    ParallelAlignParams* ptr = static_cast<ParallelAlignParams*>(arg);
-    
+    ParallelAlignParams *ptr = static_cast<ParallelAlignParams *>(arg);
+
     // if not fallback_needed, the block was resolved by SPOA directly. Nothing to do.
     if (!(*ptr->fallback_needed)[ptr->task_index]) {
         return nullptr;
     }
 
     // Use references to avoid copying the vectors.
-    const std::vector<std::string>& data = *(ptr->data);
-    const std::vector<std::pair<int_t, int_t>>& parallel_range = *(ptr->parallel_range);
+    const std::vector<std::string> &data = *(ptr->data);
+    const std::vector<std::pair<int_t, int_t>> &parallel_range = *(ptr->parallel_range);
     const uint_t task_index = ptr->task_index;
     const uint_t seq_num = data.size();
 
@@ -876,7 +874,7 @@ void* parallel_align(void* arg) {
     aligned_seq_index.reserve(seq_num);
 
     // Write directly to the file.
-    for (uint_t i = 0; i < seq_num; i++) {  
+    for (uint_t i = 0; i < seq_num; i++) {
         // Check if the sequence should be aligned.
         if (parallel_range[i].first >= 0) {
             // Extract the desired substring from the sequence.
@@ -884,7 +882,7 @@ void* parallel_align(void* arg) {
             // Write the header and sequence directly to the file.
             file << ">SEQUENCE" << i << "\n" << seq_content << "\n";
             aligned_seq_index.push_back(i);
-        }       
+        }
     }
     file.close();
 
@@ -908,10 +906,10 @@ void* parallel_align(void* arg) {
 }
 
 /**
-* @brief Align sequences in a FASTA file using either halign or mafft package.
-* @param file_name The name of the FASTA file to align.
-* @return The name of the resulting aligned FASTA file.
-*/
+ * @brief Align sequences in a FASTA file using either halign or mafft package.
+ * @param file_name The name of the FASTA file to align.
+ * @return The name of the resulting aligned FASTA file.
+ */
 std::string align_fasta(const std::string &file_name) {
 
     std::ifstream file(file_name, std::ios::binary | std::ios::ate);
@@ -920,8 +918,7 @@ std::string align_fasta(const std::string &file_name) {
     int_t t_int = 1;
     if (ceil(size / global_args.avg_file_size) + 1 < global_args.thread) {
         t_int = (int_t)(ceil(size / global_args.avg_file_size) + 1);
-    }
-    else {
+    } else {
         t_int = global_args.thread;
     }
     std::string t = std::to_string(t_int);
@@ -930,42 +927,53 @@ std::string align_fasta(const std::string &file_name) {
     std::string cmnd = "";
     std::string res_file_name = file_name.substr(0, file_name.find(".fasta")) + ".aligned.fasta";
     if (global_args.package == "halign3") {
-         cmnd.append("java -jar ./ext/halign3/share/halign-stmsa.jar ")
-             .append("-t ").append(t).append(" -o ").append(res_file_name).append(" ").append(file_name);
-#if (defined(__linux__))
-         cmnd.append(" > /dev/null");
-#else 
-         cmnd.append(" > NUL");
-#endif
-    } else if (global_args.package == "halign2") {
-        cmnd.append("java -jar ./ext/halign2/HAlign2.1.jar ")
-            .append("-localMSA ").append(file_name).append(" ").append(res_file_name).append(" 0");
-            
+        cmnd.append("java -jar ./ext/halign3/share/halign-stmsa.jar ")
+            .append("-t ")
+            .append(t)
+            .append(" -o ")
+            .append(res_file_name)
+            .append(" ")
+            .append(file_name);
 #if (defined(__linux__))
         cmnd.append(" > /dev/null");
 #else
         cmnd.append(" > NUL");
 #endif
-    }
-    else if (global_args.package == "mafft") {
-        
+    } else if (global_args.package == "halign2") {
+        cmnd.append("java -jar ./ext/halign2/HAlign2.1.jar ")
+            .append("-localMSA ")
+            .append(file_name)
+            .append(" ")
+            .append(res_file_name)
+            .append(" 0");
+
+#if (defined(__linux__))
+        cmnd.append(" > /dev/null");
+#else
+        cmnd.append(" > NUL");
+#endif
+    } else if (global_args.package == "mafft") {
+
 #if (defined(__linux__))
         cmnd.append("./ext/mafft/linux/usr/libexec/mafft/disttbfast ")
             .append("-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C ")
-            .append(t).append(" -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -i ")
-            .append(file_name).append(" > ")
+            .append(t)
+            .append(" -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -i ")
+            .append(file_name)
+            .append(" > ")
             .append(res_file_name);
         cmnd.append(" 2> /dev/null");
 #else
         cmnd.append(".\\ext\\mafft\\win\\usr\\lib\\mafft\\disttbfast.exe ")
             .append("-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C ")
-            .append(t).append(" -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -i ")
-            .append(file_name).append(" > ")
+            .append(t)
+            .append(" -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -i ")
+            .append(file_name)
+            .append(" > ")
             .append(res_file_name);
-        cmnd.append(" 2> NUL");   
+        cmnd.append(" 2> NUL");
 #endif
     }
-   
 
     try {
         // Execute the command and check for errors
@@ -976,45 +984,55 @@ std::string align_fasta(const std::string &file_name) {
             cmnd = "";
 #if (defined(__linux__))
             cmnd.append("./FMAlign2x ")
-                .append("-i ").append(file_name)
-                .append(" -o ").append(res_file_name)
-                .append(" -p ").append(global_args.package)
-                .append(" -t ").append(t)
+                .append("-i ")
+                .append(file_name)
+                .append(" -o ")
+                .append(res_file_name)
+                .append(" -p ")
+                .append(global_args.package)
+                .append(" -t ")
+                .append(t)
                 .append(" -v 0")
-                .append(" -d ").append(std::to_string(global_args.degree+1));
+                .append(" -d ")
+                .append(std::to_string(global_args.degree + 1));
             cmnd.append(" &> /dev/null");
 #else
             cmnd.append("./FMAlign2x.exe ")
-                .append("-i ").append(file_name)
-                .append(" -o ").append(res_file_name)
-                .append(" -p ").append(global_args.package)
-                .append(" -t ").append(t)
+                .append("-i ")
+                .append(file_name)
+                .append(" -o ")
+                .append(res_file_name)
+                .append(" -p ")
+                .append(global_args.package)
+                .append(" -t ")
+                .append(t)
                 .append(" -v 0")
-                .append(" -d ").append(std::to_string(global_args.degree+1));
+                .append(" -d ")
+                .append(std::to_string(global_args.degree + 1));
             cmnd.append(" &> NUL");
 #endif
             res = system(cmnd.c_str());
             if (res != 0) {
-                throw "Fail to align in parallel!";       
+                throw "Fail to align in parallel!";
             }
         }
-    }
-    catch (const char* e) { // Catch any bad allocations and print an error message.
+    } catch (const char *e) { // Catch any bad allocations and print an error message.
         std::cerr << "Error: " << e << std::endl;
         exit(1);
     }
-    
+
     return res_file_name;
 }
 
 /**
-* @brief Deletes temporary files generated during sequence alignment tasks.
-* @param task_count The number of tasks for which temporary files were created.
-* @param fallback_needed A boolean value that identifies if the file needs to be deleted
-*/
-void delete_tmp_folder(uint_t task_count, const std::vector<bool>& fallback_needed) {
+ * @brief Deletes temporary files generated during sequence alignment tasks.
+ * @param task_count The number of tasks for which temporary files were created.
+ * @param fallback_needed A boolean value that identifies if the file needs to be deleted
+ */
+void delete_tmp_folder(uint_t task_count, const std::vector<bool> &fallback_needed) {
     for (uint_t i = 0; i < task_count; i++) {
-        if (!fallback_needed[i]) continue; // just del if the file was created
+        if (!fallback_needed[i])
+            continue; // just del if the file was created
 
         std::string file_name = TMP_FOLDER + "task-" + std::to_string(i) + "_" + random_file_end + ".fasta";
         std::string res_file_name = TMP_FOLDER + "task-" + std::to_string(i) + "_" + random_file_end + ".aligned.fasta";
@@ -1030,17 +1048,17 @@ void delete_tmp_folder(uint_t task_count, const std::vector<bool>& fallback_need
 }
 
 /**
-* @brief Concatenate multiple sequence alignments into a single alignment and write the result to an output file.
-* @param concat_string A 2D vector of strings containing the aligned sequences to concatenate.
-* @param name A vector of strings containing the names of the sequences.
-*/
+ * @brief Concatenate multiple sequence alignments into a single alignment and write the result to an output file.
+ * @param concat_string A 2D vector of strings containing the aligned sequences to concatenate.
+ * @param name A vector of strings containing the names of the sequences.
+ */
 void concat_alignment(std::vector<std::vector<std::string>> &concat_string, std::vector<std::string> &name) {
     std::string output_path = global_args.output_path;
     std::vector<std::string> concated_data(name.size(), "");
     // Concatenate the sequences
     for (uint_t i = 0; i < name.size(); i++) {
         for (uint_t j = 0; j < concat_string.size(); j++) {
-            concated_data[i] += concat_string[j][i];          
+            concated_data[i] += concat_string[j][i];
         }
     }
     // Write the concatenated sequences to the output file
@@ -1059,20 +1077,19 @@ void concat_alignment(std::vector<std::vector<std::string>> &concat_string, std:
     output_file.close();
 }
 
-bool cmp(const std::pair<uint_t, uint_t>& a, const std::pair<uint_t, uint_t>& b) {
-    return a.second < b.second;
-}
+bool cmp(const std::pair<uint_t, uint_t> &a, const std::pair<uint_t, uint_t> &b) { return a.second < b.second; }
 
 /**
-* @brief Convert sequence fragments into profile by aligning missing fragments with existing ones.
-* @param concat_string A reference to a vector of vectors of strings representing concatenated sequence fragments.
-* @param data A reference to a vector of strings representing the sequence names.
-* @param concat_range A reference to a vector of vectors of pairs of integers representing the start and end positions of the sequence fragments.
-* @param fragment_len A reference to a vector of unsigned integers representing the lengths of the sequence fragments.
-* @return None.
-*/
-void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vector<std::string> &data, 
-    std::vector<std::vector<std::pair<int_t, int_t>>> &concat_range, std::vector<uint_t> &fragment_len) {
+ * @brief Convert sequence fragments into profile by aligning missing fragments with existing ones.
+ * @param concat_string A reference to a vector of vectors of strings representing concatenated sequence fragments.
+ * @param data A reference to a vector of strings representing the sequence names.
+ * @param concat_range A reference to a vector of vectors of pairs of integers representing the start and end positions of the sequence
+ * fragments.
+ * @param fragment_len A reference to a vector of unsigned integers representing the lengths of the sequence fragments.
+ * @return None.
+ */
+void seq2profile(std::vector<std::vector<std::string>> &concat_string, std::vector<std::string> &data,
+                 std::vector<std::vector<std::pair<int_t, int_t>>> &concat_range, std::vector<uint_t> &fragment_len) {
     // Count the number of missing fragments for each sequence and store them in a vector of pairs.
     uint_t seq_num = data.size();
     uint_t fragment_num = fragment_len.size();
@@ -1082,20 +1099,19 @@ void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vect
         uint_t count = 0;
         for (uint_t j = 0; j < fragment_num; j++) {
             if (concat_range[j][i].first == -1) {
-                count+=fragment_len[j];
+                count += fragment_len[j];
             }
         }
         missing_fragment_count[i] = std::make_pair(i, count);
     }
 
-
     // Sort the vector of pairs by the number of missing fragments in ascending order.
     std::sort(missing_fragment_count.begin(), missing_fragment_count.end(), cmp);
 #if DEBUG
     for (int_t i = 0; i < missing_fragment_count.size(); i++) {
-        std::cout << missing_fragment_count[i].first << " "  << missing_fragment_count[i].second << std::endl;
+        std::cout << missing_fragment_count[i].first << " " << missing_fragment_count[i].second << std::endl;
     }
-#endif // 
+#endif //
 
     // For each sequence with missing fragments, align the missing fragments with existing fragments.
     for (uint_t i = 0; i < seq_num; i++) {
@@ -1110,9 +1126,10 @@ void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vect
         std::vector<std::vector<std::string>>::iterator right_it = concat_string.begin();
         std::vector<std::vector<std::string>>::iterator cur_it = concat_string.begin();
         for (; cur_it != concat_string.end(); cur_it++) {
-            std::vector<std::string>cur_vec = *cur_it;
-            // std::cout << cur_vec[seq_index].length() << " " << fragment_len[cur_it - concat_string.begin()] << " " << concat_range[cur_it - concat_string.begin()][seq_index].first << std::endl;
-            // if (cur_vec[seq_index].length() != fragment_len[cur_it - concat_string.begin()]) {
+            std::vector<std::string> cur_vec = *cur_it;
+            // std::cout << cur_vec[seq_index].length() << " " << fragment_len[cur_it - concat_string.begin()] << " " << concat_range[cur_it
+            // - concat_string.begin()][seq_index].first << std::endl; if (cur_vec[seq_index].length() != fragment_len[cur_it -
+            // concat_string.begin()]) {
             if (concat_range[cur_it - concat_string.begin()][seq_index].first == -1) {
                 if (!if_start) {
                     left_it = cur_it;
@@ -1120,43 +1137,48 @@ void seq2profile(std::vector<std::vector<std::string>>& concat_string, std::vect
                 }
             } else if (if_start) {
                 right_it = cur_it - 1;
-                cur_it = seq2profile_align(seq_index,left_it-concat_string.begin(), right_it - concat_string.begin(), concat_string, data, concat_range, fragment_len);
+                cur_it = seq2profile_align(seq_index, left_it - concat_string.begin(), right_it - concat_string.begin(), concat_string,
+                                           data, concat_range, fragment_len);
                 if_start = false;
             }
             if (if_start && cur_it + 1 == concat_string.end()) {
                 right_it = cur_it;
-                seq2profile_align(seq_index, left_it - concat_string.begin(), right_it - concat_string.begin(), concat_string, data, concat_range, fragment_len);
+                seq2profile_align(seq_index, left_it - concat_string.begin(), right_it - concat_string.begin(), concat_string, data,
+                                  concat_range, fragment_len);
                 break;
-            }          
+            }
         }
-            
     }
 }
 
 /**
-* @brief: Aligns a sequence and a profile using a third-party tool called profile_two_align and returns the iterator pointing to the next position in the 2D vector of strings.
-* The function first checks for gaps between the fragments and adds them as necessary. 
-* Then it writes the sequence to align and a profile file, passes them to profile_two_align, and reads the results. 
-* Finally, it updates the concatenated string, range and fragment length information accordingly.
-* @param seq_index: Index of the sequence to align.
-* @param left_index: Index of the left-most fragment.
-* @param right_index: Index of the right-most fragment.
-* @param concat_string: 2D vector of strings containing the concatenated fragments.
-* @param data: Vector of strings containing the sequences.
-* @param concat_range: 2D vector of pairs of integers representing the range of each fragment in each sequence.
-* @param fragment_len: Vector of unsigned integers representing the length of each fragment.
-* @return std::vector<std::vectorstd::string>::iterator: Iterator pointing to the next position in the 2D vector of strings.
-*/
-std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_index, uint_t left_index, uint_t right_index, std::vector<std::vector<std::string>>& concat_string, std::vector<std::string>& data, std::vector<std::vector<std::pair<int_t, int_t>>>& concat_range, std::vector<uint_t>& fragment_len) {
+ * @brief: Aligns a sequence and a profile using a third-party tool called profile_two_align and returns the iterator pointing to the next
+ * position in the 2D vector of strings. The function first checks for gaps between the fragments and adds them as necessary. Then it writes
+ * the sequence to align and a profile file, passes them to profile_two_align, and reads the results. Finally, it updates the concatenated
+ * string, range and fragment length information accordingly.
+ * @param seq_index: Index of the sequence to align.
+ * @param left_index: Index of the left-most fragment.
+ * @param right_index: Index of the right-most fragment.
+ * @param concat_string: 2D vector of strings containing the concatenated fragments.
+ * @param data: Vector of strings containing the sequences.
+ * @param concat_range: 2D vector of pairs of integers representing the range of each fragment in each sequence.
+ * @param fragment_len: Vector of unsigned integers representing the length of each fragment.
+ * @return std::vector<std::vectorstd::string>::iterator: Iterator pointing to the next position in the 2D vector of strings.
+ */
+std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_index, uint_t left_index, uint_t right_index,
+                                                                  std::vector<std::vector<std::string>> &concat_string,
+                                                                  std::vector<std::string> &data,
+                                                                  std::vector<std::vector<std::pair<int_t, int_t>>> &concat_range,
+                                                                  std::vector<uint_t> &fragment_len) {
     int_t seq_begin = 0;
     // determine the start position of the sequence, if there is a sequence on the left side, take the end of the last one.
     if (left_index >= 1) {
-        seq_begin = concat_range[left_index-1][seq_index].first + concat_range[left_index - 1][seq_index].second;
+        seq_begin = concat_range[left_index - 1][seq_index].first + concat_range[left_index - 1][seq_index].second;
     }
     int_t seq_end = data[seq_index].length();
     // determine the end position of the sequence, if there is a sequence on the right side, take the start position of the next one.
     if (right_index + 1 < concat_range.size()) {
-        seq_end = concat_range[right_index+1][seq_index].first;
+        seq_end = concat_range[right_index + 1][seq_index].first;
     }
     // create a file to store the sequence content.
 
@@ -1176,7 +1198,7 @@ std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_ind
             }
             concat_string[i][seq_index] = tmp_gaps;
         }
-        
+
         return concat_string.begin() + right_index + 1;
     }
     std::string seq_file_name = TMP_FOLDER + "seq-" + std::to_string(seq_index) + "_" + random_file_end + ".fasta";
@@ -1215,8 +1237,7 @@ std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_ind
         for (uint_t j = left_index; j <= right_index; j++) {
             if (concat_string[j][i].length() == fragment_len[j]) {
                 sstream << concat_string[j][i];
-            }
-            else {
+            } else {
                 cur_fragment_is_missing = true;
                 break;
             }
@@ -1235,20 +1256,24 @@ std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_ind
     std::string cmd = "";
 #if (defined(__linux__))
     cmd.append("ext/profile-two-align/linux/profile_two_align")
-        .append(" -q ").append(seq_file_name)
-        .append(" -p ").append(profile_file_name)
+        .append(" -q ")
+        .append(seq_file_name)
+        .append(" -p ")
+        .append(profile_file_name)
         .append(" -F")
         .append(" -D")
         .append(" 2> /dev/null");
 #else
     cmd.append("ext\\profile-two-align\\win\\profile_two_align.exe")
-        .append(" -q ").append(seq_file_name)
-        .append(" -p ").append(profile_file_name)
+        .append(" -q ")
+        .append(seq_file_name)
+        .append(" -p ")
+        .append(profile_file_name)
         .append(" -F")
         .append(" -D")
         .append(" 2>NUL");
 #endif
-    
+
     int res = system(cmd.c_str());
     if (res != 0) {
 #if DEBUG
@@ -1265,7 +1290,7 @@ std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_ind
     for (uint_t i = 0; i < selected_profile_seq_index.size(); i++) {
         concat_string[left_index][selected_profile_seq_index[i]] = align_res[i];
     }
-    concat_string[left_index][seq_index] = align_res[align_res.size()-1];
+    concat_string[left_index][seq_index] = align_res[align_res.size() - 1];
 #if DEBUG
     std::cout << align_res[align_res.size() - 1] << std::endl;
 #endif // DEBUG
@@ -1276,7 +1301,7 @@ std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_ind
             concat_string[left_index][missing_profile_seq_index[i]] += concat_string[j][missing_profile_seq_index[i]];
         }
     }
-    
+
     fragment_len[left_index] = concat_string[left_index][seq_index].length();
     // Update concat_range for all indices
     for (uint_t i = 0; i < data.size(); i++) {
@@ -1292,18 +1317,15 @@ std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_ind
             continue;
         }
         if (left_index > 0) {
-            concat_range[left_index][i].first = concat_range[left_index - 1][i].first + concat_range[left_index - 1][i].second;         
-        }
-        else {
+            concat_range[left_index][i].first = concat_range[left_index - 1][i].first + concat_range[left_index - 1][i].second;
+        } else {
             concat_range[left_index][i].first = 0;
         }
         if (right_index + 1 < concat_range.size()) {
             concat_range[left_index][i].second = concat_range[right_index + 1][i].first - concat_range[left_index][i].first;
-        }
-        else {
+        } else {
             concat_range[left_index][i].second = data[i].length() - concat_range[left_index][i].first;
         }
-        
     }
     // Erase indices from concat_string, concat_range, and fragment_len vectors
     std::vector<std::vector<std::string>>::iterator str_it = concat_string.begin() + left_index + 1;
@@ -1337,14 +1359,14 @@ std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_ind
  * @param data1 A reference to the first vector of strings to refine.
  * @param data2 A reference to the second vector of strings to refine.
  */
-void refinement(std::vector<std::string>& data1, std::vector<std::string>& data2) {
+void refinement(std::vector<std::string> &data1, std::vector<std::string> &data2) {
     // The number of spaces to remove from each string.
     int spaceToRemove = INT_MAX;
 
     // Determine the minimum number of spaces to remove.
     for (uint_t i = 0; i < data1.size(); ++i) {
-        std::string& str1 = data1[i];
-        std::string& str2 = data2[i];
+        std::string &str1 = data1[i];
+        std::string &str2 = data2[i];
         int spaceCount1 = 0, spaceCount2 = 0;
 
         // Count the number of trailing spaces in str1.
@@ -1364,19 +1386,21 @@ void refinement(std::vector<std::string>& data1, std::vector<std::string>& data2
 
     // Perform the refinement process on each string in the data.
     for (uint_t i = 0; i < data1.size(); ++i) {
-        std::string& str1 = data1[i];
-        std::string& str2 = data2[i];
+        std::string &str1 = data1[i];
+        std::string &str2 = data2[i];
         int removedSpace = 0;
 
         // Remove trailing spaces from str1.
         while (str1.size() > 0 && removedSpace < spaceToRemove) {
-            if (str1[str1.size() - 1] != '-') break;
+            if (str1[str1.size() - 1] != '-')
+                break;
             str1.pop_back();
             ++removedSpace;
         }
         // Remove leading spaces from str2.
         while (str2.size() > 0 && removedSpace < spaceToRemove) {
-            if (str2[0] != '-') break;
+            if (str2[0] != '-')
+                break;
             str2.erase(0, 1);
             ++removedSpace;
         }
@@ -1384,12 +1408,13 @@ void refinement(std::vector<std::string>& data1, std::vector<std::string>& data2
 }
 
 /**
-* @brief Concatenate two sets of sequence data (chain and parallel) into a single set of concatenated data.
-* @param chain_string A vector of vectors containing the chain sequence data.
-* @param parallel_string A vector of vectors containing the parallel sequence data.
-* @return std::vector<std::vectorstd::string> A vector of vectors containing the concatenated sequence data.
-*/
-std::vector<std::vector<std::string>> concat_chain_and_parallel(std::vector<std::vector<std::string>>& chain_string, std::vector<std::vector<std::string>>& parallel_string) {
+ * @brief Concatenate two sets of sequence data (chain and parallel) into a single set of concatenated data.
+ * @param chain_string A vector of vectors containing the chain sequence data.
+ * @param parallel_string A vector of vectors containing the parallel sequence data.
+ * @return std::vector<std::vectorstd::string> A vector of vectors containing the concatenated sequence data.
+ */
+std::vector<std::vector<std::string>> concat_chain_and_parallel(std::vector<std::vector<std::string>> &chain_string,
+                                                                std::vector<std::vector<std::string>> &parallel_string) {
     // Determine the number of sequences in each set of data.
     uint_t seq_num = parallel_string[0].size();
     // Determine the number of sets of chain and parallel data.
@@ -1403,29 +1428,31 @@ std::vector<std::vector<std::string>> concat_chain_and_parallel(std::vector<std:
         for (uint_t j = 0; j < seq_num; j++) {
             concated_data[count].push_back(parallel_string[i][j]);
             if (i < chain_num) {
-                concated_data[count+1].push_back(chain_string[i][j]);
+                concated_data[count + 1].push_back(chain_string[i][j]);
             }
         }
         count += 2;
     }
-    for (uint_t i = 0; i < chain_num + parallel_num-1; i++) {
+    for (uint_t i = 0; i < chain_num + parallel_num - 1; i++) {
         refinement(concated_data[i], concated_data[i + 1]);
     }
     return concated_data;
 }
 
 /**
-* @brief Concatenates two sets of ranges in a chain and parallel manner
-* Given two vectors of vectors, chain and parallel, this function concatenates the ranges
-* in a chain and parallel manner. Specifically, it takes the i-th range from each vector in parallel
-* and concatenates them into a single vector. Then, it takes the i-th range from the chain vector
-* and concatenates it with the previous vector to form a new concatenated vector. The resulting
-* concatenated vector is stored in a new vector of vectors and returned.
-* @param chain A vector of vectors representing the chains of ranges to concatenate
-* @param parallel A vector of vectors representing the parallel ranges to concatenate
-* @return A new vector of vectors representing the concatenated ranges
-*/
-std::vector<std::vector<std::pair<int_t, int_t>>> concat_chain_and_parallel_range(std::vector<std::vector<std::pair<int_t, int_t>>>& chain, std::vector<std::vector<std::pair<int_t, int_t>>>& parallel) {
+ * @brief Concatenates two sets of ranges in a chain and parallel manner
+ * Given two vectors of vectors, chain and parallel, this function concatenates the ranges
+ * in a chain and parallel manner. Specifically, it takes the i-th range from each vector in parallel
+ * and concatenates them into a single vector. Then, it takes the i-th range from the chain vector
+ * and concatenates it with the previous vector to form a new concatenated vector. The resulting
+ * concatenated vector is stored in a new vector of vectors and returned.
+ * @param chain A vector of vectors representing the chains of ranges to concatenate
+ * @param parallel A vector of vectors representing the parallel ranges to concatenate
+ * @return A new vector of vectors representing the concatenated ranges
+ */
+std::vector<std::vector<std::pair<int_t, int_t>>>
+concat_chain_and_parallel_range(std::vector<std::vector<std::pair<int_t, int_t>>> &chain,
+                                std::vector<std::vector<std::pair<int_t, int_t>>> &parallel) {
     uint_t seq_num = chain.size();
     uint_t chain_num = chain[0].size();
     uint_t parallel_num = parallel.size();
@@ -1445,15 +1472,15 @@ std::vector<std::vector<std::pair<int_t, int_t>>> concat_chain_and_parallel_rang
 }
 
 /**
-* @brief Get the length of the first non-empty string in each row of a 2D vector of strings
-* @param concat_string The input 2D vector of strings
-* @return A vector of unsigned integers representing the length of the first non-empty string in each row
-*/
-std::vector<uint_t> get_first_nonzero_lengths(const std::vector<std::vector<std::string>>& concat_string) {
+ * @brief Get the length of the first non-empty string in each row of a 2D vector of strings
+ * @param concat_string The input 2D vector of strings
+ * @return A vector of unsigned integers representing the length of the first non-empty string in each row
+ */
+std::vector<uint_t> get_first_nonzero_lengths(const std::vector<std::vector<std::string>> &concat_string) {
     std::vector<uint_t> result;
-    for (const auto& row : concat_string) {
+    for (const auto &row : concat_string) {
         uint_t length = 0;
-        for (const auto& str : row) {
+        for (const auto &str : row) {
             if (!str.empty()) {
                 length = str.length();
                 break;

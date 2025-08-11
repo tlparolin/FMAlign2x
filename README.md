@@ -3,6 +3,7 @@
 FMAlign2x is an extended version of [FMAlign2](https://academic.oup.com/bioinformatics/advance-article/doi/10.1093/bioinformatics/btae014/7515251?searchresult=1) that enables in-memory alignment of segments found between MEMs using the SPOA library (SIMD partial order alignment tool). This feature aims to reduce the computational load of the selected primary alignment method (MAFFT, HAlign2, or HAlign3).
 
 ## Table of Contents
+
 - [Installation](#Installation)
 - [Usage](#Usage)
 - [Data](#Data)
@@ -13,6 +14,7 @@ FMAlign2x is an extended version of [FMAlign2](https://academic.oup.com/bioinfor
 - [License](#License)
 
 ## Installation
+
 We recommend using [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://www.anaconda.com/) to manage the build environment for FMAlign2x.
 
 This ensures that all dependencies are correctly isolated and reproducible.
@@ -31,29 +33,33 @@ This ensures that all dependencies are correctly isolated and reproducible.
 ### Conda-based Installation
 
 1. **Clone the repository**
+
    ```
    git clone https://github.com/tlparolin/FMAlign2x.git
    cd FMAlign2x
-   ``` 
+   ```
 
 2. **Create the Conda environment**
+
    ```
-   conda env create -f environment.yml
+   conda env create --file environment.yml
    conda activate fmalign2x
    ```
 
 3. **Build the project**
+
    ```
    mkdir build
    cd build
    cmake -DCMAKE_BUILD_TYPE=Release [-DM64=ON] ..
    cmake --build . -j
    ```
-> Note: We provide two compilation modes: 32-bit and 64-bit. In most cases, the 32-bit mode is sufficient to handle most data. However, if the concatenated length of all sequences exceeds the range of uint32_t (4294967295), you should add the -DM64=ON parameter when compiling the program to generate a 64-bit executable.
+
+   > Note: We provide two compilation modes: 32-bit and 64-bit. In most cases, the 32-bit mode is sufficient to handle most data. However, if the concatenated length of all sequences exceeds the range of uint32_t (4294967295), you should add the -DM64=ON parameter when compiling the program to generate a 64-bit executable.
 
 4. **Run the program**
 
-    ./FMAlign2 [options]
+   ./FMAlign2 [options]
 
 5. **Optional Features**
 
@@ -77,7 +83,6 @@ If you don't have Java installed or if the installed version is not compatible, 
 
 Once you have Java installed and verified the version, you should be able to use halign2 and halign3 for multiple sequence alignment.
 
-
 ## Usage
 
 > Reminder: Please ensure that all external files (such as MAFFT, HALIGN, etc.) are properly copied to their corresponding directories. Pay close attention to the relative paths between FMAlign2 and the ext folder to avoid issues during execution.
@@ -88,25 +93,25 @@ Once you have Java installed and verified the version, you should be able to use
 
 if you want to show the parameters details:
 
- ~~~
- ./FMAlign2 -h
- ~~~
+```
+./FMAlign2 -h
+```
 
-  Parameters Details:
+Parameters Details:
 
-   - -i [file path] **[required]** The path to the input file.
-   - -o [output path] [default: ouput.fmaligned2.fasta] The path to the output file.
-   - -p [package] [default: mafft] The MSA method used in parallel align. for example, [**halign3**](https://github.com/malabz/HAlign-3), [**halign2**](https://github.com/ShixiangWan/HAlign2.0) and [**mafft**](https://mafft.cbrc.jp/alignment/software/).
-   - -t [int] [default: cpu number]  The maximum number of threads that the program runs, the recommended setting is the number of CPUs.
-   - -l [int] [default: square root of mean length] The minimum length of MEMs, the default value is square root of mean length.
-   - -c [float] [default: 1] A floating-point parameter that specifies the minimum coverage across all sequences, with values ranging from 0 to 1.
-   - -f [mode] [default: global or local] The filter MEMs mode. The default setting is that if sequence number less 100, **accurate** mode otherwise **global** mode.
-   - -x [int] [default:1] In-memory alignment of small blocks between MEMs with SPOA.
-   - -d [int] [default:0] Depth of recursion, you could ignore it.
-   - -v [int] [default:1] Verbose option, 0 or 1. You could ignore it.
-   - -h [help] print help information
+- -i [file path] **[required]** The path to the input file.
+- -o [output path] [default: ouput.fmaligned2.fasta] The path to the output file.
+- -p [package] [default: mafft] The MSA method used in parallel align. for example, [**halign3**](https://github.com/malabz/HAlign-3), [**halign2**](https://github.com/ShixiangWan/HAlign2.0) and [**mafft**](https://mafft.cbrc.jp/alignment/software/).
+- -t [int] [default: cpu number] The maximum number of threads that the program runs, the recommended setting is the number of CPUs.
+- -l [int] [default: square root of mean length] The minimum length of MEMs, the default value is square root of mean length.
+- -c [float] [default: 1] A floating-point parameter that specifies the minimum coverage across all sequences, with values ranging from 0 to 1.
+- -f [mode] [default: global or local] The filter MEMs mode. The default setting is that if sequence number less 100, **accurate** mode otherwise **global** mode.
+- -x [int] [default:1] In-memory alignment of small blocks between MEMs with SPOA.
+- -d [int] [default:0] Depth of recursion, you could ignore it.
+- -v [int] [default:1] Verbose option, 0 or 1. You could ignore it.
+- -h [help] print help information
 
------
+---
 
 We will demonstrate with the example data `mt1x.fasta`.
 
@@ -115,6 +120,7 @@ We will demonstrate with the example data `mt1x.fasta`.
 ```
 
 This command specifies the following options:
+
 - Input data: `mt1x.fasta` located in the `data` folder.
 - Minimum length of MEMs: 20.
 - Sequence coverage of MEMs: 1.
@@ -124,7 +130,7 @@ This command specifies the following options:
 
 After running this command, you will obtain the aligned output in the `output.fmaligned2.fasta` file.
 
------
+---
 
 If you want to evaluate the generated alignment results, you can run the `sp.py` script (requires a Python environment) with the following parameters:
 
@@ -173,6 +179,7 @@ FMAlign2x is supported by [Scientific Computing Group Lab](https://www.ibilce.un
 We value your input and appreciate your contribution to improving the project. Thank you for taking the time to provide feedback, and we will address your concerns as soon as possible.
 
 ## Uninstall
+
 To completely uninstall **FMAlign2x** and clean up its build files, binaries, and the Conda environment, follow the steps below:
 
 1. **Delete the build directory (CMake cache, object files, etc.)**
@@ -180,20 +187,25 @@ To completely uninstall **FMAlign2x** and clean up its build files, binaries, an
 ```bash
 rm -rf build
 ```
+
 This will remove all temporary CMake files and compiled objects.
 
 2. **Remove the compiled binary**
-If you installed or copied the binary manually somewhere (e.g., bin/FMAlign2x or system-wide), remove it with:
+   If you installed or copied the binary manually somewhere (e.g., bin/FMAlign2x or system-wide), remove it with:
+
 ```
 rm -f FMAlign2x
 ```
+
 Or if placed in a custom path:
+
 ```
 rm -f /path/to/your/installation/FMAlign2x
 ```
 
 3. **Remove the Conda environment**
-If you created a Conda environment specifically for FMAlign2x (e.g., named fmalign2x), deactivate and remove it:
+   If you created a Conda environment specifically for FMAlign2x (e.g., named fmalign2x), deactivate and remove it:
+
 ```
 conda deactivate
 conda env remove -n fmalign2x
@@ -209,6 +221,7 @@ conda env remove -n fmalign2x
 - [TPRA](https://github.com/malabz/TPRA): A refinement tool for ensembling different multiple sequence alignment results
 
 ## Citation
+
 In progress.
 
 ## License
