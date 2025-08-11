@@ -1,42 +1,35 @@
-#ifndef _THREAD_POOL_H_
-#define _THREAD_POOL_H_
-// This file is from project https://github.com/malabz/WMSA and has been used with the author's permission.
-// Thread pool header file
-#if (_WIN32 || _WIN64)
-#include <Windows.h>
-#endif
+#ifndef THREAD_POOL_H
+#define THREAD_POOL_H
 
-#include "thread_condition.h"
+#include <atomic>
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include <queue>
+#include <thread>
+#include <vector>
 
-// Encapsulate the task object that needs to be executed by the object in the thread pool
-typedef struct task
-{
-    void* (*run)(void* args);  // Function pointer, the task that needs to be performed
-    void* arg;              // parameter
-    struct task* next;      // The next task in the task queue
-}task_t;
+class ThreadPool {
+  public:
+    explicit ThreadPool(size_t max_threads);
+    ~ThreadPool();
 
+    // Adiciona uma tarefa para execu莽茫o
+    void add_task(std::function<void()> task);
 
-//下面是线程池结构体
-typedef struct threadpool
-{
-    condition_t ready;    // state quantity
-    task_t* first;       // The first task in the task queue
-    task_t* last;        // The last task in the task queue
-    int counter;         // The number of existing threads in the thread pool
-    int idle;            // The number of idle threads in the thread pool
-    int max_threads;     // The maximum number of threads in the thread pool
-    int quit;            //Whether to exit the flag
-}threadpool_t;
+    // Espera todas as tarefas finalizarem e destr贸i o pool
+    void shutdown();
 
+  private:
+    void worker_thread();
 
-// Thread pool initialization
-void threadpool_init(threadpool_t* pool, int threads);
+    std::vector<std::thread> workers_;
+    std::queue<std::function<void()>> tasks_;
 
-// Add tasks to the thread pool
-void threadpool_add_task(threadpool_t* pool, void* (*run)(void* arg), void* arg);
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    std::atomic<bool> quitting_{false};
+    size_t max_threads_;
+};
 
-// destroy thread pool
-void threadpool_destroy(threadpool_t* pool);
-
-#endif
+#endif // THREAD_POOL_H

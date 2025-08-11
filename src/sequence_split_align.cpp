@@ -95,6 +95,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     uint_t chain_num = chain[0].size();
     uint_t seq_num = data.size();
     std::vector<std::vector<std::string>> chain_string(chain_num); // chain_num * seq_num
+
     // Initialize ExpandChainParams structure for each chain pair
     std::vector<ExpandChainParams> params(chain_num);
     for (uint_t i = 0; i < chain_num; i++) {
@@ -103,21 +104,14 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         params[i].chain_index = i;
         params[i].result_store = chain_string.begin() + i;
     }
+
     // Expand each chain pair and store the resulting aligned sequences
     if (global_args.min_seq_coverage == 1) {
-#if (defined(__linux__))
-        threadpool pool;
-        threadpool_init(&pool, global_args.thread);
+        ThreadPool pool(global_args.thread);
         for (uint_t i = 0; i < chain_num; i++) {
-            threadpool_add_task(&pool, expand_chain, &params[i]);
+            pool.add_task([&, i]() { expand_chain(&params[i]); });
         }
-        threadpool_destroy(&pool);
-#else // Otherwise, use OpenMP for parallel execution
-#pragma omp parallel for num_threads(global_args.thread)
-        for (uint_t i = 0; i < chain_num; i++) {
-            expand_chain(&params[i]);
-        }
-#endif
+        pool.shutdown();
     } else {
         for (uint_t i = 0; i < chain_num; i++) {
             expand_chain(&params[i]);
@@ -174,10 +168,10 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     uint_t parallel_num = parallel_align_range.size();
     std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<ParallelAlignParams> parallel_params(parallel_num);
-    // If the system is Linux, initialize a thread pool and add tasks to it for parallel execution
-#if (defined(__linux__))
-    threadpool pool;
-    threadpool_init(&pool, global_args.thread);
+
+    // Initialize a thread pool and add tasks to it for parallel execution
+    ThreadPool pool(global_args.thread);
+
     for (uint_t i = 0; i < parallel_num; i++) {
         if (!fallback_needed[i])
             continue;
@@ -187,26 +181,15 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         parallel_params[i].task_index = i;
         parallel_params[i].result_store = parallel_string.begin() + i;
         parallel_params[i].fallback_needed = &fallback_needed;
-        threadpool_add_task(&pool, parallel_align, &parallel_params[i]);
-    }
-    threadpool_destroy(&pool);
-#else
-#pragma omp parallel for num_threads(global_args.thread)
-    for (uint_t i = 0; i < parallel_num; i++) {
-        if (!fallback_needed[i])
-            continue;
 
-        parallel_params[i].data = &data;
-        parallel_params[i].parallel_range = parallel_align_range.begin() + i;
-        parallel_params[i].task_index = i;
-        parallel_params[i].result_store = parallel_string.begin() + i;
-        parallel_params[i].fallback_needed = &fallback_needed;
-        parallel_align(&parallel_params[i]);
+        pool.add_task([&, i]() { parallel_align(&parallel_params[i]); });
     }
-#endif
+
+    pool.shutdown();
 
     // Remove temporary files created during parallel execution
     delete_tmp_folder(parallel_num, fallback_needed);
+
     // Calculate the time taken for parallel alignment and print the output
     double parallel_align_time = timer.elapsed_time();
     s.str("");
@@ -361,24 +344,14 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
     }
 
     // Run SPOA in parallel
-    // Linux: use threadpool
     if (!spoa_params.empty()) {
-#if (defined(__linux__))
-        threadpool pool;
-        threadpool_init(&pool, global_args.thread);
+        ThreadPool pool(global_args.thread);
 
-        for (auto &params : spoa_params) {
-            threadpool_add_task(&pool, spoa_task, &params);
-        }
-
-        threadpool_destroy(&pool);
-#else
-        // Others (Windows): use OpenMP
-#pragma omp parallel for num_threads(global_args.thread)
         for (size_t idx = 0; idx < spoa_params.size(); ++idx) {
-            spoa_task(&spoa_params[idx]);
+            pool.add_task([&, idx]() { spoa_task(&spoa_params[idx]); });
         }
-#endif
+
+        pool.shutdown();
     }
 
     if (global_args.verbose) {

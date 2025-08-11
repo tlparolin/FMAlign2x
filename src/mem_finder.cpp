@@ -126,21 +126,14 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vecto
     }
 
     std::vector<FindOptimalChainParams> find_optimal_chain_params(sequence_num);
-#if (defined(__linux__))
-    threadpool pool;
-    threadpool_init(&pool, global_args.thread);
+
+    ThreadPool pool(global_args.thread);
     for (uint_t i = 0; i < sequence_num; i++) {
         find_optimal_chain_params[i].chains = split_point_on_sequence.begin() + i;
-        threadpool_add_task(&pool, find_optimal_chain, &find_optimal_chain_params[i]);
+
+        pool.add_task([&, i]() { find_optimal_chain(&find_optimal_chain_params[i]); });
     }
-    threadpool_destroy(&pool);
-#else // Otherwise, use OpenMP for parallel execution
-#pragma omp parallel for num_threads(global_args.thread)
-    for (uint_t i = 0; i < sequence_num; i++) {
-        find_optimal_chain_params[i].chains = split_point_on_sequence.begin() + i;
-        find_optimal_chain(&find_optimal_chain_params[i]);
-    }
-#endif
+    pool.shutdown(); // Waits for all tasks to finish and finalizes the pool
 
     // remove column that too much -1
     std::vector<int_t> selected_cols;
@@ -376,9 +369,8 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
     std::vector<mem> mems(interval_size);
     // Convert each interval to a MEM in parallel
     IntervalToMemConversionParams *params = new IntervalToMemConversionParams[interval_size];
-#if (defined(__linux__))
-    threadpool pool;
-    threadpool_init(&pool, global_args.thread);
+
+    ThreadPool pool(global_args.thread);
     for (uint_t i = 0; i < interval_size; i++) {
         params[i].SA = &SA;
         params[i].interval = intervals[i];
@@ -387,21 +379,9 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
         params[i].min_mem_length = min_mem_length;
         params[i].joined_sequence_bound = joined_sequence_bound;
 
-        threadpool_add_task(&pool, interval2mem, params + i);
+        pool.add_task([&, i]() { interval2mem(params + i); });
     }
-    threadpool_destroy(&pool);
-#else
-#pragma omp parallel for num_threads(global_args.thread)
-    for (uint_t i = 0; i < interval_size; i++) {
-        params[i].SA = SA;
-        params[i].interval = intervals[i];
-        params[i].concat_data = concat_data;
-        params[i].result_store = mems.begin() + i;
-        params[i].min_mem_length = min_mem_length;
-        params[i].joined_sequence_bound = joined_sequence_bound;
-        interval2mem(params + i);
-    }
-#endif
+    pool.shutdown();
 
     if (mems.empty() && global_args.verbose) {
         print_table_line("Warning: There is no MEMs, please adjust your parameters.");

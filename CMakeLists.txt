@@ -41,7 +41,7 @@ set(SOURCES
 )
 
 if(NOT WIN32)
-    list(APPEND SOURCES src/thread_pool.cpp src/thread_condition.cpp)
+    list(APPEND SOURCES src/thread_pool.cpp)
 endif()
 
 file(
