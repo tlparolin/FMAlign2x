@@ -532,31 +532,30 @@ Finally, the function stores the aligned fragments in the result_store vector.
 void *expand_chain(void *arg) {
     // Cast the input parameters to the correct struct type
     ExpandChainParams *ptr = static_cast<ExpandChainParams *>(arg);
-
     // Get data, chain, and chain_index from the input parameters
-    const std::vector<std::string> &data = *(ptr->data);
-    std::vector<std::vector<std::pair<int_t, int_t>>> &chain = *(ptr->chain);
+    const std::vector<std::string> data = *(ptr->data);
+    std::vector<std::vector<std::pair<int_t, int_t>>> chain = *(ptr->chain);
     const uint_t chain_index = ptr->chain_index;
-
+    // std::cout << "in" << chain_index << '\n';
+    // Get the number of sequences in the data vector and the number of chains in the current chain
     uint_t seq_num = data.size();
     uint_t chain_num = chain[0].size();
 
-    // Declare a default Aligner and reuse it
+    // Declares a default Aligner
     StripedSmithWaterman::Aligner aligner;
-    // Declare a default filter
+    // Declares a default filter
     StripedSmithWaterman::Filter filter;
-    // Declare an alignment that stores the result
+    // Declares an alignment that stores the result
     StripedSmithWaterman::Alignment alignment;
 
     uint_t query_length = 0;
-    std::string_view query = "";
+    std::string query = "";
     std::vector<std::string> aligned_fragment(seq_num);
-
     // Find the query sequence and its length in the current chain
     for (uint_t i = 0; i < seq_num; i++) {
         if (chain[i][chain_index].first != -1) {
             query_length = chain[i][chain_index].second;
-            query = std::string_view(data[i]).substr(chain[i][chain_index].first, query_length);
+            query = data[i].substr(chain[i][chain_index].first, query_length);
             break;
         }
     }
@@ -572,36 +571,33 @@ void *expand_chain(void *arg) {
             int_t maskLen = query_length / 2;
             maskLen = maskLen < 15 ? 15 : maskLen;
 
-            // Find the first valid chain position before the current one
             for (; tmp_index > 0 && chain[i][tmp_index - 1].first == -1; --tmp_index)
                 ;
+
             ref_begin_pos = tmp_index <= 0 ? 0 : chain[i][tmp_index - 1].first + chain[i][tmp_index - 1].second;
 
-            // Find the first valid chain position after the current one
             tmp_index = chain_index;
             for (; tmp_index < chain_num - 1 && chain[i][tmp_index + 1].first == -1; ++tmp_index)
                 ;
+
             ref_end_pos = tmp_index >= chain_num - 1 ? data[i].length() - 1 : chain[i][tmp_index + 1].first;
 
-            // Use std::string_view to avoid unnecessary allocation
-            std::string_view ref = std::string_view(data[i]).substr(ref_begin_pos, ref_end_pos - ref_begin_pos);
+            std::string ref = data[i].substr(ref_begin_pos, ref_end_pos - ref_begin_pos);
 
             // Get the reference subsequence and align it with the query subsequence
-            aligner.Align(query.data(), ref.data(), ref.size(), filter, &alignment, maskLen);
+            aligner.Align(query.c_str(), ref.c_str(), ref.size(), filter, &alignment, maskLen);
 
-            // Store the result of the alignment
             std::pair<int_t, int_t> p = store_sw_alignment(alignment, ref, query, aligned_fragment, i);
 
             if (p.first != -1) {
                 p.first += ref_begin_pos;
                 (*(ptr->chain))[i][chain_index] = p;
             }
+
         } else {
-            aligned_fragment[i] = std::string(query); // Already aligned fragment is directly assigned
+            aligned_fragment[i] = query;
         }
     }
-
-    // Store the result for the current chain
     *(ptr->result_store) = aligned_fragment;
 
     return NULL;
@@ -619,7 +615,7 @@ void *expand_chain(void *arg) {
  * @param seq_index The index of the query sequence in the vector of aligned sequences.
  * @return A pair of integers representing the alignment start and length.
  */
-std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment alignment, std::string_view ref, std::string_view query,
+std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment alignment, std::string &ref, std::string &query,
                                            std::vector<std::string> &res_store, uint_t seq_index) {
     // Extract cigar string from the alignment
     std::vector<unsigned int> cigar = alignment.cigar;
@@ -640,7 +636,6 @@ std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment align
     int_t total_length = alignment.query_end;
     int_t new_ref_begin = ref_begin;
     uint_t new_ref_end = ref_end;
-
     if (cigar_int_to_op(cigar[0]) == 'S') {
         S_count += cigar_int_to_len(cigar[0]);
         if (new_ref_begin - cigar_int_to_len(cigar[0]) < 0) {
@@ -649,7 +644,6 @@ std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment align
             new_ref_begin = new_ref_begin - cigar_int_to_len(cigar[0]);
         }
     }
-
     if (cigar_int_to_op(cigar[cigar.size() - 1]) == 'S') {
         S_count += cigar_int_to_len(cigar[cigar.size() - 1]);
         total_length += cigar_int_to_len(cigar[cigar.size() - 1]);
@@ -664,12 +658,8 @@ std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment align
         res_store[seq_index] = aligned_result;
         return std::make_pair(-1, -1);
     }
-
     uint_t p_ref = 0;
     uint_t p_query = 0;
-
-    // Convert query to std::string for modifying the query (inserting gaps)
-    std::string query_str = std::string(query);
 
     for (uint_t i = 0; i < cigar.size(); i++) {
         char op = cigar_int_to_op(cigar[i]);
@@ -707,28 +697,36 @@ std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment align
         case 'X':
         case '=': {
             // Handle match, mismatch, and substitution operations
-            aligned_result.append(ref.substr(ref_begin + p_ref, len));
+            for (int_t j = 0; j < len; j++) {
+                aligned_result += ref[ref_begin + p_ref + j];
+            }
             p_ref += len;
             p_query += len;
             break;
         }
         case 'I': {
             // Handle insertion operations
-            aligned_result.append(len, '-');
+            for (int_t j = 0; j < len; j++) {
+                aligned_result += '-';
+            }
             p_query += len;
             break;
         }
         case 'D': {
             // Handle deletion operations
-            aligned_result.append(len, '-');
+            std::string gaps = "";
+            for (int_t j = 0; j < len; j++) {
+                gaps += '-';
+            }
+            for (int_t j = 0; j < len; j++) {
+                aligned_result += ref[ref_begin + p_ref + j];
+            }
+            p_ref += len;
 
-            // Convert query_str back to std::string and insert gaps
-            query_str.insert(query_begin + p_query, len, '-');
-
-            // Apply the change to all sequences in res_store
+            query.insert(query_begin + p_query, gaps);
             for (uint_t j = 0; j < seq_index; j++) {
                 if (res_store[j].length() != 0) {
-                    res_store[j].insert(query_begin + p_query, len, '-');
+                    res_store[j].insert(query_begin + p_query, gaps);
                 }
             }
             p_query += len;

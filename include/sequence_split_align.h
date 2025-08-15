@@ -176,7 +176,7 @@ void *expand_chain(void *arg);
  * @param seq_index The index of the query sequence in the vector of aligned sequences.
  * @return A pair of integers representing the alignment start and length.
  */
-std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment alignment, std::string_view ref, std::string_view query,
+std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment alignment, std::string &ref, std::string &query,
                                            std::vector<std::string> &res_store, uint_t seq_index);
 
 /**
