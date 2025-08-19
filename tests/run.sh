@@ -7,31 +7,31 @@ SUCCESS_COUNT=0
 ERROR_COUNT=0
 TOTAL_COUNT=0
 
-# Limpar logs anteriores
+# Clean logs
 > "$LOG_FILE"
 > "$ERROR_FILE"
 
-echo "Iniciando testes em $(date)" | tee -a "$LOG_FILE"
+echo "Starting tests in $(date)" | tee -a "$LOG_FILE"
 echo "================================" | tee -a "$LOG_FILE"
 
 while IFS= read -r command; do
-    # Pular linhas vazias e comentários
+    # Ignore empty lines and comments
     if [[ -z "$command" || "$command" =~ ^#.* ]]; then
         continue
     fi
     
     TOTAL_COUNT=$((TOTAL_COUNT + 1))
-    echo "[$TOTAL_COUNT] Executando: $command" | tee -a "$LOG_FILE"
+    echo "[$TOTAL_COUNT] Running: $command" | tee -a "$LOG_FILE"
     
-    # Executar comando e capturar saída
+    # Run and log
     if output=$(eval "$command" 2>&1); then
         SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-        echo "✅ SUCESSO" | tee -a "$LOG_FILE"
+        echo "✅ SUCCESS" | tee -a "$LOG_FILE"
         echo "$output" >> "$LOG_FILE"
     else
         ERROR_COUNT=$((ERROR_COUNT + 1))
-        echo "❌ ERRO" | tee -a "$LOG_FILE" 
-        echo "[$TOTAL_COUNT] ERRO: $command" >> "$ERROR_FILE"
+        echo "❌ FAILED" | tee -a "$LOG_FILE" 
+        echo "[$TOTAL_COUNT] ERROR: $command" >> "$ERROR_FILE"
         echo "$output" >> "$ERROR_FILE"
         echo "---" >> "$ERROR_FILE"
     fi
@@ -39,14 +39,14 @@ while IFS= read -r command; do
     echo "------------------------" >> "$LOG_FILE"
 done < all_commands.txt
 
-# Resumo final
+# final
 echo "================================" | tee -a "$LOG_FILE"
-echo "Resumo final:" | tee -a "$LOG_FILE"
-echo "Total de testes: $TOTAL_COUNT" | tee -a "$LOG_FILE"
-echo "Sucessos: $SUCCESS_COUNT" | tee -a "$LOG_FILE"
-echo "Erros: $ERROR_COUNT" | tee -a "$LOG_FILE"
-echo "Finalizado em $(date)" | tee -a "$LOG_FILE"
+echo "Summary:" | tee -a "$LOG_FILE"
+echo "Total tests: $TOTAL_COUNT" | tee -a "$LOG_FILE"
+echo "Success: $SUCCESS_COUNT" | tee -a "$LOG_FILE"
+echo "Errors: $ERROR_COUNT" | tee -a "$LOG_FILE"
+echo "Finished in $(date)" | tee -a "$LOG_FILE"
 
 if [ $ERROR_COUNT -gt 0 ]; then
-    echo "⚠️  Verifique $ERROR_FILE para detalhes dos erros"
+    echo "⚠️  Check $ERROR_FILE for error details"
 fi
