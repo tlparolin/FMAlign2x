@@ -99,7 +99,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
  * way, before falling back to more expensive external aligners such as MAFFT or HAlign. It operates by
  * analyzing each block defined in `parallel_align_range` and choosing one of three strategies:
  * 1. **Exact Match**: If all sequences in the block are identical, simply copies the fragment.
- * 2. **SPOA Alignment**: If average fragment length is small (< 2000 bp), applies SPOA for fast in-memory MSA.
+ * 2. **SPOA Alignment**: If average fragment length is small (< 15000 bp), applies SPOA for fast in-memory MSA.
  * 3. **Fallback Flag**: For long or divergent blocks, defers to external aligners by setting a fallback flag.
  * @param data The original vector of sequences (one string per sequence).
  * @param parallel_align_range A vector of alignment ranges (start, length pairs) per sequence, per block.

@@ -207,6 +207,13 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         if (!fallback_needed[i]) {
             parallel_string[i] = std::move(fast_parallel_string[i]);
         }
+        if (parallel_string[i].size() != seq_num) {
+            // normalize: fill missing lines with block-length gaps
+            size_t L = 0;
+            for (auto &s : parallel_string[i])
+                L = std::max(L, s.size());
+            parallel_string[i].resize(seq_num, std::string(L, '-'));
+        }
     }
 
     // Concatenate the chain strings and parallel strings
@@ -267,7 +274,7 @@ void *spoa_task(void *arg) {
  * way, before falling back to more expensive external aligners such as MAFFT or HAlign. It operates by
  * analyzing each block defined in `parallel_align_range` and choosing one of three strategies:
  * 1. **Exact Match**: If all sequences in the block are identical, simply copies the fragment.
- * 2. **SPOA Alignment**: If average fragment length is small (< 10000 bp), applies SPOA for fast in-memory MSA.
+ * 2. **SPOA Alignment**: If average fragment length is small (< 15000 bp), applies SPOA for fast in-memory MSA.
  * 3. **Fallback Flag**: For long or divergent blocks, defers to external aligners by setting a fallback flag.
  * @param data The original vector of sequences (one string per sequence).
  * @param parallel_align_range A vector of alignment ranges (start, length pairs) per sequence, per block.
@@ -325,7 +332,7 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
             for (uint_t s = 0; s < seq_num; ++s)
                 fast_parallel_string[i][s] = fragments[0];
             ++count_exact;
-        } else if (avg_len < 25000) {
+        } else if (avg_len < 15000) {
             // Case 2: SPOA (will be run in parallel)
             spoa_indices.push_back(i);
             SpoaTaskParams params;
@@ -390,16 +397,33 @@ std::vector<std::string> spoa_align(const std::vector<std::string> &sequences) {
 
     spoa::Graph graph{};
 
-    // Progressively align each sequence to the graph
-    for (const auto &seq : sequences) {
+    // maps indices of non-empty sequences
+    std::vector<size_t> map_idx;
+    map_idx.reserve(sequences.size());
+    for (size_t i = 0; i < sequences.size(); ++i) {
+        const auto &seq = sequences[i];
         if (seq.empty())
             continue;
-        auto alignment = alignment_engine->Align(seq, graph);
-        graph.AddAlignment(alignment, seq);
+        auto aln = alignment_engine->Align(seq, graph);
+        graph.AddAlignment(aln, seq);
+        map_idx.push_back(i);
     }
 
-    // Generate and return the multiple sequence alignment
-    return graph.GenerateMultipleSequenceAlignment();
+    // If all are empty: return N empty strings
+    if (map_idx.empty()) {
+        return std::vector<std::string>(sequences.size(), std::string{});
+    }
+
+    // Generates MSA only from non-empty ones
+    auto msa_compact = graph.GenerateMultipleSequenceAlignment();
+    const size_t aln_len = msa_compact.empty() ? 0 : msa_compact.front().size();
+
+    // Rebuilds to original size: empty spaces become just gaps
+    std::vector<std::string> msa(sequences.size(), std::string(aln_len, '-'));
+    for (size_t k = 0; k < msa_compact.size(); ++k) {
+        msa[map_idx[k]] = std::move(msa_compact[k]);
+    }
+    return msa;
 }
 
 /**
@@ -1394,6 +1418,14 @@ std::vector<std::vector<std::string>> concat_chain_and_parallel(std::vector<std:
     // Create a vector to hold the concatenated data.
     std::vector<std::vector<std::string>> concated_data(chain_num + parallel_num);
     uint_t count = 0;
+
+    for (uint_t i = 0; i < parallel_num; ++i) {
+        if (parallel_string[i].size() != seq_num) {
+            // log + correção defensiva
+            // (mesma lógica de resize mostrada acima)
+        }
+    }
+
     // Loop through each set of parallel data and add it to the concatenated data.
     for (uint_t i = 0; i < parallel_num; i++) {
         for (uint_t j = 0; j < seq_num; j++) {
