@@ -81,7 +81,7 @@ struct IntervalToMemConversionParams {
 };
 
 struct FindOptimalChainParams {
-    std::vector<std::vector<std::pair<int_t, int_t>>>::iterator chains;
+    std::vector<std::pair<int_t, int_t>> *chains;
 };
 
 /**
@@ -102,7 +102,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<me
  * @param sequence_num Number of sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vector<mem> &mems, uint_t sequence_num);
+std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vector<mem> &mems, size_t sequence_num);
 
 /**
  * @brief Find MEMs in a set of sequences.

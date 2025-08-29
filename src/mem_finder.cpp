@@ -88,71 +88,70 @@ void *find_optimal_chain(void *arg) {
  * @param sequence_num Number of sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vector<mem> &mems, uint_t sequence_num) {
+std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vector<mem> &mems, size_t sequence_num) {
     // delete MEM full of "-"
-    std::vector<mem>::iterator mem_it = mems.begin();
-    while (mem_it != mems.end()) {
-        mem tmp_mem = *mem_it;
-        if (tmp_mem.mem_length <= 0) {
-            mem_it = mems.erase(mem_it);
-        } else {
-            mem_it++;
-        }
-    }
-    uint_t mem_num = mems.size();
+    std::erase_if(mems, [](const mem &m) { return m.mem_length <= 0; });
+
+    const size_t mem_num = mems.size();
+
     // Initialize a vector of vectors of pairs of integers to represent the split points for each sequence
-    std::vector<std::vector<std::pair<int_t, int_t>>> split_point_on_sequence(
-        sequence_num, std::vector<std::pair<int_t, int_t>>(mem_num, std::make_pair(-1, -1)));
+    std::vector<std::vector<std::pair<int_t, int_t>>> split_point_on_sequence(sequence_num,
+                                                                              std::vector<std::pair<int_t, int_t>>(mem_num, {-1, -1}));
+
     // Loop through each non-conflicting MEM in the input
-    for (uint_t i = 0; i < mem_num; i++) {
+    for (size_t i = 0; i < mem_num; ++i) {
         // Get the current MEM and its substring positions
-        mem tmp_mem = mems[i];
+        const auto &m = mems[i];
         // Loop through each substring of the current MEM
-        for (uint_t j = 0; j < tmp_mem.substrings.size(); j++) {
+        for (const auto &substring : m.substrings) {
             // Create a pair of the substring position and the length of the MEM
-            std::pair<int_t, int_t> p(tmp_mem.substrings[j].position, tmp_mem.mem_length);
+            auto &current_point = split_point_on_sequence[substring.sequence_index][i];
+            std::pair<int_t, int_t> candidate = {substring.position, m.mem_length};
             // If this split point is already set for this sequence and it is farther from the average position,
             // skip this split point and move to the next one
-            if (split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i].first != -1) {
-                if (abs(p.first - tmp_mem.avg_pos) >
-                    abs(split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i].first - tmp_mem.avg_pos)) {
+            if (current_point.first != -1) {
+                if (std::abs(candidate.first - m.avg_pos) > std::abs(current_point.first - m.avg_pos)) {
                     continue;
                 }
             }
             // Set this split point for this sequence to the current substring position and MEM length
-            split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i] = p;
+            current_point = candidate;
         }
     }
 
-    std::vector<FindOptimalChainParams> find_optimal_chain_params(sequence_num);
-
+    std::vector<FindOptimalChainParams> find_params(sequence_num);
     ThreadPool pool(global_args.thread);
-    for (uint_t i = 0; i < sequence_num; i++) {
-        find_optimal_chain_params[i].chains = split_point_on_sequence.begin() + i;
-
-        pool.add_task([&, i]() { find_optimal_chain(&find_optimal_chain_params[i]); });
+    for (size_t i = 0; i < sequence_num; ++i) {
+        find_params[i].chains = &split_point_on_sequence[i];
+        pool.add_task([&, i]() { find_optimal_chain(&find_params[i]); });
     }
     pool.shutdown(); // Waits for all tasks to finish and finalizes the pool
 
     // remove column that too much -1
-    std::vector<int_t> selected_cols;
-    for (uint_t j = 0; j < split_point_on_sequence[0].size(); j++) {
-        int_t count = 0;
-        for (uint_t i = 0; i < split_point_on_sequence.size(); i++) {
+    std::vector<size_t> selected_cols;
+    const size_t col_count = split_point_on_sequence[0].size();
+    const size_t max_missing = static_cast<size_t>(std::floor(sequence_num * (1.0 - global_args.min_seq_coverage)));
+
+    for (size_t j = 0; j < col_count; ++j) {
+        size_t missing = 0;
+        for (size_t i = 0; i < sequence_num; ++i) {
             if (split_point_on_sequence[i][j].first == -1) {
-                count++;
+                ++missing;
             }
         }
-        if (count <= floor(sequence_num * (1 - global_args.min_seq_coverage))) {
+        if (missing <= max_missing) {
             selected_cols.push_back(j);
         }
     }
+
     std::vector<std::vector<std::pair<int_t, int_t>>> chain(sequence_num);
-    for (uint_t i = 0; i < selected_cols.size(); i++) {
-        for (uint_t j = 0; j < split_point_on_sequence.size(); j++) {
-            chain[j].push_back(split_point_on_sequence[j][selected_cols[i]]);
+    for (size_t i = 0; i < sequence_num; ++i) {
+        chain[i].reserve(selected_cols.size());
+        for (size_t col : selected_cols) {
+            chain[i].emplace_back(split_point_on_sequence[i][col]);
         }
     }
+
     return chain;
 }
 
