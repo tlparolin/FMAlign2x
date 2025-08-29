@@ -34,19 +34,17 @@
 #endif
 
 void *find_optimal_chain(void *arg) {
-    FindOptimalChainParams *ptr = static_cast<FindOptimalChainParams *>(arg);
-    std::vector<std::pair<int_t, int_t>> chains = *(ptr->chains);
-    std::vector<std::pair<int_t, int_t>> new_chains;
+    auto *ptr = static_cast<FindOptimalChainParams *>(arg);
+    auto &chains = *ptr->chains;
+    const size_t chain_num = chains.size();
 
-    uint_t chain_num = chains.size();
-    std::vector<double> dp(chain_num, 0);
-    std::vector<int_t> prev(chain_num, -1);
+    std::vector<double> dp(chain_num);
+    std::vector<size_t> prev(chain_num, static_cast<size_t>(-1));
     // Iterate over all "mem" objects and calculate their size and update dynamic programming tables
-    for (uint_t i = 0; i < chain_num; i++) {
-        double len = chains[i].second;
-        dp[i] += len;
-        for (uint_t j = i + 1; j < chain_num; j++) {
-            if (chains[i].first + len < chains[j].first && dp[i] > dp[j]) {
+    for (size_t i = 0; i < chain_num; ++i) {
+        dp[i] = static_cast<double>(chains[i].second);
+        for (size_t j = i + 1; j < chain_num; ++j) {
+            if (chains[i].first + chains[i].second < chains[j].first && dp[i] > dp[j]) {
                 dp[j] = dp[i];
                 prev[j] = i;
             }
@@ -54,31 +52,32 @@ void *find_optimal_chain(void *arg) {
     }
     // Find the index of the last "mem" object in the longest non-conflicting sequence
     double max_size = 0;
-    int_t end_index = 0;
-    for (uint_t i = 0; i < chain_num; i++) {
+    size_t end_index = 0;
+    for (size_t i = 0; i < chain_num; ++i) {
         if (dp[i] > max_size) {
             max_size = dp[i];
             end_index = i;
         }
     }
     // Retrieve the indices of all non-conflicting "mem" objects in the longest sequence
-    std::vector<bool> selected_chain(chain_num, false);
-    while (end_index > 0) {
-        selected_chain[end_index] = true;
+    std::vector<bool> selected(chain_num, false);
+    while (end_index < chain_num && end_index != static_cast<size_t>(-1)) {
+        selected[end_index] = true;
         end_index = prev[end_index];
     }
 
-    for (uint_t i = 0; i < chain_num; i++) {
-        if (selected_chain[i]) {
-            new_chains.push_back(chains[i]);
-        } else {
-            new_chains.push_back(std::make_pair(-1, -1));
-        }
+    std::vector<std::pair<int_t, int_t>> new_chains;
+    new_chains.reserve(chain_num);
+    for (size_t i = 0; i < chain_num; ++i) {
+        if (selected[i])
+            new_chains.emplace_back(chains[i]);
+        else
+            new_chains.emplace_back(-1, -1);
     }
 
-    *(ptr->chains) = new_chains;
+    chains = std::move(new_chains);
 
-    return NULL;
+    return nullptr;
 }
 
 /**
