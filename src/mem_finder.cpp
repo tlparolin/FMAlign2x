@@ -165,128 +165,119 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vecto
  */
 std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<mem> &mems, uint_t sequence_num) {
     // delete MEM full of "-"
-    std::vector<mem>::iterator mem_it = mems.begin();
-    while (mem_it != mems.end()) {
-        mem tmp_mem = *mem_it;
-        if (tmp_mem.mem_length <= 0) {
-            mem_it = mems.erase(mem_it);
-        } else {
-            mem_it++;
-        }
-    }
+    std::erase_if(mems, [](auto const &m) { return m.mem_length <= 0; });
+
     // Initialize dynamic programming tables to keep track of size and previous indices
-    uint_t mem_num = mems.size();
-    std::vector<double> dp(mem_num, 0);
+    // DP: calculate score for each "mem" object
+    const auto mem_num = mems.size();
+    std::vector<double> dp(mem_num, 0.0);
     std::vector<int_t> prev(mem_num, -1);
+
     // Iterate over all "mem" objects and calculate their size and update dynamic programming tables
     for (uint_t i = 0; i < mem_num; ++i) {
-        double size = mems[i].mem_length * mems[i].substrings.size();
+        const auto size = static_cast<double>(mems[i].mem_length) * mems[i].substrings.size();
         dp[i] += size;
-        for (uint_t j = i + 1; j < mem_num; j++) {
+        for (uint_t j = i + 1; j < mem_num; ++j) {
             if (mems[i].avg_pos + mems[i].mem_length < mems[j].avg_pos && dp[i] > dp[j]) {
                 dp[j] = dp[i];
-                prev[j] = i;
+                prev[j] = static_cast<int_t>(i);
             }
         }
     }
+
     // Find the index of the last "mem" object in the longest non-conflicting sequence
-    double max_size = 0;
+    double max_size = 0.0;
     int_t end_index = 0;
-    for (uint_t i = 0; i < mem_num; i++) {
+    for (uint_t i = 0; i < mem_num; ++i) {
         if (dp[i] > max_size) {
             max_size = dp[i];
-            end_index = i;
+            end_index = static_cast<int_t>(i);
         }
     }
+
     // Retrieve the indices of all non-conflicting "mem" objects in the longest sequence
     std::vector<int_t> mems_without_conflict;
     while (end_index > 0) {
         mems_without_conflict.push_back(end_index);
         end_index = prev[end_index];
     }
-    reverse(mems_without_conflict.begin(), mems_without_conflict.end());
+    std::ranges::reverse(mems_without_conflict);
+
     // Initialize a vector of vectors of pairs of integers to represent the split points for each sequence
     std::vector<std::vector<std::pair<int_t, int_t>>> split_point_on_sequence(
-        sequence_num, std::vector<std::pair<int_t, int_t>>(mems_without_conflict.size(), std::make_pair(-1, -1)));
+        sequence_num, std::vector<std::pair<int_t, int_t>>(mems_without_conflict.size(), {-1, -1}));
 
     // Loop through each non-conflicting MEM in the input
-    for (uint_t i = 0; i < mems_without_conflict.size(); i++) {
+    for (uint_t i = 0; i < mems_without_conflict.size(); ++i) {
         // Get the current MEM and its substring positions
-        mem tmp_mem = mems[mems_without_conflict[i]];
+        const auto &tmp_mem = mems[mems_without_conflict[i]];
         // Loop through each substring of the current MEM
-        for (uint_t j = 0; j < tmp_mem.substrings.size(); j++) {
+        for (const auto &sub : tmp_mem.substrings) {
             // Create a pair of the substring position and the length of the MEM
-            std::pair<int_t, int_t> p(tmp_mem.substrings[j].position, tmp_mem.mem_length);
+            std::pair<int_t, int_t> p{sub.position, tmp_mem.mem_length};
             // If this split point is already set for this sequence and it is farther from the average position,
             // skip this split point and move to the next one
-            if (split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i].first != -1) {
-                if (abs(p.first - tmp_mem.avg_pos) >
-                    abs(split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i].first - tmp_mem.avg_pos)) {
+            auto &current = split_point_on_sequence[sub.sequence_index][i];
+            if (current.first != -1) {
+                if (std::abs(p.first - tmp_mem.avg_pos) > std::abs(current.first - tmp_mem.avg_pos)) {
                     continue;
                 }
             }
             // Set this split point for this sequence to the current substring position and MEM length
-            split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i] = p;
+            current = p;
         }
     }
 
     // Loop through each sequence in the input
-    for (uint_t i = 0; i < sequence_num; i++) {
+    for (uint_t i = 0; i < sequence_num; ++i) {
         // Initialize the index of the last split point on this sequence to 0
         int_t last_end_index = 0;
         // Loop through each pair of split points on this sequence that do not conflict
-        for (uint_t j = 1; j < mems_without_conflict.size(); j++) {
+        for (uint_t j = 1; j < mems_without_conflict.size(); ++j) {
             // Get the position and length of the current split point
-            int_t cur_pos = split_point_on_sequence[i][j].first;
-            int_t cur_len = split_point_on_sequence[i][j].second;
+            auto [cur_pos, cur_len] = split_point_on_sequence[i][j];
             // If the current split point has a negative position, skip it
-            if (cur_pos < 0) {
+            if (cur_pos < 0)
                 continue;
-            }
-            if (cur_pos >= split_point_on_sequence[i][last_end_index].first &&
-                (j == split_point_on_sequence[0].size() - 1 || cur_pos <= split_point_on_sequence[i][j + 1].first)) {
-                if (cur_pos >= split_point_on_sequence[i][last_end_index].first + split_point_on_sequence[i][last_end_index].second) {
+
+            auto [last_pos, last_len] = split_point_on_sequence[i][last_end_index];
+
+            if (cur_pos >= last_pos && (j == split_point_on_sequence[0].size() - 1 || cur_pos <= split_point_on_sequence[i][j + 1].first)) {
+
+                if (cur_pos >= last_pos + last_len) {
                     last_end_index = j;
-                }
-                // If the current split point conflicts with the last split point used,
-                // choose the split point with the shortest length and mark the other one as invalid
-                else {
-                    if (split_point_on_sequence[i][last_end_index].second > cur_len) {
-                        split_point_on_sequence[i][j].first = -1;
-                        split_point_on_sequence[i][j].second = -1;
+                } else {
+                    // If the current split point conflicts with the last split point used,
+                    // choose the split point with the shortest length and mark the other one as invalid
+                    if (last_len > cur_len) {
+                        split_point_on_sequence[i][j] = {-1, -1};
                     } else {
-                        split_point_on_sequence[i][last_end_index].first = -1;
-                        split_point_on_sequence[i][last_end_index].second = -1;
+                        split_point_on_sequence[i][last_end_index] = {-1, -1};
                         last_end_index = j;
                     }
                 }
             } else {
-                split_point_on_sequence[i][j].first = -1;
-                split_point_on_sequence[i][j].second = -1;
+                split_point_on_sequence[i][j] = {-1, -1};
             }
-            // If the current split point is after the last split point that was used,
-            // update the index of the last split point used to the current index
         }
     }
     // remove column that too much -1
     std::vector<int_t> selected_cols;
-    for (uint_t j = 0; j < split_point_on_sequence[0].size(); j++) {
-        int_t count = 0;
-        for (uint_t i = 0; i < split_point_on_sequence.size(); i++) {
-            if (split_point_on_sequence[i][j].first == -1) {
-                count++;
-            }
-        }
-        if (count <= floor(sequence_num * (1 - global_args.min_seq_coverage))) {
-            selected_cols.push_back(j);
+    for (uint_t j = 0; j < split_point_on_sequence[0].size(); ++j) {
+        int_t count = std::ranges::count_if(split_point_on_sequence, [j](auto const &row) { return row[j].first == -1; });
+        if (count <= std::floor(sequence_num * (1 - global_args.min_seq_coverage))) {
+            selected_cols.push_back(static_cast<int_t>(j));
         }
     }
+
+    // build final chain
     std::vector<std::vector<std::pair<int_t, int_t>>> chain(sequence_num);
-    for (uint_t i = 0; i < selected_cols.size(); i++) {
-        for (uint_t j = 0; j < split_point_on_sequence.size(); j++) {
-            chain[j].push_back(split_point_on_sequence[j][selected_cols[i]]);
+    for (auto col : selected_cols) {
+        for (uint_t j = 0; j < split_point_on_sequence.size(); ++j) {
+            chain[j].push_back(split_point_on_sequence[j][col]);
         }
     }
+
     return chain;
 }
 
