@@ -187,9 +187,6 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 
     pool.shutdown();
 
-    // Remove temporary files created during parallel execution
-    delete_tmp_folder(parallel_num, fallback_needed);
-
     // Calculate the time taken for parallel alignment and print the output
     double parallel_align_time = timer.elapsed_time();
     s.str("");
@@ -233,6 +230,46 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         print_table_divider();
     }
     return;
+}
+
+std::vector<std::string> process_large_interval_with_spoa_windows(const std::vector<std::string> &sequences, size_t window_size = 10000,
+                                                                  size_t overlap = 200) {
+    if (sequences.empty())
+        return {};
+
+    size_t total_len = 0;
+    for (auto &s : sequences)
+        total_len += s.size();
+    if (total_len <= window_size) {
+        return spoa_align(sequences);
+    }
+
+    // break into windows (accumulate seq lengths)
+    std::vector<std::vector<std::string>> windows;
+    size_t acc = 0;
+    windows.emplace_back();
+    for (auto &s : sequences) {
+        if (acc + s.size() > window_size && !windows.back().empty()) {
+            windows.emplace_back();
+            acc = 0;
+        }
+        windows.back().push_back(s);
+        acc += s.size();
+    }
+
+    // align each window and merge
+    std::vector<std::string> merged;
+    for (size_t w = 0; w < windows.size(); ++w) {
+        auto aligned = spoa_align(windows[w]);
+        if (merged.empty()) {
+            merged = std::move(aligned);
+        } else {
+            for (size_t i = 0; i < merged.size(); ++i) {
+                merged[i] += aligned[i].substr(overlap);
+            }
+        }
+    }
+    return merged;
 }
 
 /**
@@ -851,195 +888,34 @@ void *parallel_align(void *arg) {
     // Use references to avoid copying the vectors.
     const std::vector<std::string> &data = *(ptr->data);
     const std::vector<std::pair<int_t, int_t>> &parallel_range = *(ptr->parallel_range);
-    const uint_t task_index = ptr->task_index;
     const uint_t seq_num = data.size();
 
-    // Construct the file name.
-    std::string file_name = TMP_FOLDER + "task-" + std::to_string(task_index) + "_" + random_file_end + ".fasta";
-
-    // Open the output file.
-    std::ofstream file(file_name);
-    if (!file.is_open()) {
-        std::cerr << file_name << " failed to open!" << std::endl;
-        exit(1);
-    }
-
-    // Reserve space in the vector to avoid reallocations.
-    std::vector<uint_t> aligned_seq_index;
-    aligned_seq_index.reserve(seq_num);
-
-    // Write directly to the file.
+    // extract fragments
+    std::vector<std::string> fragments(seq_num);
     for (uint_t i = 0; i < seq_num; i++) {
-        // Check if the sequence should be aligned.
-        if (parallel_range[i].first >= 0) {
-            // Extract the desired substring from the sequence.
-            std::string seq_content = data[i].substr(parallel_range[i].first, parallel_range[i].second);
-            // Write the header and sequence directly to the file.
-            file << ">SEQUENCE" << i << "\n" << seq_content << "\n";
-            aligned_seq_index.push_back(i);
+        if (parallel_range[i].first >= 0 && parallel_range[i].second > 0) {
+            fragments[i] = data[i].substr(parallel_range[i].first, parallel_range[i].second);
+        } else {
+            fragments[i] = "";
         }
     }
-    file.close();
 
-    // Call the align_fasta function to align the sequences in the file.
-    std::string res_file_name = align_fasta(file_name);
-
-    // Read the alignment results.
-    std::vector<std::string> aligned_seq;
-    std::vector<std::string> aligned_name;
-    read_data(res_file_name.c_str(), aligned_seq, aligned_name, false);
-
-    // Map the aligned sequences back to their original indices.
-    std::vector<std::string> final_aligned_seq(seq_num, "");
-    for (size_t i = 0; i < aligned_seq_index.size(); i++) {
-        final_aligned_seq[aligned_seq_index[i]] = std::move(aligned_seq[i]);
+    // decide alignment strategy
+    size_t total_len = 0;
+    for (auto &f : fragments)
+        total_len += f.size();
+    std::vector<std::string> aligned;
+    if (total_len > 15000) {
+        aligned = process_large_interval_with_spoa_windows(fragments, 10000, 200);
+    } else {
+        aligned = spoa_align(fragments);
     }
+
     // Store the final aligned sequences with move semantics to avoid unnecessary copies.
+    std::vector<std::string> final_aligned_seq(seq_num, "");
     *(ptr->result_store) = std::move(final_aligned_seq);
 
     return NULL;
-}
-
-/**
- * @brief Align sequences in a FASTA file using either halign or mafft package.
- * @param file_name The name of the FASTA file to align.
- * @return The name of the resulting aligned FASTA file.
- */
-std::string align_fasta(const std::string &file_name) {
-
-    std::ifstream file(file_name, std::ios::binary | std::ios::ate);
-    int_t size = file.tellg() / (1024 * 1024);
-    file.close();
-    int_t t_int = 1;
-    if (ceil(size / global_args.avg_file_size) + 1 < global_args.thread) {
-        t_int = (int_t)(ceil(size / global_args.avg_file_size) + 1);
-    } else {
-        t_int = global_args.thread;
-    }
-    std::string t = std::to_string(t_int);
-    // std::cout << size << " "<< global_args.avg_file_size <<" " << t <<std::endl;
-    // Construct command string based on selected alignment package and operating system
-    std::string cmnd = "";
-    std::string res_file_name = file_name.substr(0, file_name.find(".fasta")) + ".aligned.fasta";
-    if (global_args.package == "halign3") {
-        cmnd.append("java -jar ./ext/halign3/share/halign-stmsa.jar ")
-            .append("-t ")
-            .append(t)
-            .append(" -o ")
-            .append(res_file_name)
-            .append(" ")
-            .append(file_name);
-#if (defined(__linux__))
-        cmnd.append(" > /dev/null");
-#else
-        cmnd.append(" > NUL");
-#endif
-    } else if (global_args.package == "halign2") {
-        cmnd.append("java -jar ./ext/halign2/HAlign2.1.jar ")
-            .append("-localMSA ")
-            .append(file_name)
-            .append(" ")
-            .append(res_file_name)
-            .append(" 0");
-
-#if (defined(__linux__))
-        cmnd.append(" > /dev/null");
-#else
-        cmnd.append(" > NUL");
-#endif
-    } else if (global_args.package == "mafft") {
-
-#if (defined(__linux__))
-        cmnd.append("./ext/mafft/linux/usr/libexec/mafft/disttbfast ")
-            .append("-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C ")
-            .append(t)
-            .append(" -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -i ")
-            .append(file_name)
-            .append(" > ")
-            .append(res_file_name);
-        cmnd.append(" 2> /dev/null");
-#else
-        cmnd.append(".\\ext\\mafft\\win\\usr\\lib\\mafft\\disttbfast.exe ")
-            .append("-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C ")
-            .append(t)
-            .append(" -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -i ")
-            .append(file_name)
-            .append(" > ")
-            .append(res_file_name);
-        cmnd.append(" 2> NUL");
-#endif
-    }
-
-    try {
-        // Execute the command and check for errors
-        int res = system(cmnd.c_str());
-        if (res != 0) {
-            std::string out = "Warning: Starts calling FMAlign2x recursively to align " + file_name;
-            print_table_line(out);
-            cmnd = "";
-#if (defined(__linux__))
-            cmnd.append("./FMAlign2x ")
-                .append("-i ")
-                .append(file_name)
-                .append(" -o ")
-                .append(res_file_name)
-                .append(" -p ")
-                .append(global_args.package)
-                .append(" -t ")
-                .append(t)
-                .append(" -v 0")
-                .append(" -d ")
-                .append(std::to_string(global_args.degree + 1));
-            cmnd.append(" &> /dev/null");
-#else
-            cmnd.append("./FMAlign2x.exe ")
-                .append("-i ")
-                .append(file_name)
-                .append(" -o ")
-                .append(res_file_name)
-                .append(" -p ")
-                .append(global_args.package)
-                .append(" -t ")
-                .append(t)
-                .append(" -v 0")
-                .append(" -d ")
-                .append(std::to_string(global_args.degree + 1));
-            cmnd.append(" &> NUL");
-#endif
-            res = system(cmnd.c_str());
-            if (res != 0) {
-                throw "Fail to align in parallel!";
-            }
-        }
-    } catch (const char *e) { // Catch any bad allocations and print an error message.
-        std::cerr << "Error: " << e << std::endl;
-        exit(1);
-    }
-
-    return res_file_name;
-}
-
-/**
- * @brief Deletes temporary files generated during sequence alignment tasks.
- * @param task_count The number of tasks for which temporary files were created.
- * @param fallback_needed A boolean value that identifies if the file needs to be deleted
- */
-void delete_tmp_folder(uint_t task_count, const std::vector<bool> &fallback_needed) {
-    for (uint_t i = 0; i < task_count; i++) {
-        if (!fallback_needed[i])
-            continue; // just del if the file was created
-
-        std::string file_name = TMP_FOLDER + "task-" + std::to_string(i) + "_" + random_file_end + ".fasta";
-        std::string res_file_name = TMP_FOLDER + "task-" + std::to_string(i) + "_" + random_file_end + ".aligned.fasta";
-
-        if (std::remove(file_name.c_str()) != 0) {
-            std::cerr << "Error deleting file " << file_name << std::endl;
-        }
-
-        if (std::remove(res_file_name.c_str()) != 0) {
-            std::cerr << "Error deleting file " << res_file_name << std::endl;
-        }
-    }
 }
 
 /**
