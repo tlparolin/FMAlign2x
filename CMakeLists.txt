@@ -73,6 +73,27 @@ CPMAddPackage(
     "SPOA_OPTIMIZE_FOR_NATIVE ON"
 )
 
+# WFA2 Config
+CPMAddPackage(
+  NAME wfa2
+  GITHUB_REPOSITORY smarco/WFA2-lib
+  GIT_TAG v2.3.5
+  OPTIONS
+    "OPENMP TRUE"
+    #"EXTRA_FLAGS -ftree-vectorizer-verbose=5"
+)
+
+if(wfa2_ADDED)
+    # INTERFACE to simplify include/link
+    add_library(wfa2lib INTERFACE)
+    target_include_directories(wfa2lib INTERFACE ${wfa2_SOURCE_DIR}/bindings/cpp)
+    # Dependendo da versão, os alvos são wfa2cpp ou wfa2
+    target_link_libraries(wfa2lib INTERFACE wfa2cpp)
+endif()
+
+find_package(OpenMP REQUIRED)
+
+
 # MAFFT Directories
 set(MAFFT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/ext/mafft/mafft-7.526)
 set(MAFFT_BINARIES ${CMAKE_SOURCE_DIR}/ext/mafft/linux/usr)
@@ -96,10 +117,13 @@ add_custom_command(
 add_custom_target(mafft DEPENDS ${MAFFT_BIN_CHECK})
 
 add_executable(FMAlign2x ${SOURCES})
-target_link_libraries(FMAlign2x libsais spoa)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(FMAlign2x PRIVATE OpenMP::OpenMP_CXX)
+endif()
+target_link_libraries(FMAlign2x PRIVATE libsais spoa wfa2lib)
 
 # FMAlign2 depends on mafft
-add_dependencies(FMAlign2x mafft spoa)
+add_dependencies(FMAlign2x mafft spoa wfa2)
 
 # Clean Rules
 add_custom_target(clean-all
