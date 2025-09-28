@@ -235,6 +235,192 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     return;
 }
 
+// parse SAM-style CIGAR (e.g. "10M2I4M")
+std::vector<std::pair<int, char>> parse_sam_cigar(const std::string &cigar) {
+    std::vector<std::pair<int, char>> ops;
+    int num = 0;
+    for (unsigned char c : cigar) {
+        if (std::isdigit(c)) {
+            num = num * 10 + (c - '0');
+        } else {
+            ops.emplace_back(num, (char)c);
+            num = 0;
+        }
+    }
+    return ops;
+}
+
+// apply parsed SAM CIGAR to produce two aligned strings (ref, qry)
+std::pair<std::string, std::string> apply_cigar_to_seqs(const std::string &cigar, const std::string &ref_seq, const std::string &qry_seq) {
+
+    auto ops = parse_sam_cigar(cigar);
+    std::string a_ref;
+    a_ref.reserve(ref_seq.size() + qry_seq.size());
+    std::string a_qry;
+    a_qry.reserve(ref_seq.size() + qry_seq.size());
+    size_t i_ref = 0, i_qry = 0;
+
+    for (auto &p : ops) {
+        int cnt = p.first;
+        char op = p.second;
+        if (op == 'M' || op == '=' || op == 'X') {
+            for (int k = 0; k < cnt; ++k) {
+                if (i_ref >= ref_seq.size() || i_qry >= qry_seq.size())
+                    break;
+                a_ref.push_back(ref_seq[i_ref++]);
+                a_qry.push_back(qry_seq[i_qry++]);
+            }
+        } else if (op == 'I') {
+            // insertion wrt reference => gaps in ref
+            for (int k = 0; k < cnt; ++k) {
+                if (i_qry >= qry_seq.size())
+                    break;
+                a_ref.push_back('-');
+                a_qry.push_back(qry_seq[i_qry++]);
+            }
+        } else if (op == 'D' || op == 'N') {
+            // deletion wrt reference => gaps in qry
+            for (int k = 0; k < cnt; ++k) {
+                if (i_ref >= ref_seq.size())
+                    break;
+                a_ref.push_back(ref_seq[i_ref++]);
+                a_qry.push_back('-');
+            }
+        } else {
+            // ignore/defensive: treat as match
+            for (int k = 0; k < cnt; ++k) {
+                if (i_ref >= ref_seq.size() || i_qry >= qry_seq.size())
+                    break;
+                a_ref.push_back(ref_seq[i_ref++]);
+                a_qry.push_back(qry_seq[i_qry++]);
+            }
+        }
+    }
+    return {a_ref, a_qry};
+}
+
+// wrapper: run pairwise WFA and return SAM CIGAR string
+std::string wfa_pairwise_cigar(const std::string &pattern, const std::string &text, int mismatch, int gap_open, int gap_extend) {
+    using namespace wfa; // WFAlignerGapAffine in namespace wfa
+    // create an aligner with chosen penalties and default memory mode
+    WFAlignerGapAffine aligner(mismatch, gap_open, gap_extend, WFAligner::Alignment, WFAligner::MemoryHigh);
+    // align end-to-end (pattern = reference, text = query)
+    aligner.alignEnd2End(pattern.c_str(), pattern.size(), text.c_str(), text.size());
+    // get SAM CIGAR (string). pass false to avoid verbose header
+    return aligner.getCIGAR(false);
+}
+
+// center-star progressive MSA using WFA pairwise alignments
+std::vector<std::string> wfa_msa_center_star(const std::vector<std::string> &sequences) {
+    if (sequences.empty())
+        return {};
+    size_t n = sequences.size();
+    if (n == 1)
+        return sequences;
+
+    // choose center = longest sequence (simple heuristic)
+    size_t center_idx = 0;
+    for (size_t i = 1; i < n; ++i)
+        if (sequences[i].size() > sequences[center_idx].size())
+            center_idx = i;
+
+    // msa_rows holds current aligned rows (may contain gaps)
+    std::vector<std::string> msa_rows(n, "");
+    msa_rows[center_idx] = sequences[center_idx];
+
+    // align each other sequence to the (progressive) center
+    for (size_t idx = 0; idx < n; ++idx) {
+        if (idx == center_idx)
+            continue;
+
+        // get ungapped version of current center (remove '-' from msa_rows[center_idx])
+        std::string ungapped_center;
+        ungapped_center.reserve(msa_rows[center_idx].size());
+        for (char c : msa_rows[center_idx])
+            if (c != '-')
+                ungapped_center.push_back(c);
+
+        // pairwise WFA: ungapped_center vs sequences[idx]
+        std::string cigar = wfa_pairwise_cigar(ungapped_center, sequences[idx]);
+        auto aligned_pair = apply_cigar_to_seqs(cigar, ungapped_center, sequences[idx]);
+        std::string new_master = aligned_pair.first;   // may contain '-'
+        std::string aligned_qry = aligned_pair.second; // aligned version of sequences[idx]
+
+        // Now we must integrate new_master into the existing msa_rows (propagate gaps)
+        // We'll iterate new_master and update every existing row by inserting gaps where new_master has '-'
+        std::string &old_master = msa_rows[center_idx]; // existing (may have gaps)
+        size_t p = 0;                                   // position in the (mutating) old_master
+
+        // Reconstrói todas as linhas alinhadas de acordo com new_master
+        std::vector<std::string> new_rows(n);
+
+        for (size_t i = 0; i < new_master.size(); ++i) {
+            char c = new_master[i];
+            if (c == '-') {
+                // insere gap em todas as linhas
+                for (size_t r = 0; r < n; ++r) {
+                    new_rows[r].push_back('-');
+                }
+            } else {
+                // avança p até achar posição não-gap em old_master
+                while (p < old_master.size() && old_master[p] == '-') {
+                    ++p;
+                }
+
+                // se p está além do tamanho do old_master, pad com gap
+                if (p >= old_master.size()) {
+                    for (size_t r = 0; r < n; ++r) {
+                        new_rows[r].push_back('-');
+                    }
+                } else {
+                    // copia caractere real da linha antiga
+                    for (size_t r = 0; r < n; ++r) {
+                        if (p < msa_rows[r].size())
+                            new_rows[r].push_back(msa_rows[r][p]);
+                        else
+                            new_rows[r].push_back('-'); // se a linha acabou, completa com gap
+                    }
+                }
+                ++p;
+            }
+        }
+
+        // troca as linhas antigas pelas novas
+        msa_rows.swap(new_rows);
+
+        // after insertion the center length should equal new_master.size()
+        // set center row to new_master (it already has '-' positions consistent with inserted gaps)
+        msa_rows[center_idx] = new_master;
+
+        // set aligned query row
+        msa_rows[idx] = aligned_qry;
+
+        // pad any existing rows to match new length (defensive)
+        size_t L = msa_rows[center_idx].size();
+        for (size_t r = 0; r < n; ++r) {
+            if (!msa_rows[r].empty() && msa_rows[r].size() < L)
+                msa_rows[r].append(L - msa_rows[r].size(), '-');
+        }
+    }
+
+    // For any rows still empty (shouldn't happen), put original seq and pad
+    size_t final_len = msa_rows[center_idx].size();
+    std::vector<std::string> out(n);
+    for (size_t i = 0; i < n; ++i) {
+        if (!msa_rows[i].empty())
+            out[i] = msa_rows[i];
+        else {
+            out[i] = sequences[i];
+            if (out[i].size() < final_len)
+                out[i].append(final_len - out[i].size(), '-');
+        }
+    }
+    return out;
+}
+
+// Provide the old name as an alias so existing calls don't break
+inline std::vector<std::string> spoa_align(const std::vector<std::string> &seqs) { return wfa_msa_center_star(seqs); }
+
 /**
  * @brief Executes a SPOA (Simd Partial Order Alignment) task on a set of DNA sequence fragments.
  * This function is designed to be run as a thread. It extracts subsequences from the input data
@@ -387,44 +573,44 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
  * alternative to full external aligners (e.g., MAFFT, HAlign) in internal blocks of ultralong sequences.
  * @see https://github.com/rvaser/spoa for more details on the SPOA library.
  */
-std::vector<std::string> spoa_align(const std::vector<std::string> &sequences) {
-    if (sequences.empty())
-        return {};
+// std::vector<std::string> spoa_align(const std::vector<std::string> &sequences) {
+//     if (sequences.empty())
+//         return {};
 
-    // Create the SPOA alignment engine with linear gap penalties
-    // Note: Each thread creates its own engine instance for thread safety
-    auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8);
+//     // Create the SPOA alignment engine with linear gap penalties
+//     // Note: Each thread creates its own engine instance for thread safety
+//     auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8);
 
-    spoa::Graph graph{};
+//     spoa::Graph graph{};
 
-    // maps indices of non-empty sequences
-    std::vector<size_t> map_idx;
-    map_idx.reserve(sequences.size());
-    for (size_t i = 0; i < sequences.size(); ++i) {
-        const auto &seq = sequences[i];
-        if (seq.empty())
-            continue;
-        auto aln = alignment_engine->Align(seq, graph);
-        graph.AddAlignment(aln, seq);
-        map_idx.push_back(i);
-    }
+//     // maps indices of non-empty sequences
+//     std::vector<size_t> map_idx;
+//     map_idx.reserve(sequences.size());
+//     for (size_t i = 0; i < sequences.size(); ++i) {
+//         const auto &seq = sequences[i];
+//         if (seq.empty())
+//             continue;
+//         auto aln = alignment_engine->Align(seq, graph);
+//         graph.AddAlignment(aln, seq);
+//         map_idx.push_back(i);
+//     }
 
-    // If all are empty: return N empty strings
-    if (map_idx.empty()) {
-        return std::vector<std::string>(sequences.size(), std::string{});
-    }
+//     // If all are empty: return N empty strings
+//     if (map_idx.empty()) {
+//         return std::vector<std::string>(sequences.size(), std::string{});
+//     }
 
-    // Generates MSA only from non-empty ones
-    auto msa_compact = graph.GenerateMultipleSequenceAlignment();
-    const size_t aln_len = msa_compact.empty() ? 0 : msa_compact.front().size();
+//     // Generates MSA only from non-empty ones
+//     auto msa_compact = graph.GenerateMultipleSequenceAlignment();
+//     const size_t aln_len = msa_compact.empty() ? 0 : msa_compact.front().size();
 
-    // Rebuilds to original size: empty spaces become just gaps
-    std::vector<std::string> msa(sequences.size(), std::string(aln_len, '-'));
-    for (size_t k = 0; k < msa_compact.size(); ++k) {
-        msa[map_idx[k]] = std::move(msa_compact[k]);
-    }
-    return msa;
-}
+//     // Rebuilds to original size: empty spaces become just gaps
+//     std::vector<std::string> msa(sequences.size(), std::string(aln_len, '-'));
+//     for (size_t k = 0; k < msa_compact.size(); ++k) {
+//         msa[map_idx[k]] = std::move(msa_compact[k]);
+//     }
+//     return msa;
+// }
 
 /**
  * @brief Get a vector of integers that are not in the selected_cols vector and have a maximum value of n.

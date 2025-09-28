@@ -28,21 +28,26 @@
 
 #include "../ext/SW/ssw.h"
 #include "../ext/SW/ssw_cpp.h"
+#include "bindings/cpp/WFAligner.hpp" // WFA2 C++ bindings (repo oficial)
 #include "common.h"
 #include "utils.h"
 #include <algorithm>
+#include <cctype>
+#include <climits>
+#include <random>
 #include <spoa/spoa.hpp>
 #include <sstream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <tuple>
+#include <utility>
+#include <vector>
 #ifdef __linux__
 #include <sys/stat.h>
 #else
 #include <direct.h>
 #endif
-#include <climits>
-#include <random>
-#include <string_view>
-#include <tuple>
-#include <utility>
 
 const std::string TMP_FOLDER = "./temp/";
 
@@ -68,6 +73,12 @@ struct SpoaTaskParams {
     uint_t seq_num;
     std::vector<std::string> *result_store;
 };
+
+std::vector<std::pair<int, char>> parse_sam_cigar(const std::string &cigar);
+std::pair<std::string, std::string> apply_cigar_to_seqs(const std::string &cigar, const std::string &ref_seq, const std::string &qry_seq);
+std::string wfa_pairwise_cigar(const std::string &pattern, const std::string &text, int mismatch = 4, int gap_open = 12,
+                               int gap_extend = 2);
+std::vector<std::string> wfa_msa_center_star(const std::vector<std::string> &sequences);
 
 /**
  * @brief Generates a random string of the specified length.
