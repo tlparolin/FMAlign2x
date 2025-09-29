@@ -76,8 +76,7 @@ struct SpoaTaskParams {
 
 std::vector<std::pair<int, char>> parse_sam_cigar(const std::string &cigar);
 std::pair<std::string, std::string> apply_cigar_to_seqs(const std::string &cigar, const std::string &ref_seq, const std::string &qry_seq);
-std::string wfa_pairwise_cigar(const std::string &pattern, const std::string &text, int mismatch = 4, int gap_open = 12,
-                               int gap_extend = 2);
+std::string wfa_pairwise_cigar(const std::string &pattern, const std::string &text, int mismatch = 4, int gap_open = 6, int gap_extend = 2);
 std::vector<std::string> wfa_msa_center_star(const std::vector<std::string> &sequences);
 
 /**

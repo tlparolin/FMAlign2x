@@ -80,7 +80,6 @@ std::string generateRandomString(int length) {
  * @return void
  */
 std::string random_file_end;
-
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name,
                               std::vector<std::vector<std::pair<int_t, int_t>>> chain) {
     // Print status header
