@@ -83,154 +83,192 @@ std::string random_file_end;
 
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name,
                               std::vector<std::vector<std::pair<int_t, int_t>>> chain) {
-    // Print status message
+    // Print status header
     if (global_args.verbose) {
         std::cout << "#                Parallel Aligning...                       #" << std::endl;
         print_table_divider();
     }
 
-    random_file_end = generateRandomString(10);
     std::string output = "";
     Timer timer;
-    uint_t chain_num = chain[0].size();
-    uint_t seq_num = data.size();
-    std::vector<std::vector<std::string>> chain_string(chain_num); // chain_num * seq_num
 
-    // Initialize ExpandChainParams structure for each chain pair
+    // basic sizes
+    uint_t chain_num = 0;
+    if (!chain.empty())
+        chain_num = chain[0].size();
+    uint_t seq_num = data.size();
+
+    // Expand chains first (same as before)
+    std::vector<std::vector<std::string>> chain_string(chain_num); // chain_num * seq_num
     std::vector<ExpandChainParams> params(chain_num);
-    for (uint_t i = 0; i < chain_num; i++) {
+    for (uint_t i = 0; i < chain_num; ++i) {
         params[i].data = &data;
         params[i].chain = &chain;
         params[i].chain_index = i;
         params[i].result_store = chain_string.begin() + i;
     }
 
-    // Expand each chain pair and store the resulting aligned sequences
     if (global_args.min_seq_coverage == 1) {
         ThreadPool pool(global_args.thread);
-        for (uint_t i = 0; i < chain_num; i++) {
+        for (uint_t i = 0; i < chain_num; ++i) {
             pool.add_task([&, i]() { expand_chain(&params[i]); });
         }
         pool.shutdown();
     } else {
-        for (uint_t i = 0; i < chain_num; i++) {
+        for (uint_t i = 0; i < chain_num; ++i) {
             expand_chain(&params[i]);
         }
     }
-
     params.clear();
 
-    // Calculate SW expand time and print status message
+    // SW expand timing
     double SW_time = timer.elapsed_time();
-    std::stringstream s;
-    s << std::fixed << std::setprecision(2) << SW_time;
-    if (global_args.verbose) {
-        output = "SW expand time: " + s.str() + " seconds.";
-        print_table_line(output);
-    }
-
-    timer.reset();
-
-    // Create temporary file folder (if it doesn't already exist)
-    if (0 != access(TMP_FOLDER.c_str(), 0)) {
-#ifdef __linux__
-        if (0 != mkdir(TMP_FOLDER.c_str(), 0755)) {
-            std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
-        }
-#else
-        if (0 != mkdir(TMP_FOLDER.c_str())) {
-            std::cerr << "Fail to create file folder " << TMP_FOLDER << std::endl;
-        }
-#endif
-    }
-    // Calculate parallel alignment ranges and perform parallel alignment for each range
-    std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range = get_parallel_align_range(data, chain);
-
-    // Try to solve block in memory if choosed by user (-x option)
-    std::vector<std::vector<std::string>> fast_parallel_string(parallel_align_range.size());
-    std::vector<bool> fallback_needed(parallel_align_range.size(), true);
-
-    if (global_args.extended) {
-        std::tie(fast_parallel_string, fallback_needed) = preprocess_parallel_blocks(data, parallel_align_range);
-
-        // Calculate the time taken for in memory parallel alignment and print the output
-        double parallel_memory_align_time = timer.elapsed_time();
-        s.str("");
-        s << std::fixed << std::setprecision(2) << parallel_memory_align_time;
+    {
+        std::stringstream s;
+        s << std::fixed << std::setprecision(2) << SW_time;
         if (global_args.verbose) {
-            output = "In memory align time: " + s.str() + " seconds.";
+            output = "SW expand time: " + s.str() + " seconds.";
             print_table_line(output);
         }
-
-        timer.reset();
-    }
-
-    uint_t parallel_num = parallel_align_range.size();
-    std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
-    std::vector<ParallelAlignParams> parallel_params(parallel_num);
-
-    // Initialize a thread pool and add tasks to it for parallel execution
-    ThreadPool pool(global_args.thread);
-
-    for (uint_t i = 0; i < parallel_num; i++) {
-        if (!fallback_needed[i])
-            continue;
-
-        parallel_params[i].data = &data;
-        parallel_params[i].parallel_range = parallel_align_range.begin() + i;
-        parallel_params[i].task_index = i;
-        parallel_params[i].result_store = parallel_string.begin() + i;
-        parallel_params[i].fallback_needed = &fallback_needed;
-
-        pool.add_task([&, i]() { parallel_align(&parallel_params[i]); });
-    }
-
-    pool.shutdown();
-
-    // Remove temporary files created during parallel execution
-    delete_tmp_folder(parallel_num, fallback_needed);
-
-    // Calculate the time taken for parallel alignment and print the output
-    double parallel_align_time = timer.elapsed_time();
-    s.str("");
-    s << std::fixed << std::setprecision(2) << parallel_align_time;
-    if (global_args.verbose) {
-        output = "MSA Tool align time: " + s.str() + " seconds.";
-        print_table_line(output);
     }
 
     timer.reset();
-    // Concatenate the chains and parallel ranges
+
+    // Calculate parallel alignment ranges and perform parallel alignment for each range
+    std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range = get_parallel_align_range(data, chain);
+    uint_t parallel_num = parallel_align_range.size();
+
+    // We'll produce for each parallel block an MSA built by WFA (center-star)
+    std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
+
+    // Thread pool to run WFA-based MSA for each parallel block
+    {
+        ThreadPool pool(global_args.thread);
+
+        for (uint_t i = 0; i < parallel_num; ++i) {
+            // capture necessary items by value for thread-safety
+            auto range = parallel_align_range[i];
+            pool.add_task([i, range, &data, &parallel_string]() {
+                try {
+                    uint_t seq_num_local = data.size();
+                    // Build block fragments for each sequence (preserve ordering)
+                    std::vector<std::string> block_seqs(seq_num_local);
+                    for (uint_t s = 0; s < seq_num_local; ++s) {
+                        if (s < range.size()) {
+                            auto [start, len] = range[s];
+                            if (len > 0 && start >= 0) {
+                                const std::string &full = data[s];
+                                size_t st = static_cast<size_t>(std::max<int_t>(0, (int_t)start));
+                                size_t take = std::min<size_t>((size_t)len, (st < full.size() ? full.size() - st : 0));
+                                if (take > 0 && st < full.size())
+                                    block_seqs[s] = full.substr(st, take);
+                                else
+                                    block_seqs[s] = "";
+                            } else {
+                                block_seqs[s] = "";
+                            }
+                        } else {
+                            // if the range vector is shorter than seq_num, fill with empty
+                            block_seqs[s] = "";
+                        }
+                    }
+
+                    // Call WFA-based MSA (center-star).
+                    std::vector<std::string> msa_block = wfa_msa_center_star(block_seqs);
+
+                    // Normalize result: ensure size == seq_num_local
+                    if (msa_block.size() != seq_num_local) {
+                        // If returned smaller, create vector with gaps and copy what exists
+                        size_t final_len = 0;
+                        for (const auto &r : msa_block)
+                            final_len = std::max(final_len, r.size());
+                        if (final_len == 0 && !msa_block.empty())
+                            final_len = msa_block[0].size();
+                        if (final_len == 0)
+                            final_len = 1; // fallback safety
+
+                        std::vector<std::string> normalized(seq_num_local, std::string(final_len, '-'));
+                        for (size_t k = 0; k < msa_block.size() && k < seq_num_local; ++k)
+                            normalized[k] = msa_block[k];
+
+                        msa_block.swap(normalized);
+                    } else {
+                        // ensure all rows have same length; if not, pad with gaps
+                        size_t L = 0;
+                        for (auto &r : msa_block)
+                            L = std::max(L, r.size());
+                        for (auto &r : msa_block)
+                            if (r.size() < L)
+                                r.append(L - r.size(), '-');
+                    }
+
+                    // store move-constructed result
+                    parallel_string[i] = std::move(msa_block);
+                } catch (const std::exception &e) {
+                    // on error, produce an all-gap block so pipeline can continue
+                    size_t safe_len = 1;
+                    std::vector<std::string> fallback(data.size(), std::string(safe_len, '-'));
+                    parallel_string[i] = std::move(fallback);
+                }
+            });
+        }
+
+        pool.shutdown();
+    }
+
+    // No temporary files to delete (we removed preprocess/fallback temp logic)
+
+    // Parallel align timing
+    double parallel_align_time = timer.elapsed_time();
+    {
+        std::stringstream s;
+        s << std::fixed << std::setprecision(2) << parallel_align_time;
+        if (global_args.verbose) {
+            output = "MSA Tool align time: " + s.str() + " seconds.";
+            print_table_line(output);
+        }
+    }
+
+    timer.reset();
+
+    // Concatenate ranges: same as before
     std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
 
+    // Normalize each parallel_string[i] to seq_num (filling missing with gaps)
     for (uint_t i = 0; i < parallel_num; ++i) {
-        if (!fallback_needed[i]) {
-            parallel_string[i] = std::move(fast_parallel_string[i]);
-        }
         if (parallel_string[i].size() != seq_num) {
-            // normalize: fill missing lines with block-length gaps
+            // determine max length in this block and resize/pad
             size_t L = 0;
             for (auto &s : parallel_string[i])
                 L = std::max(L, s.size());
+            if (L == 0)
+                L = 1; // safety
             parallel_string[i].resize(seq_num, std::string(L, '-'));
+            for (auto &s : parallel_string[i])
+                if (s.size() < L)
+                    s.append(L - s.size(), '-');
         }
     }
 
-    // Concatenate the chain strings and parallel strings
+    // Concatenate chain strings (from expand_chain) and parallel strings (from WFA)
     std::vector<std::vector<std::string>> concat_string = concat_chain_and_parallel(chain_string, parallel_string);
     std::vector<uint_t> fragment_len = get_first_nonzero_lengths(concat_string);
 
+    // seq2profile and concat alignment (same as before)
     seq2profile(concat_string, data, concat_range, fragment_len);
     double seq2profile_time = timer.elapsed_time();
 
     concat_alignment(concat_string, name);
 
-    s.str("");
-    s << std::fixed << std::setprecision(2) << seq2profile_time;
-    if (global_args.verbose) {
-        output = "Seq-profile time: " + s.str() + " seconds.";
-        print_table_line(output);
-        print_table_divider();
+    // final timings and prints
+    {
+        std::stringstream s;
+        s << std::fixed << std::setprecision(2) << seq2profile_time;
+        if (global_args.verbose) {
+            output = "Seq-profile time: " + s.str() + " seconds.";
+            print_table_line(output);
+            print_table_divider();
+        }
     }
     return;
 }
@@ -417,200 +455,6 @@ std::vector<std::string> wfa_msa_center_star(const std::vector<std::string> &seq
     }
     return out;
 }
-
-// Provide the old name as an alias so existing calls don't break
-inline std::vector<std::string> spoa_align(const std::vector<std::string> &seqs) { return wfa_msa_center_star(seqs); }
-
-/**
- * @brief Executes a SPOA (Simd Partial Order Alignment) task on a set of DNA sequence fragments.
- * This function is designed to be run as a thread. It extracts subsequences from the input data
- * based on the provided ranges, constructs a vector of fragments, and performs multiple sequence
- * alignment using the SPOA algorithm. The result is stored in the location pointed to by
- * `params->result_store`.
- * @param arg A pointer to a `SpoaTaskParams` structure containing:
- *  - the number of sequences (`seq_num`),
- *  - the input data (`data`),
- *  - the ranges to extract from each sequence (`range`),
- *  - and a pointer to where the alignment result should be stored (`result_store`).
- * @return Always returns `nullptr`. The result of the alignment is stored via the pointer in `params`.
- * @note If a sequence has an invalid range (start == -1 or length <= 0), an empty string is used.
- */
-void *spoa_task(void *arg) {
-    SpoaTaskParams *params = static_cast<SpoaTaskParams *>(arg);
-
-    std::vector<std::string> fragments(params->seq_num);
-
-    for (uint_t s = 0; s < params->seq_num; ++s) {
-        auto [start, len] = (*params->range)[s];
-        if (start != -1 && len > 0) {
-            fragments[s] = (*params->data)[s].substr(start, len);
-        } else {
-            fragments[s] = "";
-        }
-    }
-
-    *(params->result_store) = spoa_align(fragments);
-
-    return nullptr;
-}
-
-/**
- * @brief Preprocesses alignment blocks between MEMs to reduce load on external aligners.
- * This function attempts to resolve alignment blocks (typically between MEMs) in a fast and memory-efficient
- * way, before falling back to more expensive external aligners such as MAFFT or HAlign. It operates by
- * analyzing each block defined in `parallel_align_range` and choosing one of three strategies:
- * 1. **Exact Match**: If all sequences in the block are identical, simply copies the fragment.
- * 2. **SPOA Alignment**: If average fragment length is small (< 15000 bp), applies SPOA for fast in-memory MSA.
- * 3. **Fallback Flag**: For long or divergent blocks, defers to external aligners by setting a fallback flag.
- * @param data The original vector of sequences (one string per sequence).
- * @param parallel_align_range A vector of alignment ranges (start, length pairs) per sequence, per block.
- *        Each element defines the intervals to be extracted from `data` for one alignment block.
- * @return A pair:
- * - First: A 2D vector of strings containing aligned fragments (SPOA-aligned or copied directly).
- * - Second: A boolean vector where `true` indicates the block must be aligned by an external aligner.
- * @note This function assumes that `spoa_align()` is implemented and available in scope.
- *       It is intended to be used directly after `get_parallel_align_range()` in the FMAlign2 pipeline.
- */
-std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>
-preprocess_parallel_blocks(const std::vector<std::string> &data,
-                           const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range) {
-    uint_t parallel_num = parallel_align_range.size();
-    uint_t seq_num = data.size();
-
-    std::vector<std::vector<std::string>> fast_parallel_string(parallel_num, std::vector<std::string>(seq_num));
-    std::vector<bool> fallback_needed(parallel_num, false);
-
-    uint_t count_exact = 0;
-    uint_t count_spoa = 0;
-    uint_t count_fallback = 0;
-
-    // Vectors to store indexes of blocks that will use spoa for in memory alignment
-    std::vector<uint_t> spoa_indices;
-    std::vector<SpoaTaskParams> spoa_params;
-
-    // First pass: identify block types and prepare SPOA parameters
-    for (uint_t i = 0; i < parallel_num; ++i) {
-        auto &range = parallel_align_range[i];
-
-        // Collect fragments for analysis
-        std::vector<std::string> fragments(seq_num);
-        size_t total_len = 0;
-        bool all_equal = true;
-
-        for (uint_t s = 0; s < seq_num; ++s) {
-            auto [start, len] = range[s];
-            if (start != -1 && len > 0) {
-                fragments[s] = data[s].substr(start, len);
-                total_len += len;
-
-                if (s > 0 && fragments[s] != fragments[0]) {
-                    all_equal = false;
-                }
-            } else {
-                fragments[s] = "";
-            }
-        }
-
-        size_t avg_len = total_len / seq_num;
-
-        if (all_equal) {
-            // Case 1: Exact copy
-            for (uint_t s = 0; s < seq_num; ++s)
-                fast_parallel_string[i][s] = fragments[0];
-            ++count_exact;
-        } else if (avg_len < 15000) {
-            // Case 2: SPOA (will be run in parallel)
-            spoa_indices.push_back(i);
-            SpoaTaskParams params;
-            params.data = &data;
-            params.range = &parallel_align_range[i];
-            params.task_index = i;
-            params.seq_num = seq_num;
-            params.result_store = &fast_parallel_string[i];
-            spoa_params.push_back(params);
-            ++count_spoa;
-        } else {
-            // Case 3: Fallback to msa tools
-            fallback_needed[i] = true;
-            ++count_fallback;
-        }
-    }
-
-    // Run SPOA in parallel
-    if (!spoa_params.empty()) {
-        ThreadPool pool(global_args.thread);
-
-        for (size_t idx = 0; idx < spoa_params.size(); ++idx) {
-            pool.add_task([&, idx]() { spoa_task(&spoa_params[idx]); });
-        }
-
-        pool.shutdown();
-    }
-
-    if (global_args.verbose) {
-        print_table_line("Blocks resolved by copy: " + std::to_string(count_exact));
-        print_table_line("Blocks aligned in memory: " + std::to_string(count_spoa));
-        print_table_line("Blocks sent to " + global_args.package + ": " + std::to_string(count_fallback));
-    }
-
-    return {fast_parallel_string, fallback_needed};
-}
-
-/**
- * @brief Performs multiple sequence alignment using SPOA (Partial Order Alignment).
- * This function leverages the SPOA library to construct a partial order graph and
- * progressively align input sequences to it. It uses the global alignment model
- * (Needleman-Wunsch) with linear gap penalties, optimized for short to medium-length
- * sequence blocks (e.g., between MEMs). Empty sequences are ignored during the alignment process.
- * The final output is a multiple sequence alignment with gaps introduced as necessary to maintain consistency.
- * Scoring parameters used:
- * - Match: +4
- * - Mismatch: -10
- * - Gap (linear): -8
- * @param sequences A vector of input sequences to be aligned. Each sequence is a std::string.
- * @return A vector of aligned sequences (same size as input), each padded with '-' where needed.
- * @note This function is designed for fast in-memory alignment and is suitable as a lightweight
- * alternative to full external aligners (e.g., MAFFT, HAlign) in internal blocks of ultralong sequences.
- * @see https://github.com/rvaser/spoa for more details on the SPOA library.
- */
-// std::vector<std::string> spoa_align(const std::vector<std::string> &sequences) {
-//     if (sequences.empty())
-//         return {};
-
-//     // Create the SPOA alignment engine with linear gap penalties
-//     // Note: Each thread creates its own engine instance for thread safety
-//     auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8);
-
-//     spoa::Graph graph{};
-
-//     // maps indices of non-empty sequences
-//     std::vector<size_t> map_idx;
-//     map_idx.reserve(sequences.size());
-//     for (size_t i = 0; i < sequences.size(); ++i) {
-//         const auto &seq = sequences[i];
-//         if (seq.empty())
-//             continue;
-//         auto aln = alignment_engine->Align(seq, graph);
-//         graph.AddAlignment(aln, seq);
-//         map_idx.push_back(i);
-//     }
-
-//     // If all are empty: return N empty strings
-//     if (map_idx.empty()) {
-//         return std::vector<std::string>(sequences.size(), std::string{});
-//     }
-
-//     // Generates MSA only from non-empty ones
-//     auto msa_compact = graph.GenerateMultipleSequenceAlignment();
-//     const size_t aln_len = msa_compact.empty() ? 0 : msa_compact.front().size();
-
-//     // Rebuilds to original size: empty spaces become just gaps
-//     std::vector<std::string> msa(sequences.size(), std::string(aln_len, '-'));
-//     for (size_t k = 0; k < msa_compact.size(); ++k) {
-//         msa[map_idx[k]] = std::move(msa_compact[k]);
-//     }
-//     return msa;
-// }
 
 /**
  * @brief Get a vector of integers that are not in the selected_cols vector and have a maximum value of n.
@@ -1016,216 +860,6 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const
     }
 
     return transpose_res;
-}
-
-/**
- * @brief Function for parallel alignment of sequences.
- * This function aligns a subset of input sequences in parallel using multiple threads.
- * @param arg Pointer to a ParallelAlignParams struct which contains the input data, the range of sequences to align,
- * the index of the current task, and a pointer to the storage for the aligned sequences.
- * @return NULL
- */
-void *parallel_align(void *arg) {
-    // Cast input parameters to the correct struct type.
-    ParallelAlignParams *ptr = static_cast<ParallelAlignParams *>(arg);
-
-    // if not fallback_needed, the block was resolved by SPOA directly. Nothing to do.
-    if (!(*ptr->fallback_needed)[ptr->task_index]) {
-        return nullptr;
-    }
-
-    // Use references to avoid copying the vectors.
-    const std::vector<std::string> &data = *(ptr->data);
-    const std::vector<std::pair<int_t, int_t>> &parallel_range = *(ptr->parallel_range);
-    const uint_t task_index = ptr->task_index;
-    const uint_t seq_num = data.size();
-
-    // Construct the file name.
-    std::string file_name = TMP_FOLDER + "task-" + std::to_string(task_index) + "_" + random_file_end + ".fasta";
-
-    // Open the output file.
-    std::ofstream file(file_name);
-    if (!file.is_open()) {
-        std::cerr << file_name << " failed to open!" << std::endl;
-        exit(1);
-    }
-
-    // Reserve space in the vector to avoid reallocations.
-    std::vector<uint_t> aligned_seq_index;
-    aligned_seq_index.reserve(seq_num);
-
-    // Write directly to the file.
-    for (uint_t i = 0; i < seq_num; i++) {
-        // Check if the sequence should be aligned.
-        if (parallel_range[i].first >= 0) {
-            // Extract the desired substring from the sequence.
-            std::string seq_content = data[i].substr(parallel_range[i].first, parallel_range[i].second);
-            // Write the header and sequence directly to the file.
-            file << ">SEQUENCE" << i << "\n" << seq_content << "\n";
-            aligned_seq_index.push_back(i);
-        }
-    }
-    file.close();
-
-    // Call the align_fasta function to align the sequences in the file.
-    std::string res_file_name = align_fasta(file_name);
-
-    // Read the alignment results.
-    std::vector<std::string> aligned_seq;
-    std::vector<std::string> aligned_name;
-    read_data(res_file_name.c_str(), aligned_seq, aligned_name, false);
-
-    // Map the aligned sequences back to their original indices.
-    std::vector<std::string> final_aligned_seq(seq_num, "");
-    for (size_t i = 0; i < aligned_seq_index.size(); i++) {
-        final_aligned_seq[aligned_seq_index[i]] = std::move(aligned_seq[i]);
-    }
-    // Store the final aligned sequences with move semantics to avoid unnecessary copies.
-    *(ptr->result_store) = std::move(final_aligned_seq);
-
-    return NULL;
-}
-
-/**
- * @brief Align sequences in a FASTA file using either halign or mafft package.
- * @param file_name The name of the FASTA file to align.
- * @return The name of the resulting aligned FASTA file.
- */
-std::string align_fasta(const std::string &file_name) {
-
-    std::ifstream file(file_name, std::ios::binary | std::ios::ate);
-    int_t size = file.tellg() / (1024 * 1024);
-    file.close();
-    int_t t_int = 1;
-    if (ceil(size / global_args.avg_file_size) + 1 < global_args.thread) {
-        t_int = (int_t)(ceil(size / global_args.avg_file_size) + 1);
-    } else {
-        t_int = global_args.thread;
-    }
-    std::string t = std::to_string(t_int);
-    // std::cout << size << " "<< global_args.avg_file_size <<" " << t <<std::endl;
-    // Construct command string based on selected alignment package and operating system
-    std::string cmnd = "";
-    std::string res_file_name = file_name.substr(0, file_name.find(".fasta")) + ".aligned.fasta";
-    if (global_args.package == "halign3") {
-        cmnd.append("java -jar ./ext/halign3/share/halign-stmsa.jar ")
-            .append("-t ")
-            .append(t)
-            .append(" -o ")
-            .append(res_file_name)
-            .append(" ")
-            .append(file_name);
-#if (defined(__linux__))
-        cmnd.append(" > /dev/null");
-#else
-        cmnd.append(" > NUL");
-#endif
-    } else if (global_args.package == "halign2") {
-        cmnd.append("java -jar ./ext/halign2/HAlign2.1.jar ")
-            .append("-localMSA ")
-            .append(file_name)
-            .append(" ")
-            .append(res_file_name)
-            .append(" 0");
-
-#if (defined(__linux__))
-        cmnd.append(" > /dev/null");
-#else
-        cmnd.append(" > NUL");
-#endif
-    } else if (global_args.package == "mafft") {
-
-#if (defined(__linux__))
-        cmnd.append("./ext/mafft/linux/usr/libexec/mafft/disttbfast ")
-            .append("-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C ")
-            .append(t)
-            .append(" -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -i ")
-            .append(file_name)
-            .append(" > ")
-            .append(res_file_name);
-        cmnd.append(" 2> /dev/null");
-#else
-        cmnd.append(".\\ext\\mafft\\win\\usr\\lib\\mafft\\disttbfast.exe ")
-            .append("-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C ")
-            .append(t)
-            .append(" -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -i ")
-            .append(file_name)
-            .append(" > ")
-            .append(res_file_name);
-        cmnd.append(" 2> NUL");
-#endif
-    }
-
-    try {
-        // Execute the command and check for errors
-        int res = system(cmnd.c_str());
-        if (res != 0) {
-            std::string out = "Warning: Starts calling FMAlign2x recursively to align " + file_name;
-            print_table_line(out);
-            cmnd = "";
-#if (defined(__linux__))
-            cmnd.append("./FMAlign2x ")
-                .append("-i ")
-                .append(file_name)
-                .append(" -o ")
-                .append(res_file_name)
-                .append(" -p ")
-                .append(global_args.package)
-                .append(" -t ")
-                .append(t)
-                .append(" -v 0")
-                .append(" -d ")
-                .append(std::to_string(global_args.degree + 1));
-            cmnd.append(" &> /dev/null");
-#else
-            cmnd.append("./FMAlign2x.exe ")
-                .append("-i ")
-                .append(file_name)
-                .append(" -o ")
-                .append(res_file_name)
-                .append(" -p ")
-                .append(global_args.package)
-                .append(" -t ")
-                .append(t)
-                .append(" -v 0")
-                .append(" -d ")
-                .append(std::to_string(global_args.degree + 1));
-            cmnd.append(" &> NUL");
-#endif
-            res = system(cmnd.c_str());
-            if (res != 0) {
-                throw "Fail to align in parallel!";
-            }
-        }
-    } catch (const char *e) { // Catch any bad allocations and print an error message.
-        std::cerr << "Error: " << e << std::endl;
-        exit(1);
-    }
-
-    return res_file_name;
-}
-
-/**
- * @brief Deletes temporary files generated during sequence alignment tasks.
- * @param task_count The number of tasks for which temporary files were created.
- * @param fallback_needed A boolean value that identifies if the file needs to be deleted
- */
-void delete_tmp_folder(uint_t task_count, const std::vector<bool> &fallback_needed) {
-    for (uint_t i = 0; i < task_count; i++) {
-        if (!fallback_needed[i])
-            continue; // just del if the file was created
-
-        std::string file_name = TMP_FOLDER + "task-" + std::to_string(i) + "_" + random_file_end + ".fasta";
-        std::string res_file_name = TMP_FOLDER + "task-" + std::to_string(i) + "_" + random_file_end + ".aligned.fasta";
-
-        if (std::remove(file_name.c_str()) != 0) {
-            std::cerr << "Error deleting file " << file_name << std::endl;
-        }
-
-        if (std::remove(res_file_name.c_str()) != 0) {
-            std::cerr << "Error deleting file " << res_file_name << std::endl;
-        }
-    }
 }
 
 /**
