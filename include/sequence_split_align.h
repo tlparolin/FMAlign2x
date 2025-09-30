@@ -35,7 +35,6 @@
 #include <cctype>
 #include <climits>
 #include <random>
-#include <spoa/spoa.hpp>
 #include <sstream>
 #include <stdexcept>
 #include <string>
