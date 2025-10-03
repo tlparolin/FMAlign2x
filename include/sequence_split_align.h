@@ -99,8 +99,8 @@ std::string generateRandomString(int length);
  * @param chain A vector of chain pairs representing initial pairwise alignments between sequences
  * @return void
  */
-void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name,
-                              std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence);
+void split_and_parallel_align(std::vector<std::string> &data, std::vector<std::string> &name,
+                              std::vector<std::vector<std::pair<int_t, int_t>>> &chain);
 
 /**
  * @brief Preprocesses alignment blocks between MEMs to reduce load on external aligners.

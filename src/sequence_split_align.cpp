@@ -80,8 +80,8 @@ std::string generateRandomString(int length) {
  * @return void
  */
 std::string random_file_end;
-void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name,
-                              std::vector<std::vector<std::pair<int_t, int_t>>> chain) {
+void split_and_parallel_align(std::vector<std::string> &data, std::vector<std::string> &name,
+                              std::vector<std::vector<std::pair<int_t, int_t>>> &chain) {
     // Print status header
     if (global_args.verbose) {
         std::cout << "#                Parallel Aligning...                       #" << std::endl;
@@ -214,8 +214,72 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 
         pool.shutdown();
     }
+    // FOR SERIAL VERSION (debugging)
+    // for (uint_t i = 0; i < parallel_num; ++i) {
+    //     auto range = parallel_align_range[i];
 
-    // No temporary files to delete (we removed preprocess/fallback temp logic)
+    //     try {
+    //         uint_t seq_num_local = data.size();
+    //         // Build block fragments for each sequence (preserve ordering)
+    //         std::vector<std::string> block_seqs(seq_num_local);
+    //         for (uint_t s = 0; s < seq_num_local; ++s) {
+    //             if (s < range.size()) {
+    //                 auto [start, len] = range[s];
+    //                 if (len > 0 && start >= 0) {
+    //                     const std::string &full = data[s];
+    //                     size_t st = static_cast<size_t>(std::max<int_t>(0, (int_t)start));
+    //                     size_t take = std::min<size_t>((size_t)len, (st < full.size() ? full.size() - st : 0));
+    //                     if (take > 0 && st < full.size())
+    //                         block_seqs[s] = full.substr(st, take);
+    //                     else
+    //                         block_seqs[s] = "";
+    //                 } else {
+    //                     block_seqs[s] = "";
+    //                 }
+    //             } else {
+    //                 block_seqs[s] = "";
+    //             }
+    //         }
+
+    //         // Call WFA-based MSA (center-star).
+    //         std::vector<std::string> msa_block = wfa_msa_center_star(block_seqs);
+
+    //         // Normalize result: ensure size == seq_num_local
+    //         if (msa_block.size() != seq_num_local) {
+    //             // If returned smaller, create vector with gaps and copy what exists
+    //             size_t final_len = 0;
+    //             for (const auto &r : msa_block)
+    //                 final_len = std::max(final_len, r.size());
+    //             if (final_len == 0 && !msa_block.empty())
+    //                 final_len = msa_block[0].size();
+    //             if (final_len == 0)
+    //                 final_len = 1; // fallback safety
+
+    //             std::vector<std::string> normalized(seq_num_local, std::string(final_len, '-'));
+    //             for (size_t k = 0; k < msa_block.size() && k < seq_num_local; ++k)
+    //                 normalized[k] = msa_block[k];
+
+    //             msa_block.swap(normalized);
+    //         } else {
+    //             // ensure all rows have same length; if not, pad with gaps
+    //             size_t L = 0;
+    //             for (auto &r : msa_block)
+    //                 L = std::max(L, r.size());
+    //             for (auto &r : msa_block)
+    //                 if (r.size() < L)
+    //                     r.append(L - r.size(), '-');
+    //         }
+
+    //         // store move-constructed result
+    //         parallel_string[i] = std::move(msa_block);
+
+    //     } catch (const std::exception &e) {
+    //         // on error, produce an all-gap block so pipeline can continue
+    //         size_t safe_len = 1;
+    //         std::vector<std::string> fallback(data.size(), std::string(safe_len, '-'));
+    //         parallel_string[i] = std::move(fallback);
+    //     }
+    // }
 
     // Parallel align timing
     double parallel_align_time = timer.elapsed_time();
@@ -223,7 +287,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
         std::stringstream s;
         s << std::fixed << std::setprecision(2) << parallel_align_time;
         if (global_args.verbose) {
-            output = "MSA Tool align time: " + s.str() + " seconds.";
+            output = "Parallel align time: " + s.str() + " seconds.";
             print_table_line(output);
         }
     }
@@ -340,7 +404,7 @@ std::pair<std::string, std::string> apply_cigar_to_seqs(const std::string &cigar
 std::string wfa_pairwise_cigar(const std::string &pattern, const std::string &text, int mismatch, int gap_open, int gap_extend) {
     using namespace wfa; // WFAlignerGapAffine in namespace wfa
     // create an aligner with chosen penalties and default memory mode
-    WFAlignerGapAffine aligner(mismatch, gap_open, gap_extend, WFAligner::Alignment, WFAligner::MemoryHigh);
+    WFAlignerGapAffine aligner(mismatch, gap_open, gap_extend, WFAligner::Alignment, WFAligner::MemoryMed);
     // align end-to-end (pattern = reference, text = query)
     aligner.alignEnd2End(pattern.c_str(), pattern.size(), text.c_str(), text.size());
     // get SAM CIGAR (string). pass false to avoid verbose header
