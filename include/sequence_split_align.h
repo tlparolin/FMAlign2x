@@ -73,9 +73,101 @@ struct SpoaTaskParams {
     std::vector<std::string> *result_store;
 };
 
+/**
+ * @brief Parses a SAM/BAM CIGAR string.
+ *
+ * This function takes a CIGAR string, which represents alignment operations
+ * between a sequence and the reference, and converts it into a vector of
+ * (length, operation) pairs.
+ *
+ * Each operation can be:
+ * - `M` : alignment match or mismatch
+ * - `I` : insertion to the sequence
+ * - `D` : deletion from the sequence
+ * - `N` : skipped region from the reference
+ * - `S` : soft clipping
+ * - `H` : hard clipping
+ * - `P` : padding
+ * - `=` : sequence match
+ * - `X` : sequence mismatch
+ *
+ * @param cigar The CIGAR string to parse (e.g., `"10M1I5M2D20M"`).
+ * @return std::vector<std::pair<int,char>> Vector of (length, operation) pairs.
+ *
+ * @note Assumes the CIGAR string is valid. No semantic validation is performed
+ *       beyond separating numbers and characters.
+ *
+ * @see https://samtools.github.io/hts-specs/SAMv1.pdf
+ */
 std::vector<std::pair<int, char>> parse_sam_cigar(const std::string &cigar);
+
+/**
+ * @brief Applies a CIGAR string to a reference and query sequence to produce aligned sequences.
+ *
+ * This function takes a CIGAR string and two sequences (reference and query),
+ * and generates the aligned sequences by inserting gaps according to the
+ * alignment operations specified in the CIGAR string.
+ *
+ * The CIGAR operations are interpreted as follows:
+ * - `M`, `=`, `X` : match or mismatch; advance both sequences
+ * - `I`            : insertion with respect to the reference; insert gaps in reference
+ * - `D`, `N`       : deletion with respect to the reference; insert gaps in query
+ * - other characters are treated as matches (defensive handling)
+ *
+ * @param cigar The CIGAR string describing the alignment (e.g., "10M1I5M2D20M").
+ * @param ref_seq The reference sequence.
+ * @param qry_seq The query sequence.
+ * @return std::pair<std::string, std::string> The aligned sequences
+ *         as a pair {aligned_ref, aligned_query}.
+ *
+ * @note The function assumes the CIGAR string and sequences are consistent.
+ *       Any operations exceeding the sequence lengths are truncated.
+ * @see parse_sam_cigar
+ */
 std::pair<std::string, std::string> apply_cigar_to_seqs(const std::string &cigar, const std::string &ref_seq, const std::string &qry_seq);
+
+/**
+ * @brief Performs pairwise alignment between two sequences using WFA2 and returns a CIGAR string.
+ *
+ * This function uses the Wavefront Alignment Algorithm (WFA2) with affine gap penalties
+ * to compute a global (end-to-end) alignment between a reference sequence (`pattern`)
+ * and a query sequence (`text`). The resulting alignment is returned as a SAM CIGAR string.
+ *
+ * @param pattern The reference sequence (treated as the "pattern").
+ * @param text The query sequence to align against the reference.
+ * @param mismatch Penalty score for mismatches.
+ * @param gap_open Penalty score for opening a gap.
+ * @param gap_extend Penalty score for extending a gap.
+ * @return std::string The SAM CIGAR string representing the alignment.
+ *
+ * @note The alignment is end-to-end (global), using `WFAligner::MemoryMed` as the memory mode.
+ *       To change memory mode, modify the constructor of `WFAlignerGapAffine`.
+ * @see wfa::WFAlignerGapAffine, parse_sam_cigar, apply_cigar_to_seqs
+ */
 std::string wfa_pairwise_cigar(const std::string &pattern, const std::string &text, int mismatch = 4, int gap_open = 6, int gap_extend = 2);
+
+/**
+ * @brief Performs multiple sequence alignment (MSA) using a center-star strategy with WFA2 pairwise alignments.
+ *
+ * This function takes a vector of sequences and progressively aligns them
+ * using a center-star approach:
+ * 1. The center sequence is chosen as the longest sequence (heuristic).
+ * 2. Each other sequence is aligned to the center sequence using pairwise
+ *    WFA2 alignments (`wfa_pairwise_cigar` and `apply_cigar_to_seqs`).
+ * 3. Gaps introduced during alignment are propagated to all previously aligned sequences
+ *    to maintain consistency in the MSA.
+ *
+ * @param sequences A vector of sequences to align.
+ * @return std::vector<std::string> The multiple sequence alignment, with gaps inserted as '-'.
+ *
+ * @note
+ * - This method is progressive and uses a simple heuristic for center selection.
+ * - Gaps are propagated to all sequences to keep alignment consistent.
+ * - For empty input, an empty vector is returned.
+ * - For a single sequence, the function returns it unchanged.
+ *
+ * @see wfa_pairwise_cigar, apply_cigar_to_seqs, parse_sam_cigar
+ */
 std::vector<std::string> wfa_msa_center_star(const std::vector<std::string> &sequences);
 
 /**

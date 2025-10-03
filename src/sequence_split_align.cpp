@@ -336,59 +336,125 @@ void split_and_parallel_align(std::vector<std::string> &data, std::vector<std::s
     return;
 }
 
-// parse SAM-style CIGAR (e.g. "10M2I4M")
+/**
+ * @brief Parses a SAM/BAM CIGAR string.
+ *
+ * This function takes a CIGAR string, which represents alignment operations
+ * between a sequence and the reference, and converts it into a vector of
+ * (length, operation) pairs.
+ *
+ * Each operation can be:
+ * - `M` : alignment match or mismatch
+ * - `I` : insertion to the sequence
+ * - `D` : deletion from the sequence
+ * - `N` : skipped region from the reference
+ * - `S` : soft clipping
+ * - `H` : hard clipping
+ * - `P` : padding
+ * - `=` : sequence match
+ * - `X` : sequence mismatch
+ *
+ * @param cigar The CIGAR string to parse (e.g., `"10M1I5M2D20M"`).
+ * @return std::vector<std::pair<int,char>> Vector of (length, operation) pairs.
+ *
+ * @note Assumes the CIGAR string is valid. No semantic validation is performed
+ *       beyond separating numbers and characters.
+ *
+ * @see https://samtools.github.io/hts-specs/SAMv1.pdf
+ */
 std::vector<std::pair<int, char>> parse_sam_cigar(const std::string &cigar) {
+    // Vector to store parsed operations: (length, operation character)
     std::vector<std::pair<int, char>> ops;
+
+    // Temporary variable to accumulate numbers in the CIGAR string
     int num = 0;
+
+    // Iterate over each character in the CIGAR string
     for (unsigned char c : cigar) {
         if (std::isdigit(c)) {
+            // If the character is a digit, build the number (could be multi-digit)
             num = num * 10 + (c - '0');
         } else {
+            // If the character is not a digit, it represents the operation
+            // Store the accumulated number and operation as a pair
             ops.emplace_back(num, (char)c);
+
+            // Reset the number for the next operation
             num = 0;
         }
     }
+
+    // Return the vector of (length, operation) pairs
     return ops;
 }
 
-// apply parsed SAM CIGAR to produce two aligned strings (ref, qry)
+/**
+ * @brief Applies a CIGAR string to a reference and query sequence to produce aligned sequences.
+ *
+ * This function takes a CIGAR string and two sequences (reference and query),
+ * and generates the aligned sequences by inserting gaps according to the
+ * alignment operations specified in the CIGAR string.
+ *
+ * The CIGAR operations are interpreted as follows:
+ * - `M`, `=`, `X` : match or mismatch; advance both sequences
+ * - `I`            : insertion with respect to the reference; insert gaps in reference
+ * - `D`, `N`       : deletion with respect to the reference; insert gaps in query
+ * - other characters are treated as matches (defensive handling)
+ *
+ * @param cigar The CIGAR string describing the alignment (e.g., "10M1I5M2D20M").
+ * @param ref_seq The reference sequence.
+ * @param qry_seq The query sequence.
+ * @return std::pair<std::string, std::string> The aligned sequences
+ *         as a pair {aligned_ref, aligned_query}.
+ *
+ * @note The function assumes the CIGAR string and sequences are consistent.
+ *       Any operations exceeding the sequence lengths are truncated.
+ * @see parse_sam_cigar
+ */
 std::pair<std::string, std::string> apply_cigar_to_seqs(const std::string &cigar, const std::string &ref_seq, const std::string &qry_seq) {
-
+    // Parse the CIGAR string into a vector of (length, operation) pairs
     auto ops = parse_sam_cigar(cigar);
+
+    // Strings to hold the aligned sequences (may contain gaps)
     std::string a_ref;
-    a_ref.reserve(ref_seq.size() + qry_seq.size());
+    a_ref.reserve(ref_seq.size() + qry_seq.size()); // reserve memory for efficiency
     std::string a_qry;
     a_qry.reserve(ref_seq.size() + qry_seq.size());
+
+    // Indexes to track position in original sequences
     size_t i_ref = 0, i_qry = 0;
 
+    // Iterate over each CIGAR operation
     for (auto &p : ops) {
-        int cnt = p.first;
-        char op = p.second;
+        int cnt = p.first;  // number of bases affected by this operation
+        char op = p.second; // operation type: M, I, D, etc.
+
         if (op == 'M' || op == '=' || op == 'X') {
+            // Match or mismatch: advance both sequences
             for (int k = 0; k < cnt; ++k) {
                 if (i_ref >= ref_seq.size() || i_qry >= qry_seq.size())
-                    break;
+                    break; // prevent going past the end of sequences
                 a_ref.push_back(ref_seq[i_ref++]);
                 a_qry.push_back(qry_seq[i_qry++]);
             }
         } else if (op == 'I') {
-            // insertion wrt reference => gaps in ref
+            // Insertion relative to reference: add gaps in reference
             for (int k = 0; k < cnt; ++k) {
                 if (i_qry >= qry_seq.size())
                     break;
-                a_ref.push_back('-');
-                a_qry.push_back(qry_seq[i_qry++]);
+                a_ref.push_back('-');              // gap in reference
+                a_qry.push_back(qry_seq[i_qry++]); // advance query
             }
         } else if (op == 'D' || op == 'N') {
-            // deletion wrt reference => gaps in qry
+            // Deletion relative to reference: add gaps in query
             for (int k = 0; k < cnt; ++k) {
                 if (i_ref >= ref_seq.size())
                     break;
-                a_ref.push_back(ref_seq[i_ref++]);
-                a_qry.push_back('-');
+                a_ref.push_back(ref_seq[i_ref++]); // advance reference
+                a_qry.push_back('-');              // gap in query
             }
         } else {
-            // ignore/defensive: treat as match
+            // Defensive: unknown operation, treat as match
             for (int k = 0; k < cnt; ++k) {
                 if (i_ref >= ref_seq.size() || i_qry >= qry_seq.size())
                     break;
@@ -397,106 +463,154 @@ std::pair<std::string, std::string> apply_cigar_to_seqs(const std::string &cigar
             }
         }
     }
+
+    // Return the aligned sequences as a pair
     return {a_ref, a_qry};
 }
 
-// wrapper: run pairwise WFA and return SAM CIGAR string
+/**
+ * @brief Performs pairwise alignment between two sequences using WFA2 and returns a CIGAR string.
+ *
+ * This function uses the Wavefront Alignment Algorithm (WFA2) with affine gap penalties
+ * to compute a global (end-to-end) alignment between a reference sequence (`pattern`)
+ * and a query sequence (`text`). The resulting alignment is returned as a SAM CIGAR string.
+ *
+ * @param pattern The reference sequence (treated as the "pattern").
+ * @param text The query sequence to align against the reference.
+ * @param mismatch Penalty score for mismatches.
+ * @param gap_open Penalty score for opening a gap.
+ * @param gap_extend Penalty score for extending a gap.
+ * @return std::string The SAM CIGAR string representing the alignment.
+ *
+ * @note The alignment is end-to-end (global), using `WFAligner::MemoryMed` as the memory mode.
+ *       To change memory mode, modify the constructor of `WFAlignerGapAffine`.
+ * @see wfa::WFAlignerGapAffine, parse_sam_cigar, apply_cigar_to_seqs
+ */
 std::string wfa_pairwise_cigar(const std::string &pattern, const std::string &text, int mismatch, int gap_open, int gap_extend) {
-    using namespace wfa; // WFAlignerGapAffine in namespace wfa
-    // create an aligner with chosen penalties and default memory mode
-    WFAlignerGapAffine aligner(mismatch, gap_open, gap_extend, WFAligner::Alignment, WFAligner::MemoryMed);
-    // align end-to-end (pattern = reference, text = query)
+    // Create a Wavefront Aligner with affine gap penalties
+    // - mismatch: penalty for mismatches
+    // - gap_open: penalty for opening a gap
+    // - gap_extend: penalty for extending a gap
+    // - waf::WFAligner::Alignment: compute full alignment (not only score)
+    // - waf::WFAligner::MemoryMed: medium memory usage mode
+    wfa::WFAlignerGapAffine aligner(mismatch, gap_open, gap_extend, wfa::WFAligner::Alignment, wfa::WFAligner::MemoryMed);
+
+    // Perform global (end-to-end) alignment
+    // - pattern is treated as reference
+    // - text is treated as query
     aligner.alignEnd2End(pattern.c_str(), pattern.size(), text.c_str(), text.size());
-    // get SAM CIGAR (string). pass false to avoid verbose header
+
+    // Retrieve the SAM CIGAR string representing the alignment
+    // - pass false to omit verbose header info
     return aligner.getCIGAR(false);
 }
 
-// center-star progressive MSA using WFA pairwise alignments
+/**
+ * @brief Performs multiple sequence alignment (MSA) using a center-star strategy with WFA2 pairwise alignments.
+ *
+ * This function takes a vector of sequences and progressively aligns them
+ * using a center-star approach:
+ * 1. The center sequence is chosen as the longest sequence (heuristic).
+ * 2. Each other sequence is aligned to the center sequence using pairwise
+ *    WFA2 alignments (`wfa_pairwise_cigar` and `apply_cigar_to_seqs`).
+ * 3. Gaps introduced during alignment are propagated to all previously aligned sequences
+ *    to maintain consistency in the MSA.
+ *
+ * @param sequences A vector of sequences to align.
+ * @return std::vector<std::string> The multiple sequence alignment, with gaps inserted as '-'.
+ *
+ * @note
+ * - This method is progressive and uses a simple heuristic for center selection.
+ * - Gaps are propagated to all sequences to keep alignment consistent.
+ * - For empty input, an empty vector is returned.
+ * - For a single sequence, the function returns it unchanged.
+ *
+ * @see wfa_pairwise_cigar, apply_cigar_to_seqs, parse_sam_cigar
+ */
 std::vector<std::string> wfa_msa_center_star(const std::vector<std::string> &sequences) {
+    // Return empty vector if input is empty
     if (sequences.empty())
         return {};
+
     size_t n = sequences.size();
+    // If there is only one sequence, return it as-is
     if (n == 1)
         return sequences;
 
-    // choose center = longest sequence (simple heuristic)
+    // Choose the center sequence for progressive alignment
+    // Simple heuristic: pick the longest sequence
     size_t center_idx = 0;
     for (size_t i = 1; i < n; ++i)
         if (sequences[i].size() > sequences[center_idx].size())
             center_idx = i;
 
-    // msa_rows holds current aligned rows (may contain gaps)
+    // Vector to hold the current aligned rows (may contain gaps)
     std::vector<std::string> msa_rows(n, "");
-    msa_rows[center_idx] = sequences[center_idx];
+    msa_rows[center_idx] = sequences[center_idx]; // initialize center row
 
-    // align each other sequence to the (progressive) center
+    // Align each other sequence to the (progressive) center
     for (size_t idx = 0; idx < n; ++idx) {
         if (idx == center_idx)
             continue;
 
-        // get ungapped version of current center (remove '-' from msa_rows[center_idx])
+        // Get ungapped version of current center (remove '-' characters)
         std::string ungapped_center;
         ungapped_center.reserve(msa_rows[center_idx].size());
         for (char c : msa_rows[center_idx])
             if (c != '-')
                 ungapped_center.push_back(c);
 
-        // pairwise WFA: ungapped_center vs sequences[idx]
+        // Pairwise WFA alignment: ungapped_center vs sequences[idx]
+        // Explicitly call wfa_pairwise_cigar (already uses waf:: internally)
         std::string cigar = wfa_pairwise_cigar(ungapped_center, sequences[idx]);
         auto aligned_pair = apply_cigar_to_seqs(cigar, ungapped_center, sequences[idx]);
-        std::string new_master = aligned_pair.first;   // may contain '-'
-        std::string aligned_qry = aligned_pair.second; // aligned version of sequences[idx]
+        std::string new_master = aligned_pair.first;   // updated center row with gaps
+        std::string aligned_qry = aligned_pair.second; // aligned query sequence
 
-        // Now we must integrate new_master into the existing msa_rows (propagate gaps)
-        // We'll iterate new_master and update every existing row by inserting gaps where new_master has '-'
-        std::string &old_master = msa_rows[center_idx]; // existing (may have gaps)
-        size_t p = 0;                                   // position in the (mutating) old_master
+        // Integrate new_master into existing msa_rows (propagate gaps to all rows)
+        std::string &old_master = msa_rows[center_idx];
+        size_t p = 0; // position in the old master row
 
-        // Reconstrói todas as linhas alinhadas de acordo com new_master
-        std::vector<std::string> new_rows(n);
+        std::vector<std::string> new_rows(n); // temporary storage for updated rows
 
         for (size_t i = 0; i < new_master.size(); ++i) {
             char c = new_master[i];
             if (c == '-') {
-                // insere gap em todas as linhas
-                for (size_t r = 0; r < n; ++r) {
+                // Insert a gap in all rows at this position
+                for (size_t r = 0; r < n; ++r)
                     new_rows[r].push_back('-');
-                }
             } else {
-                // avança p até achar posição não-gap em old_master
-                while (p < old_master.size() && old_master[p] == '-') {
+                // Advance p to the next non-gap character in old_master
+                while (p < old_master.size() && old_master[p] == '-')
                     ++p;
-                }
 
-                // se p está além do tamanho do old_master, pad com gap
                 if (p >= old_master.size()) {
-                    for (size_t r = 0; r < n; ++r) {
+                    // If we reach beyond old_master, insert gaps in all rows
+                    for (size_t r = 0; r < n; ++r)
                         new_rows[r].push_back('-');
-                    }
                 } else {
-                    // copia caractere real da linha antiga
+                    // Copy characters from old rows
                     for (size_t r = 0; r < n; ++r) {
                         if (p < msa_rows[r].size())
                             new_rows[r].push_back(msa_rows[r][p]);
                         else
-                            new_rows[r].push_back('-'); // se a linha acabou, completa com gap
+                            new_rows[r].push_back('-'); // pad if sequence ended
                     }
                 }
                 ++p;
             }
         }
 
-        // troca as linhas antigas pelas novas
+        // Swap old rows with updated rows
         msa_rows.swap(new_rows);
 
-        // after insertion the center length should equal new_master.size()
-        // set center row to new_master (it already has '-' positions consistent with inserted gaps)
+        // Update the center row to the new_master
         msa_rows[center_idx] = new_master;
 
-        // set aligned query row
+        // Set aligned query row
         msa_rows[idx] = aligned_qry;
 
-        // pad any existing rows to match new length (defensive)
+        // Ensure all rows have the same length as the center (defensive padding)
         size_t L = msa_rows[center_idx].size();
         for (size_t r = 0; r < n; ++r) {
             if (!msa_rows[r].empty() && msa_rows[r].size() < L)
@@ -504,7 +618,7 @@ std::vector<std::string> wfa_msa_center_star(const std::vector<std::string> &seq
         }
     }
 
-    // For any rows still empty (shouldn't happen), put original seq and pad
+    // Final check: if any rows are still empty, fill with original sequence and pad
     size_t final_len = msa_rows[center_idx].size();
     std::vector<std::string> out(n);
     for (size_t i = 0; i < n; ++i) {
@@ -516,7 +630,8 @@ std::vector<std::string> wfa_msa_center_star(const std::vector<std::string> &seq
                 out[i].append(final_len - out[i].size(), '-');
         }
     }
-    return out;
+
+    return out; // return the multiple sequence alignment
 }
 
 /**
