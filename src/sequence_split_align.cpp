@@ -492,8 +492,20 @@ std::string wfa_pairwise_cigar(const std::string &pattern, const std::string &te
     // - gap_open: penalty for opening a gap
     // - gap_extend: penalty for extending a gap
     // - waf::WFAligner::Alignment: compute full alignment (not only score)
-    // - waf::WFAligner::MemoryMed: medium memory usage mode
-    wfa::WFAlignerGapAffine aligner(mismatch, gap_open, gap_extend, wfa::WFAligner::Alignment, wfa::WFAligner::MemoryMed);
+    // - waf::WFAligner::MemoryHigh = high memory usage mode
+    // - waf::WFAligner::MemoryMed = medium memory usage mode
+    // - waf::WFAligner::MemoryLow = low memory usage mode
+    // - waf::WFAligner::MemoryUltraLow = ultra low memory usage mode
+    wfa::WFAligner::MemoryMode memo_mode = wfa::WFAligner::MemoryHigh;
+
+    if (global_args.memory_mode == "med")
+        memo_mode = wfa::WFAligner::MemoryMed;
+    else if (global_args.memory_mode == "low")
+        memo_mode = wfa::WFAligner::MemoryLow;
+    else if (global_args.memory_mode == "ultralow")
+        memo_mode = wfa::WFAligner::MemoryUltraLow;
+
+    wfa::WFAlignerGapAffine aligner(mismatch, gap_open, gap_extend, wfa::WFAligner::Alignment, wfa::WFAligner::memo_mode);
 
     // Perform global (end-to-end) alignment
     // - pattern is treated as reference

@@ -77,7 +77,7 @@ struct GlobalArgs {
     std::string filter_mode;
     int_t verbose;
     double avg_file_size;
-    bool extended = false;
+    std::string memory_mode;
 };
 extern GlobalArgs global_args;
 

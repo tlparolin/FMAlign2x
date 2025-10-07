@@ -54,8 +54,8 @@ int main(int argc, char **argv) {
         "c",
         "A floating-point parameter that specifies the minimum coverage across all sequences, with values ranging from 0 to 1. The default \
 setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7.");
-    parser.add_argument("x", false, "1");
-    parser.add_argument_help("x", "Enable in-memory alignment of small blocks between MEMs. Should be 0 or 1. Default is 1.");
+    parser.add_argument("m", false, "1");
+    parser.add_argument_help("m", "Memory mode for WFA2-lib: high, med, low, ultralow. Default is high that is more precise.");
     parser.add_argument("p", false, "mafft");
     parser.add_argument_help("p", "The MSA method used in parallel align. for example, halign3, halign2 and mafft.");
     parser.add_argument("o", false, "output.fmaligned2.fasta");
@@ -96,10 +96,13 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
             throw "filer mode --f parameter should be global or local!";
         }
 
-        global_args.extended = parser.get("x") == "1";
-        if (global_args.extended != 0 && global_args.extended != 1) {
-            throw "extended (-x) should be 1 or 0";
+        std::string tmp_m = "high";
+        tmp_m = parser.get("m");
+        std::transform(tmp_m.begin(), tmp_m.end(), tmp_m.begin(), ::tolower);
+        if (tmp_m != "high" && tmp_m != "med" && tmp_m != "low" && tmp_m != "ultralow") {
+            throw std::invalid_argument("Invalid memory mode (-m). Must be one of: high, med, low or ultralow.");
         }
+        global_args.memory_mode = tmp_m;
 
         global_args.verbose = std::stoi(parser.get("v"));
         if (global_args.verbose != 0 && global_args.verbose != 1) {
