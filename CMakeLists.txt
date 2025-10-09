@@ -62,6 +62,17 @@ CPMAddPackage(
     "LIBSAIS_BUILD_SHARED_LIB OFF"
 )
 
+# SPOA Config
+CPMAddPackage(
+  NAME spoa
+  GITHUB_REPOSITORY rvaser/spoa
+  GIT_TAG 4.1.0
+  OPTIONS
+    "SPOA_BUILD_SHARED OFF"
+    "SPOA_ENABLE_CPU_DISPATCH ON"
+    "SPOA_OPTIMIZE_FOR_NATIVE ON"
+)
+
 # WFA2 Config
 CPMAddPackage(
   NAME wfa2
@@ -84,7 +95,9 @@ add_executable(FMAlign2x ${SOURCES})
 if(OpenMP_CXX_FOUND)
     target_link_libraries(FMAlign2x PRIVATE OpenMP::OpenMP_CXX)
 endif()
-target_link_libraries(FMAlign2x PRIVATE libsais wfa2lib)
+target_link_libraries(FMAlign2x PRIVATE libsais spoa wfa2lib)
+
+add_dependencies(FMAlign2x libsais spoa wfa2lib)
 
 # Clean Rules
 add_custom_target(clean-all
