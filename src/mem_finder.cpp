@@ -88,7 +88,7 @@ void *find_optimal_chain(void *arg) {
  * @param sequence_num Number of sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vector<mem> &mems, size_t sequence_num) {
+std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vector<mem> &mems, size_t sequence_num, ThreadPool &pool) {
     // delete MEM full of "-"
     std::erase_if(mems, [](const mem &m) { return m.mem_length <= 0; });
 
@@ -120,12 +120,11 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vecto
     }
 
     std::vector<FindOptimalChainParams> find_params(sequence_num);
-    ThreadPool pool(global_args.thread);
     for (size_t i = 0; i < sequence_num; ++i) {
         find_params[i].chains = &split_point_on_sequence[i];
         pool.add_task([&, i]() { find_optimal_chain(&find_params[i]); });
     }
-    pool.shutdown(); // Waits for all tasks to finish and finalizes the pool
+    pool.wait_for_tasks(); // Waits for all tasks to finish and finalizes the pool
 
     // remove column that too much -1
     std::vector<size_t> selected_cols;
@@ -286,7 +285,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<me
  * @param data A vector of strings representing the sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std::string> &data) {
+std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std::string> &data, ThreadPool &pool) {
     if (global_args.verbose) {
         std::cout << "#                    Finding MEM...                         #" << std::endl;
         print_table_divider();
@@ -359,7 +358,6 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
     // Convert each interval to a MEM in parallel
     IntervalToMemConversionParams *params = new IntervalToMemConversionParams[interval_size];
 
-    ThreadPool pool(global_args.thread);
     for (uint_t i = 0; i < interval_size; i++) {
         params[i].SA = &SA;
         params[i].interval = intervals[i];
@@ -370,7 +368,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
 
         pool.add_task([&, i]() { interval2mem(params + i); });
     }
-    pool.shutdown();
+    pool.wait_for_tasks();
 
     if (mems.empty() && global_args.verbose) {
         print_table_line("Warning: There is no MEMs, please adjust your parameters.");
@@ -384,7 +382,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
 
     uint_t sequence_num = data.size();
     auto split_point_on_sequence =
-        (global_args.filter_mode == "global") ? filter_mem_fast(mems, sequence_num) : filter_mem_accurate(mems, sequence_num);
+        (global_args.filter_mode == "global") ? filter_mem_fast(mems, sequence_num) : filter_mem_accurate(mems, sequence_num, pool);
 
     global_args.avg_file_size = (n / (split_point_on_sequence[0].size() + 1)) / std::pow(2, 20);
 

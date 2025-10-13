@@ -81,7 +81,7 @@ std::string generateRandomString(int length) {
  */
 std::string random_file_end;
 void split_and_parallel_align(std::vector<std::string> &data, std::vector<std::string> &name,
-                              std::vector<std::vector<std::pair<int_t, int_t>>> &chain) {
+                              std::vector<std::vector<std::pair<int_t, int_t>>> &chain, ThreadPool &pool) {
     // Print status header
     if (global_args.verbose) {
         std::cout << "#                Parallel Aligning...                       #" << std::endl;
@@ -108,11 +108,10 @@ void split_and_parallel_align(std::vector<std::string> &data, std::vector<std::s
     }
 
     if (global_args.min_seq_coverage == 1) {
-        ThreadPool pool(global_args.thread);
         for (uint_t i = 0; i < chain_num; ++i) {
             pool.add_task([&, i]() { expand_chain(&params[i]); });
         }
-        pool.shutdown();
+        pool.wait_for_tasks();
     } else {
         for (uint_t i = 0; i < chain_num; ++i) {
             expand_chain(&params[i]);
@@ -149,8 +148,6 @@ void split_and_parallel_align(std::vector<std::string> &data, std::vector<std::s
 
     // Thread pool to run WFA-based MSA for each parallel block
     {
-        ThreadPool pool(global_args.thread);
-
         for (uint_t i = 0; i < parallel_num; ++i) {
             // capture necessary items by value for thread-safety
             auto range = parallel_align_range[i];
@@ -218,8 +215,7 @@ void split_and_parallel_align(std::vector<std::string> &data, std::vector<std::s
                 }
             });
         }
-
-        pool.shutdown();
+        pool.wait_for_tasks();
     }
     // FOR SERIAL VERSION (debugging)
     // for (uint_t i = 0; i < parallel_num; ++i) {

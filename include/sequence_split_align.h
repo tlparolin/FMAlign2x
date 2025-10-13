@@ -192,7 +192,7 @@ std::string generateRandomString(int length);
  * @return void
  */
 void split_and_parallel_align(std::vector<std::string> &data, std::vector<std::string> &name,
-                              std::vector<std::vector<std::pair<int_t, int_t>>> &chain);
+                              std::vector<std::vector<std::pair<int_t, int_t>>> &chain, ThreadPool &pool);
 
 /**
  * @brief Preprocesses alignment blocks between MEMs to reduce load on external aligners.
