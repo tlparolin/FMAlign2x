@@ -304,7 +304,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
     }
 
     if (global_args.verbose) {
-        print_table_line("Minimal MEM length is set to " + std::to_string(global_args.min_mem_length));
+        print_table_line(std::format("Minimal MEM length is set to {}", global_args.min_mem_length));
     }
 
     if (global_args.filter_mode == "default") {
@@ -320,7 +320,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
     }
 
     if (global_args.verbose) {
-        print_table_line("Minimal sequence coverage is set to " + std::to_string(global_args.min_seq_coverage));
+        print_table_line(std::format("Minimal sequence coverage is set to {}", std::to_string(global_args.min_seq_coverage)));
     }
 
     timer.reset();
@@ -331,11 +331,8 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
     LIBSAIS_OMP(concat_data, SA.data(), n, 0, NULL, global_args.thread);
     LIBSAIS_PLCP_OMP(concat_data, SA.data(), PLCP.data(), n, global_args.thread);
 
-    double suffix_construction_time = timer.elapsed_time();
-    std::stringstream s;
-    s << std::fixed << std::setprecision(2) << suffix_construction_time;
     if (global_args.verbose) {
-        print_table_line("Suffix construction time: " + s.str() + " seconds");
+        print_table_line(std::format("Suffix construction time: {:.2f} seconds", timer.elapsed_time()));
     }
 
     timer.reset();
@@ -390,8 +387,8 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
     std::stringstream ss;
     ss << std::fixed << std::setprecision(3) << mem_time;
     if (global_args.verbose) {
-        print_table_line("Sequence divide parts (MEMs): " + std::to_string(split_point_on_sequence[0].size() + 1));
-        print_table_line("MEM process time: " + ss.str() + " seconds");
+        print_table_line(std::format("Sequence divide parts (MEMs): {}", std::to_string(split_point_on_sequence[0].size() + 1)));
+        print_table_line(std::format("MEM process time: {:.2f} seconds", timer.elapsed_time()));
         print_table_divider();
     }
 
