@@ -34,7 +34,9 @@
 #include <algorithm>
 #include <cctype>
 #include <climits>
+#include <format>
 #include <random>
+#include <spoa/spoa.hpp>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -62,16 +64,28 @@ struct ParallelAlignParams {
     std::vector<std::vector<std::pair<int_t, int_t>>>::iterator parallel_range;
     uint_t task_index;
     std::vector<std::vector<std::string>>::iterator result_store;
-    const std::vector<bool> *fallback_needed;
+    std::vector<bool> *fallback_needed;
 };
 
-struct SpoaTaskParams {
+struct MSATaskParams {
     const std::vector<std::string> *data;
     const std::vector<std::pair<int_t, int_t>> *range;
     uint_t task_index;
     uint_t seq_num;
     std::vector<std::string> *result_store;
 };
+
+void *spoa_task(void *arg);
+
+void wfa_task(MSATaskParams *params);
+
+std::vector<std::string> spoa_align(const std::vector<std::string> &sequences);
+
+std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>
+preprocess_parallel_blocks(const std::vector<std::string> &data,
+                           const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range, ThreadPool &pool);
+
+void wfa_parallel_align(ParallelAlignParams *params);
 
 /**
  * @brief Parses a SAM/BAM CIGAR string.
@@ -191,8 +205,8 @@ std::string generateRandomString(int length);
  * @param chain A vector of chain pairs representing initial pairwise alignments between sequences
  * @return void
  */
-void split_and_parallel_align(std::vector<std::string> &data, std::vector<std::string> &name,
-                              std::vector<std::vector<std::pair<int_t, int_t>>> &chain, ThreadPool &pool);
+void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name,
+                              std::vector<std::vector<std::pair<int_t, int_t>>> chain, ThreadPool &pool);
 
 /**
 @brief Expands the chain at the given index for all sequences in the input data.

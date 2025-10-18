@@ -80,263 +80,358 @@ std::string generateRandomString(int length) {
  * @return void
  */
 std::string random_file_end;
-void split_and_parallel_align(std::vector<std::string> &data, std::vector<std::string> &name,
-                              std::vector<std::vector<std::pair<int_t, int_t>>> &chain, ThreadPool &pool) {
-    // Print status header
+void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name,
+                              std::vector<std::vector<std::pair<int_t, int_t>>> chain, ThreadPool &pool) {
     if (global_args.verbose) {
         std::cout << "#                Parallel Aligning...                       #" << std::endl;
         print_table_divider();
     }
 
-    std::string output = "";
     Timer timer;
 
-    // basic sizes
-    uint_t chain_num = 0;
-    if (!chain.empty())
-        chain_num = chain[0].size();
+    uint_t chain_num = chain.empty() ? 0 : chain[0].size();
     uint_t seq_num = data.size();
 
-    // Expand chains first (same as before)
+    // --- Expand chains ---
     std::vector<std::vector<std::string>> chain_string(chain_num); // chain_num * seq_num
-    std::vector<ExpandChainParams> params(chain_num);
+    std::vector<ExpandChainParams> expand_params(chain_num);
     for (uint_t i = 0; i < chain_num; ++i) {
-        params[i].data = &data;
-        params[i].chain = &chain;
-        params[i].chain_index = i;
-        params[i].result_store = chain_string.begin() + i;
+        expand_params[i].data = &data;
+        expand_params[i].chain = &chain;
+        expand_params[i].chain_index = i;
+        expand_params[i].result_store = chain_string.begin() + i;
     }
 
     if (global_args.min_seq_coverage == 1) {
-        for (uint_t i = 0; i < chain_num; ++i) {
-            pool.add_task([&, i]() { expand_chain(&params[i]); });
-        }
+        for (uint_t i = 0; i < chain_num; ++i)
+            pool.add_task([&, i]() { expand_chain(&expand_params[i]); });
         pool.wait_for_tasks();
     } else {
-        for (uint_t i = 0; i < chain_num; ++i) {
-            expand_chain(&params[i]);
-        }
+        for (uint_t i = 0; i < chain_num; ++i)
+            expand_chain(&expand_params[i]);
     }
-    params.clear();
+    expand_params.clear();
 
-    // SW expand timing
-    double SW_time = timer.elapsed_time();
-    {
-        std::stringstream s;
-        s << std::fixed << std::setprecision(2) << SW_time;
-        if (global_args.verbose) {
-            output = "SW expand time: " + s.str() + " seconds.";
-            print_table_line(output);
-        }
-    }
+    if (global_args.verbose)
+        print_table_line(std::format("SW expand time: {:.2f} seconds", timer.elapsed_time()));
 
     timer.reset();
 
-    // Calculate parallel alignment ranges and perform parallel alignment for each range
+    // --- Parallel alignment: calculate ranges ---
     std::vector<std::vector<std::pair<int_t, int_t>>> parallel_align_range = get_parallel_align_range(data, chain);
-    uint_t parallel_num = parallel_align_range.size();
 
-    // Sort parallel ranges by total length (descending) to balance workload
+    // Sort by total length descending to balance workload
     std::sort(parallel_align_range.begin(), parallel_align_range.end(), [](auto &a, auto &b) {
         auto len_a = std::accumulate(a.begin(), a.end(), 0L, [](auto s, auto &p) { return s + p.second; });
         auto len_b = std::accumulate(b.begin(), b.end(), 0L, [](auto s, auto &p) { return s + p.second; });
-        return len_a > len_b; // maiores primeiro
+        return len_a > len_b;
     });
 
-    // We'll produce for each parallel block an MSA built by WFA (center-star)
-    std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
+    // --- Preprocess blocks: resolve with SPOA or WFA2 in-memory ---
+    std::vector<std::vector<std::string>> fast_parallel_string;
+    std::vector<bool> wfa2_needed; // true if WFA2 was used
+    std::tie(fast_parallel_string, wfa2_needed) = preprocess_parallel_blocks(data, parallel_align_range, pool);
 
-    // Thread pool to run WFA-based MSA for each parallel block
-    {
-        for (uint_t i = 0; i < parallel_num; ++i) {
-            // capture necessary items by value for thread-safety
-            auto range = parallel_align_range[i];
-            pool.add_task([i, range, &data, &parallel_string]() {
-                try {
-                    uint_t seq_num_local = data.size();
-                    // Build block fragments for each sequence (preserve ordering)
-                    std::vector<std::string> block_seqs(seq_num_local);
-                    for (uint_t s = 0; s < seq_num_local; ++s) {
-                        if (s < range.size()) {
-                            auto [start, len] = range[s];
-                            if (len > 0 && start >= 0) {
-                                const std::string &full = data[s];
-                                size_t st = static_cast<size_t>(std::max<int_t>(0, (int_t)start));
-                                size_t take = std::min<size_t>((size_t)len, (st < full.size() ? full.size() - st : 0));
-                                if (take > 0 && st < full.size())
-                                    block_seqs[s] = full.substr(st, take);
-                                else
-                                    block_seqs[s] = "";
-                            } else {
-                                block_seqs[s] = "";
-                            }
-                        } else {
-                            // if the range vector is shorter than seq_num, fill with empty
-                            block_seqs[s] = "";
-                        }
-                    }
-
-                    // Call WFA-based MSA (center-star).
-                    std::vector<std::string> msa_block = wfa_msa_center_star(block_seqs);
-
-                    // Normalize result: ensure size == seq_num_local
-                    if (msa_block.size() != seq_num_local) {
-                        // If returned smaller, create vector with gaps and copy what exists
-                        size_t final_len = 0;
-                        for (const auto &r : msa_block)
-                            final_len = std::max(final_len, r.size());
-                        if (final_len == 0 && !msa_block.empty())
-                            final_len = msa_block[0].size();
-                        if (final_len == 0)
-                            final_len = 1; // fallback safety
-
-                        std::vector<std::string> normalized(seq_num_local, std::string(final_len, '-'));
-                        for (size_t k = 0; k < msa_block.size() && k < seq_num_local; ++k)
-                            normalized[k] = msa_block[k];
-
-                        msa_block.swap(normalized);
-                    } else {
-                        // ensure all rows have same length; if not, pad with gaps
-                        size_t L = 0;
-                        for (auto &r : msa_block)
-                            L = std::max(L, r.size());
-                        for (auto &r : msa_block)
-                            if (r.size() < L)
-                                r.append(L - r.size(), '-');
-                    }
-
-                    // store move-constructed result
-                    parallel_string[i] = std::move(msa_block);
-                } catch (const std::exception &e) {
-                    // on error, produce an all-gap block so pipeline can continue
-                    size_t safe_len = 1;
-                    std::vector<std::string> fallback(data.size(), std::string(safe_len, '-'));
-                    parallel_string[i] = std::move(fallback);
-                }
-            });
-        }
-        pool.wait_for_tasks();
-    }
-    // FOR SERIAL VERSION (debugging)
-    // for (uint_t i = 0; i < parallel_num; ++i) {
-    //     auto range = parallel_align_range[i];
-
-    //     try {
-    //         uint_t seq_num_local = data.size();
-    //         // Build block fragments for each sequence (preserve ordering)
-    //         std::vector<std::string> block_seqs(seq_num_local);
-    //         for (uint_t s = 0; s < seq_num_local; ++s) {
-    //             if (s < range.size()) {
-    //                 auto [start, len] = range[s];
-    //                 if (len > 0 && start >= 0) {
-    //                     const std::string &full = data[s];
-    //                     size_t st = static_cast<size_t>(std::max<int_t>(0, (int_t)start));
-    //                     size_t take = std::min<size_t>((size_t)len, (st < full.size() ? full.size() - st : 0));
-    //                     if (take > 0 && st < full.size())
-    //                         block_seqs[s] = full.substr(st, take);
-    //                     else
-    //                         block_seqs[s] = "";
-    //                 } else {
-    //                     block_seqs[s] = "";
-    //                 }
-    //             } else {
-    //                 block_seqs[s] = "";
-    //             }
-    //         }
-
-    //         // Call WFA-based MSA (center-star).
-    //         std::vector<std::string> msa_block = wfa_msa_center_star(block_seqs);
-
-    //         // Normalize result: ensure size == seq_num_local
-    //         if (msa_block.size() != seq_num_local) {
-    //             // If returned smaller, create vector with gaps and copy what exists
-    //             size_t final_len = 0;
-    //             for (const auto &r : msa_block)
-    //                 final_len = std::max(final_len, r.size());
-    //             if (final_len == 0 && !msa_block.empty())
-    //                 final_len = msa_block[0].size();
-    //             if (final_len == 0)
-    //                 final_len = 1; // fallback safety
-
-    //             std::vector<std::string> normalized(seq_num_local, std::string(final_len, '-'));
-    //             for (size_t k = 0; k < msa_block.size() && k < seq_num_local; ++k)
-    //                 normalized[k] = msa_block[k];
-
-    //             msa_block.swap(normalized);
-    //         } else {
-    //             // ensure all rows have same length; if not, pad with gaps
-    //             size_t L = 0;
-    //             for (auto &r : msa_block)
-    //                 L = std::max(L, r.size());
-    //             for (auto &r : msa_block)
-    //                 if (r.size() < L)
-    //                     r.append(L - r.size(), '-');
-    //         }
-
-    //         // store move-constructed result
-    //         parallel_string[i] = std::move(msa_block);
-
-    //     } catch (const std::exception &e) {
-    //         // on error, produce an all-gap block so pipeline can continue
-    //         size_t safe_len = 1;
-    //         std::vector<std::string> fallback(data.size(), std::string(safe_len, '-'));
-    //         parallel_string[i] = std::move(fallback);
-    //     }
-    // }
-
-    // Parallel align timing
-    double parallel_align_time = timer.elapsed_time();
-    {
-        std::stringstream s;
-        s << std::fixed << std::setprecision(2) << parallel_align_time;
-        if (global_args.verbose) {
-            output = "Parallel align time: " + s.str() + " seconds.";
-            print_table_line(output);
-        }
-    }
+    if (global_args.verbose)
+        print_table_line(std::format("Parallel alignment time: {:.2f} seconds", timer.elapsed_time()));
 
     timer.reset();
 
-    // Concatenate ranges: same as before
-    std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
+    // --- Fill parallel_string with results from preprocessed blocks ---
+    uint_t parallel_num = parallel_align_range.size();
+    std::vector<std::vector<std::string>> parallel_string(parallel_num, std::vector<std::string>(seq_num));
 
-    // Normalize each parallel_string[i] to seq_num (filling missing with gaps)
     for (uint_t i = 0; i < parallel_num; ++i) {
+        parallel_string[i] = std::move(fast_parallel_string[i]);
+
         if (parallel_string[i].size() != seq_num) {
-            // determine max length in this block and resize/pad
+            // normalize: fill missing lines with block-length gaps
             size_t L = 0;
             for (auto &s : parallel_string[i])
                 L = std::max(L, s.size());
-            if (L == 0)
-                L = 1; // safety
             parallel_string[i].resize(seq_num, std::string(L, '-'));
-            for (auto &s : parallel_string[i])
-                if (s.size() < L)
-                    s.append(L - s.size(), '-');
         }
     }
 
-    // Concatenate chain strings (from expand_chain) and parallel strings (from WFA)
+    // --- Concatenate chains + parallel blocks ---
     std::vector<std::vector<std::string>> concat_string = concat_chain_and_parallel(chain_string, parallel_string);
+    std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
+
     std::vector<uint_t> fragment_len = get_first_nonzero_lengths(concat_string);
 
-    // seq2profile and concat alignment (same as before)
     seq2profile(concat_string, data, concat_range, fragment_len);
     double seq2profile_time = timer.elapsed_time();
 
     concat_alignment(concat_string, name);
 
-    // final timings and prints
-    {
-        std::stringstream s;
-        s << std::fixed << std::setprecision(2) << seq2profile_time;
-        if (global_args.verbose) {
-            output = "Seq-profile time: " + s.str() + " seconds.";
-            print_table_line(output);
-            print_table_divider();
+    if (global_args.verbose) {
+        print_table_line(std::format("Seq-profile time: {:.2f} seconds", seq2profile_time));
+        print_table_divider();
+    }
+
+    pool.shutdown(); // end thread pool
+}
+
+/**
+ * @brief Executes a SPOA (Simd Partial Order Alignment) task on a set of DNA sequence fragments.
+ * This function is designed to be run as a thread. It extracts subsequences from the input data
+ * based on the provided ranges, constructs a vector of fragments, and performs multiple sequence
+ * alignment using the SPOA algorithm. The result is stored in the location pointed to by
+ * `params->result_store`.
+ * @param arg A pointer to a `MSATaskParams` structure containing:
+ *  - the number of sequences (`seq_num`),
+ *  - the input data (`data`),
+ *  - the ranges to extract from each sequence (`range`),
+ *  - and a pointer to where the alignment result should be stored (`result_store`).
+ * @return Always returns `nullptr`. The result of the alignment is stored via the pointer in `params`.
+ * @note If a sequence has an invalid range (start == -1 or length <= 0), an empty string is used.
+ */
+void *spoa_task(void *arg) {
+    MSATaskParams *params = static_cast<MSATaskParams *>(arg);
+
+    std::vector<std::string> fragments(params->seq_num);
+
+    for (uint_t s = 0; s < params->seq_num; ++s) {
+        auto [start, len] = (*params->range)[s];
+        if (start != -1 && len > 0) {
+            fragments[s] = (*params->data)[s].substr(start, len);
+        } else {
+            fragments[s] = "";
         }
     }
-    return;
+
+    *(params->result_store) = spoa_align(fragments);
+
+    return nullptr;
+}
+
+/**
+ * @brief Performs multiple sequence alignment using SPOA (Partial Order Alignment).
+ * This function leverages the SPOA library to construct a partial order graph and
+ * progressively align input sequences to it. It uses the global alignment model
+ * (Needleman-Wunsch) with linear gap penalties, optimized for short to medium-length
+ * sequence blocks (e.g., between MEMs). Empty sequences are ignored during the alignment process.
+ * The final output is a multiple sequence alignment with gaps introduced as necessary to maintain consistency.
+ * Scoring parameters used:
+ * - Match: +4
+ * - Mismatch: -10
+ * - Gap (linear): -8
+ * @param sequences A vector of input sequences to be aligned. Each sequence is a std::string.
+ * @return A vector of aligned sequences (same size as input), each padded with '-' where needed.
+ * @note This function is designed for fast in-memory alignment and is suitable as a lightweight
+ * alternative to full external aligners (e.g., MAFFT, HAlign) in internal blocks of ultralong sequences.
+ * @see https://github.com/rvaser/spoa for more details on the SPOA library.
+ */
+std::vector<std::string> spoa_align(const std::vector<std::string> &sequences) {
+    if (sequences.empty())
+        return {};
+
+    // Create the SPOA alignment engine with linear gap penalties
+    // Note: Each thread creates its own engine instance for thread safety
+    auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8);
+
+    spoa::Graph graph{};
+
+    // maps indices of non-empty sequences
+    std::vector<size_t> map_idx;
+    map_idx.reserve(sequences.size());
+    for (size_t i = 0; i < sequences.size(); ++i) {
+        const auto &seq = sequences[i];
+        if (seq.empty())
+            continue;
+        auto aln = alignment_engine->Align(seq, graph);
+        graph.AddAlignment(aln, seq);
+        map_idx.push_back(i);
+    }
+
+    // If all are empty: return N empty strings
+    if (map_idx.empty()) {
+        return std::vector<std::string>(sequences.size(), std::string{});
+    }
+
+    // Generates MSA only from non-empty ones
+    auto msa_compact = graph.GenerateMultipleSequenceAlignment();
+    const size_t aln_len = msa_compact.empty() ? 0 : msa_compact.front().size();
+
+    // Rebuilds to original size: empty spaces become just gaps
+    std::vector<std::string> msa(sequences.size(), std::string(aln_len, '-'));
+    for (size_t k = 0; k < msa_compact.size(); ++k) {
+        msa[map_idx[k]] = std::move(msa_compact[k]);
+    }
+    return msa;
+}
+
+/**
+ * @brief Preprocesses alignment blocks between MEMs to reduce load on external aligners.
+ * This function attempts to resolve alignment blocks (typically between MEMs) in a fast and memory-efficient
+ * way, before falling back to more expensive external aligners such as MAFFT or HAlign. It operates by
+ * analyzing each block defined in `parallel_align_range` and choosing one of three strategies:
+ * 1. **Exact Match**: If all sequences in the block are identical, simply copies the fragment.
+ * 2. **SPOA Alignment**: If average fragment length is small (< 15000 bp), applies SPOA for fast in-memory MSA.
+ * 3. **Fallback Flag**: For long or divergent blocks, defers to external aligners by setting a fallback flag.
+ * @param data The original vector of sequences (one string per sequence).
+ * @param parallel_align_range A vector of alignment ranges (start, length pairs) per sequence, per block.
+ *        Each element defines the intervals to be extracted from `data` for one alignment block.
+ * @return A pair:
+ * - First: A 2D vector of strings containing aligned fragments (SPOA-aligned or copied directly).
+ * - Second: A boolean vector where `true` indicates the block must be aligned by an external aligner.
+ * @note This function assumes that `spoa_align()` is implemented and available in scope.
+ *       It is intended to be used directly after `get_parallel_align_range()` in the FMAlign2 pipeline.
+ */
+std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>
+preprocess_parallel_blocks(const std::vector<std::string> &data,
+                           const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range, ThreadPool &pool) {
+    uint_t parallel_num = parallel_align_range.size();
+    uint_t seq_num = data.size();
+
+    std::vector<std::vector<std::string>> fast_parallel_string(parallel_num, std::vector<std::string>(seq_num));
+    std::vector<bool> wfa_needed(parallel_num, false); // now indicates WFA2 use
+
+    uint_t count_exact = 0;
+    uint_t count_spoa = 0;
+    uint_t count_wfa2 = 0;
+
+    std::vector<MSATaskParams> spoa_params;
+    std::vector<MSATaskParams> wfa_params;
+
+    // --- First pass: classify each block ---
+    for (uint_t i = 0; i < parallel_num; ++i) {
+        const auto &range = parallel_align_range[i];
+        std::vector<std::string> fragments(seq_num);
+        size_t total_len = 0;
+        bool all_equal = true;
+
+        // Collect fragments for this block
+        for (uint_t s = 0; s < seq_num; ++s) {
+            auto [start, len] = range[s];
+            if (start != -1 && len > 0) {
+                fragments[s] = data[s].substr(start, len);
+                total_len += len;
+                if (s > 0 && fragments[s] != fragments[0])
+                    all_equal = false;
+            } else {
+                fragments[s].clear();
+            }
+        }
+
+        size_t avg_len = total_len / std::max<size_t>(seq_num, 1);
+
+        if (all_equal) {
+            // Case 1: All fragments identical → copy directly
+            for (uint_t s = 0; s < seq_num; ++s)
+                fast_parallel_string[i][s] = fragments[0];
+            ++count_exact;
+        } else if (avg_len <= 15000) {
+            // Case 2: Short block → use SPOA
+            MSATaskParams spoa_param;
+            spoa_param.data = &data;
+            spoa_param.range = &parallel_align_range[i];
+            spoa_param.task_index = i;
+            spoa_param.seq_num = seq_num;
+            spoa_param.result_store = &fast_parallel_string[i];
+            spoa_params.push_back(spoa_param);
+            ++count_spoa;
+        } else {
+            // Case 3: Long block → use WFA2
+            MSATaskParams wfa_param;
+            wfa_param.data = &data;
+            wfa_param.range = &parallel_align_range[i];
+            wfa_param.task_index = i;
+            wfa_param.seq_num = seq_num;
+            wfa_param.result_store = &fast_parallel_string[i];
+            wfa_params.push_back(wfa_param);
+            wfa_needed[i] = true;
+            ++count_wfa2;
+        }
+    }
+
+    // --- Run SPOA tasks in parallel ---
+    for (size_t idx = 0; idx < spoa_params.size(); ++idx) {
+        pool.add_task([&, idx]() { spoa_task(&spoa_params[idx]); });
+    }
+
+    // --- Run WFA2 tasks in parallel ---
+    for (size_t idx = 0; idx < wfa_params.size(); ++idx) {
+        pool.add_task([&, idx]() { wfa_task(&wfa_params[idx]); });
+    }
+
+    // Wait for all threads to complete
+    pool.wait_for_tasks();
+
+    // --- Print summary if verbose mode is active ---
+    if (global_args.verbose) {
+        print_table_line(std::format("Blocks resolved by copy: {}", count_exact));
+        print_table_line(std::format("Blocks aligned with SPOA: {}", count_spoa));
+        print_table_line(std::format("Blocks aligned with WFA2: {}", count_wfa2));
+    }
+
+    return {fast_parallel_string, wfa_needed};
+}
+
+// void wfa_parallel_align(ParallelAlignParams *params) {
+//     const auto &data = *params->data;
+//     const auto &range = *params->parallel_range;
+//     uint_t seq_num = data.size();
+
+//     // Extract the substring (block) of each sequence based on (start, len)
+//     std::vector<std::string> fragments(seq_num);
+//     for (uint_t s = 0; s < seq_num; ++s) {
+//         auto [start, len] = range[s];
+//         if (start != -1 && len > 0 && static_cast<size_t>(start) < data[s].size())
+//             fragments[s] = data[s].substr(start, len);
+//         else
+//             fragments[s].clear(); // empty fragment
+//     }
+
+//     // Run multiple sequence alignment using WFA center-star
+//     std::vector<std::string> aligned_block;
+//     try {
+//         aligned_block = wfa_msa_center_star(fragments);
+//     } catch (const std::exception &e) {
+//         std::cerr << "[WFA ERROR] Block " << params->task_index << " failed: " << e.what() << std::endl;
+
+//         // Emergency fallback: copy original fragments and pad with gaps
+//         aligned_block = fragments;
+//         size_t maxlen = 0;
+//         for (auto &s : aligned_block)
+//             maxlen = std::max(maxlen, s.size());
+//         for (auto &s : aligned_block)
+//             s.append(maxlen - s.size(), '-');
+//     }
+
+//     // Normalize sequence lengths (pad shorter ones with '-')
+//     size_t max_len = 0;
+//     for (auto &s : aligned_block)
+//         max_len = std::max(max_len, s.size());
+
+//     for (auto &s : aligned_block)
+//         if (s.size() < max_len)
+//             s.append(max_len - s.size(), '-');
+
+//     // Store the result in the output vector
+//     (*params->result_store) = std::move(aligned_block);
+
+//     // Mark this block as successfully aligned (no fallback required)
+//     (*params->wfa2_needed)[params->task_index] = false;
+// }
+
+void wfa_task(MSATaskParams *params) {
+    const auto &range = *params->range;
+    const auto &data = *params->data;
+    std::vector<std::string> fragments(params->seq_num);
+
+    for (uint_t s = 0; s < params->seq_num; ++s) {
+        auto [start, len] = range[s];
+        if (start != -1 && len > 0)
+            fragments[s] = data[s].substr(start, len);
+        else
+            fragments[s].clear();
+    }
+
+    // Align using WFA2 (center-star or pairwise aggregation)
+    std::vector<std::string> aligned = wfa_msa_center_star(fragments);
+
+    (*params->result_store) = aligned;
 }
 
 /**
@@ -1003,7 +1098,7 @@ void seq2profile(std::vector<std::vector<std::string>> &concat_string, std::vect
     // Sort the vector of pairs by the number of missing fragments in ascending order.
     std::sort(missing_fragment_count.begin(), missing_fragment_count.end(), cmp);
 #if DEBUG
-    for (int_t i = 0; i < missing_fragment_count.size(); i++) {
+    for (size_t i = 0; i < missing_fragment_count.size(); i++) {
         std::cout << missing_fragment_count[i].first << " " << missing_fragment_count[i].second << std::endl;
     }
 #endif //
