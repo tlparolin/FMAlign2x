@@ -29,339 +29,323 @@
 ../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50
 ../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default
 ../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p mafft
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p halign3
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p halign2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p mafft -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p mafft -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p halign3 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p halign3 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p halign2 -t 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p halign2 -t 2
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -p halign2 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -p halign2 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -p halign2 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -p halign2 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -p halign2 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -p halign2 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -p halign2 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -p halign2 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -p halign2 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -p halign2 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -p halign2 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -p halign2 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -p halign2 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -p halign2 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -p halign2 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p mafft -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p mafft -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p mafft -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p mafft -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p halign3 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p halign3 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p halign3 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p halign3 -t 2 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p halign2 -t 1 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p halign2 -t 1 -x 1
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p halign2 -t 2 -x 0
-../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -p halign2 -t 2 -x 1
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m high
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m med
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m low
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m ultralow
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f default -l 50 -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 0 -f local -l 50 -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f default -l 50 -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 1 -d 1 -f local -l 50 -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f default -l 50 -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 0 -f local -l 50 -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f default -l 50 -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l default -m ultralow -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m high -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m high -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m med -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m med -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m low -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m low -t 8
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m ultralow -t 4
+../FMAlign2x -i ../data/mt1x.fasta -c 0.7 -d 1 -f local -l 50 -m ultralow -t 8
