@@ -75,17 +75,73 @@ struct MSATaskParams {
     std::vector<std::string> *result_store;
 };
 
+/**
+ * @brief Executes a SPOA (Simd Partial Order Alignment) task on a set of DNA sequence fragments.
+ * This function is designed to be run as a thread. It extracts subsequences from the input data
+ * based on the provided ranges, constructs a vector of fragments, and performs multiple sequence
+ * alignment using the SPOA algorithm. The result is stored in the location pointed to by
+ * `params->result_store`.
+ * @param arg A pointer to a `MSATaskParams` structure containing:
+ *  - the number of sequences (`seq_num`),
+ *  - the input data (`data`),
+ *  - the ranges to extract from each sequence (`range`),
+ *  - and a pointer to where the alignment result should be stored (`result_store`).
+ * @return Always returns `nullptr`. The result of the alignment is stored via the pointer in `params`.
+ * @note If a sequence has an invalid range (start == -1 or length <= 0), an empty string is used.
+ */
 void *spoa_task(void *arg);
 
+/**
+ * @brief Performs multiple sequence alignment using WFA2 center-star algorithm.
+ *
+ * Extracts sequence fragments according to specified ranges and performs optimized
+ * multiple sequence alignment, storing results in params->result_store.
+ *
+ * @param params Pointer to MSATaskParams containing ranges, sequences, count, and result storage.
+ *
+ * @see wfa_msa_center_star
+ */
 void wfa_task(MSATaskParams *params);
 
+/**
+ * @brief Performs multiple sequence alignment using SPOA (Partial Order Alignment).
+ * This function leverages the SPOA library to construct a partial order graph and
+ * progressively align input sequences to it. It uses the global alignment model
+ * (Needleman-Wunsch) with linear gap penalties, optimized for short to medium-length
+ * sequence blocks (e.g., between MEMs). Empty sequences are ignored during the alignment process.
+ * The final output is a multiple sequence alignment with gaps introduced as necessary to maintain consistency.
+ * Scoring parameters used:
+ * - Match: +4
+ * - Mismatch: -10
+ * - Gap (linear): -8
+ * @param sequences A vector of input sequences to be aligned. Each sequence is a std::string.
+ * @return A vector of aligned sequences (same size as input), each padded with '-' where needed.
+ * @note This function is designed for fast in-memory alignment and is suitable as a lightweight
+ * alternative to full external aligners (e.g., MAFFT, HAlign) in internal blocks of ultralong sequences.
+ * @see https://github.com/rvaser/spoa for more details on the SPOA library.
+ */
 std::vector<std::string> spoa_align(const std::vector<std::string> &sequences);
 
+/**
+ * @brief Preprocesses alignment blocks between MEMs to reduce load on external aligners.
+ * This function attempts to resolve alignment blocks (typically between MEMs) in a fast and memory-efficient
+ * way, before falling back to more expensive external aligners such as MAFFT or HAlign. It operates by
+ * analyzing each block defined in `parallel_align_range` and choosing one of three strategies:
+ * 1. **Exact Match**: If all sequences in the block are identical, simply copies the fragment.
+ * 2. **SPOA Alignment**: If average fragment length is small (< 15000 bp), applies SPOA for fast in-memory MSA.
+ * 3. **Fallback Flag**: For long or divergent blocks, defers to external aligners by setting a fallback flag.
+ * @param data The original vector of sequences (one string per sequence).
+ * @param parallel_align_range A vector of alignment ranges (start, length pairs) per sequence, per block.
+ *        Each element defines the intervals to be extracted from `data` for one alignment block.
+ * @return A pair:
+ * - First: A 2D vector of strings containing aligned fragments (SPOA-aligned or copied directly).
+ * - Second: A boolean vector where `true` indicates the block must be aligned by an external aligner.
+ * @note This function assumes that `spoa_align()` is implemented and available in scope.
+ *       It is intended to be used directly after `get_parallel_align_range()` in the FMAlign2 pipeline.
+ */
 std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>
 preprocess_parallel_blocks(const std::vector<std::string> &data,
                            const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range, ThreadPool &pool);
-
-void wfa_parallel_align(ParallelAlignParams *params);
 
 /**
  * @brief Parses a SAM/BAM CIGAR string.

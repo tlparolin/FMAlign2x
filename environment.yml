@@ -1,5 +1,6 @@
 name: fmalign2x
 channels:
+  - bioconda
   - conda-forge
 dependencies:
   - gcc=14
@@ -15,7 +16,9 @@ dependencies:
   - git
   - curl
   - wget
+  - pkg-config
   - python
+  - seqkit
   - pip
   - pip:
       - pymsa

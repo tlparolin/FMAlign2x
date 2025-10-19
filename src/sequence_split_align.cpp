@@ -287,12 +287,11 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
     std::vector<std::vector<std::string>> fast_parallel_string(parallel_num, std::vector<std::string>(seq_num));
     std::vector<bool> wfa_needed(parallel_num, false); // now indicates WFA2 use
 
-    uint_t count_exact = 0;
-    uint_t count_spoa = 0;
-    uint_t count_wfa2 = 0;
+    uint_t counts[3] = {0, 0, 0}; // exact, spoa, wfa2
 
-    std::vector<MSATaskParams> spoa_params;
-    std::vector<MSATaskParams> wfa_params;
+    std::vector<MSATaskParams> spoa_params, wfa_params;
+    spoa_params.reserve(parallel_num);
+    wfa_params.reserve(parallel_num);
 
     // --- First pass: classify each block ---
     for (uint_t i = 0; i < parallel_num; ++i) {
@@ -314,107 +313,63 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
             }
         }
 
-        size_t avg_len = total_len / std::max<size_t>(seq_num, 1);
-
         if (all_equal) {
-            // Case 1: All fragments identical → copy directly
-            for (uint_t s = 0; s < seq_num; ++s)
-                fast_parallel_string[i][s] = fragments[0];
-            ++count_exact;
-        } else if (avg_len <= 15000) {
-            // Case 2: Short block → use SPOA
-            MSATaskParams spoa_param;
-            spoa_param.data = &data;
-            spoa_param.range = &parallel_align_range[i];
-            spoa_param.task_index = i;
-            spoa_param.seq_num = seq_num;
-            spoa_param.result_store = &fast_parallel_string[i];
-            spoa_params.push_back(spoa_param);
-            ++count_spoa;
+            // All fragments identical → copy directly
+            std::fill(fast_parallel_string[i].begin(), fast_parallel_string[i].end(), fragments[0]);
+            ++counts[0];
         } else {
-            // Case 3: Long block → use WFA2
-            MSATaskParams wfa_param;
-            wfa_param.data = &data;
-            wfa_param.range = &parallel_align_range[i];
-            wfa_param.task_index = i;
-            wfa_param.seq_num = seq_num;
-            wfa_param.result_store = &fast_parallel_string[i];
-            wfa_params.push_back(wfa_param);
-            wfa_needed[i] = true;
-            ++count_wfa2;
+            size_t avg_len = total_len / std::max<size_t>(seq_num, 1);
+            auto &params_list = (avg_len <= 15000) ? spoa_params : wfa_params;
+            bool is_wfa = (avg_len > 15000);
+
+            params_list.push_back({.data = &data,
+                                   .range = &parallel_align_range[i],
+                                   .task_index = i,
+                                   .seq_num = seq_num,
+                                   .result_store = &fast_parallel_string[i]});
+
+            if (is_wfa) {
+                wfa_needed[i] = true;
+                ++counts[2];
+            } else {
+                ++counts[1];
+            }
         }
     }
 
-    // --- Run SPOA tasks in parallel ---
-    for (size_t idx = 0; idx < spoa_params.size(); ++idx) {
-        pool.add_task([&, idx]() { spoa_task(&spoa_params[idx]); });
+    // --- Run tasks in parallel ---
+    if (!spoa_params.empty()) {
+        for (size_t idx = 0; idx < spoa_params.size(); ++idx)
+            pool.add_task([&spoa_params, idx]() { spoa_task(&spoa_params[idx]); });
     }
 
-    // --- Run WFA2 tasks in parallel ---
-    for (size_t idx = 0; idx < wfa_params.size(); ++idx) {
-        pool.add_task([&, idx]() { wfa_task(&wfa_params[idx]); });
+    if (!wfa_params.empty()) {
+        for (size_t idx = 0; idx < wfa_params.size(); ++idx)
+            pool.add_task([&wfa_params, idx]() { wfa_task(&wfa_params[idx]); });
     }
 
-    // Wait for all threads to complete
     pool.wait_for_tasks();
 
     // --- Print summary if verbose mode is active ---
     if (global_args.verbose) {
-        print_table_line(std::format("Blocks resolved by copy: {}", count_exact));
-        print_table_line(std::format("Blocks aligned with SPOA: {}", count_spoa));
-        print_table_line(std::format("Blocks aligned with WFA2: {}", count_wfa2));
+        print_table_line(std::format("Blocks resolved by copy: {}", counts[0]));
+        print_table_line(std::format("Blocks aligned with SPOA: {}", counts[1]));
+        print_table_line(std::format("Blocks aligned with WFA2: {}", counts[2]));
     }
 
     return {fast_parallel_string, wfa_needed};
 }
 
-// void wfa_parallel_align(ParallelAlignParams *params) {
-//     const auto &data = *params->data;
-//     const auto &range = *params->parallel_range;
-//     uint_t seq_num = data.size();
-
-//     // Extract the substring (block) of each sequence based on (start, len)
-//     std::vector<std::string> fragments(seq_num);
-//     for (uint_t s = 0; s < seq_num; ++s) {
-//         auto [start, len] = range[s];
-//         if (start != -1 && len > 0 && static_cast<size_t>(start) < data[s].size())
-//             fragments[s] = data[s].substr(start, len);
-//         else
-//             fragments[s].clear(); // empty fragment
-//     }
-
-//     // Run multiple sequence alignment using WFA center-star
-//     std::vector<std::string> aligned_block;
-//     try {
-//         aligned_block = wfa_msa_center_star(fragments);
-//     } catch (const std::exception &e) {
-//         std::cerr << "[WFA ERROR] Block " << params->task_index << " failed: " << e.what() << std::endl;
-
-//         // Emergency fallback: copy original fragments and pad with gaps
-//         aligned_block = fragments;
-//         size_t maxlen = 0;
-//         for (auto &s : aligned_block)
-//             maxlen = std::max(maxlen, s.size());
-//         for (auto &s : aligned_block)
-//             s.append(maxlen - s.size(), '-');
-//     }
-
-//     // Normalize sequence lengths (pad shorter ones with '-')
-//     size_t max_len = 0;
-//     for (auto &s : aligned_block)
-//         max_len = std::max(max_len, s.size());
-
-//     for (auto &s : aligned_block)
-//         if (s.size() < max_len)
-//             s.append(max_len - s.size(), '-');
-
-//     // Store the result in the output vector
-//     (*params->result_store) = std::move(aligned_block);
-
-//     // Mark this block as successfully aligned (no fallback required)
-//     (*params->wfa2_needed)[params->task_index] = false;
-// }
-
+/**
+ * @brief Performs multiple sequence alignment using WFA2 center-star algorithm.
+ *
+ * Extracts sequence fragments according to specified ranges and performs optimized
+ * multiple sequence alignment, storing results in params->result_store.
+ *
+ * @param params Pointer to MSATaskParams containing ranges, sequences, count, and result storage.
+ *
+ * @see wfa_msa_center_star
+ */
 void wfa_task(MSATaskParams *params) {
     const auto &range = *params->range;
     const auto &data = *params->data;
@@ -1117,7 +1072,8 @@ void seq2profile(std::vector<std::vector<std::string>> &concat_string, std::vect
         std::vector<std::vector<std::string>>::iterator cur_it = concat_string.begin();
         for (; cur_it != concat_string.end(); cur_it++) {
             std::vector<std::string> cur_vec = *cur_it;
-            // std::cout << cur_vec[seq_index].length() << " " << fragment_len[cur_it - concat_string.begin()] << " " << concat_range[cur_it
+            // std::cout << cur_vec[seq_index].length() << " " << fragment_len[cur_it - concat_string.begin()] << " " <<
+            // concat_range[cur_it
             // - concat_string.begin()][seq_index].first << std::endl; if (cur_vec[seq_index].length() != fragment_len[cur_it -
             // concat_string.begin()]) {
             if (concat_range[cur_it - concat_string.begin()][seq_index].first == -1) {
@@ -1142,10 +1098,10 @@ void seq2profile(std::vector<std::vector<std::string>> &concat_string, std::vect
 }
 
 /**
- * @brief: Aligns a sequence and a profile using a third-party tool called profile_two_align and returns the iterator pointing to the next
- * position in the 2D vector of strings. The function first checks for gaps between the fragments and adds them as necessary. Then it writes
- * the sequence to align and a profile file, passes them to profile_two_align, and reads the results. Finally, it updates the concatenated
- * string, range and fragment length information accordingly.
+ * @brief: Aligns a sequence and a profile using a third-party tool called profile_two_align and returns the iterator pointing to the
+ * next position in the 2D vector of strings. The function first checks for gaps between the fragments and adds them as necessary. Then
+ * it writes the sequence to align and a profile file, passes them to profile_two_align, and reads the results. Finally, it updates the
+ * concatenated string, range and fragment length information accordingly.
  * @param seq_index: Index of the sequence to align.
  * @param left_index: Index of the left-most fragment.
  * @param right_index: Index of the right-most fragment.
