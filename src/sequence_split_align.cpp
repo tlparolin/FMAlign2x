@@ -130,18 +130,15 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     // === SPOA-BASED ALIGNMENT (IN-MEMORY ONLY) ===
     std::vector<std::vector<std::string>> spoa_parallel_string;
 
-    if (global_args.extended) {
-        spoa_parallel_string = preprocess_parallel_blocks(data, parallel_align_range);
+    spoa_parallel_string = preprocess_parallel_blocks(data, parallel_align_range);
 
-        if (global_args.verbose) {
-            print_table_line(std::format("Parallel Align Time: {:.2f} seconds.", timer.elapsed_time()));
-        }
-
-        timer.reset();
-    } else {
-        // fallback to empty structure if not extended
-        spoa_parallel_string.resize(parallel_align_range.size(), std::vector<std::string>(seq_num, ""));
+    if (global_args.verbose) {
+        print_table_line(std::format("Parallel Align Time: {:.2f} seconds.", timer.elapsed_time()));
     }
+
+    timer.reset();
+    // fallback to empty structure if not extended
+    spoa_parallel_string.resize(parallel_align_range.size(), std::vector<std::string>(seq_num, ""));
 
     // === CONCATENATION ===
     std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
@@ -222,6 +219,10 @@ void *spoa_task(void *arg) {
 std::vector<std::vector<std::string>>
 preprocess_parallel_blocks(const std::vector<std::string> &data,
                            const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range) {
+    const size_t MAX_BLOCK_SIZE = 15000; // Maximum block size for SPOA (in bases)
+    const size_t OVERLAP_SIZE = 200;     // Overlap between consecutive sub-blocks
+    const size_t MIN_OVERLAP_TRIM = 50;  // Minimum overlap to trim (avoid over-trimming)
+
     uint_t parallel_num = parallel_align_range.size();
     uint_t seq_num = data.size();
 
@@ -229,63 +230,275 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
 
     uint_t count_exact = 0;
     uint_t count_spoa = 0;
+    uint_t count_split = 0;
 
-    // Vetores para armazenar os blocos que serão processados com SPOA
-    std::vector<uint_t> spoa_indices;
+    // Structure to hold subdivision info
+    struct SubBlockInfo {
+        uint_t block_index;
+        std::vector<std::vector<std::string>> sub_results; // One result per sub-block
+        std::vector<size_t> sub_block_starts;              // Start position of each sub-block
+        std::vector<size_t> sub_block_ends;                // End position of each sub-block
+    };
+
+    std::vector<SubBlockInfo> subdivided_blocks;
     std::vector<SpoaTaskParams> spoa_params;
 
-    // Primeira passagem: identificar blocos e preparar parâmetros para SPOA
+    // ============================================================
+    // PASS 1: Classify blocks and prepare tasks
+    // ============================================================
     for (uint_t i = 0; i < parallel_num; ++i) {
         const auto &range = parallel_align_range[i];
         std::vector<std::string> fragments(seq_num);
         bool all_equal = true;
+        size_t total_len = 0;
+        size_t max_len = 0;
 
+        // Extract fragments
         for (uint_t s = 0; s < seq_num; ++s) {
             auto [start, len] = range[s];
             if (start != -1 && len > 0) {
                 fragments[s] = data[s].substr(start, len);
-                if (s > 0 && fragments[s] != fragments[0]) {
+                total_len += len;
+                max_len = std::max(max_len, fragments[s].size());
+                if (s > 0 && fragments[s] != fragments[0])
                     all_equal = false;
-                }
             } else {
                 fragments[s] = "";
             }
         }
 
+        size_t avg_len = (seq_num > 0) ? (total_len / seq_num) : 0;
+
+        // --- Case 1: All fragments identical → direct copy ---
         if (all_equal) {
-            // Caso 1: cópia direta
-            for (uint_t s = 0; s < seq_num; ++s)
-                fast_parallel_string[i][s] = fragments[0];
+            std::fill(fast_parallel_string[i].begin(), fast_parallel_string[i].end(), fragments[0]);
             ++count_exact;
-        } else {
-            // Caso 2: alinhar com SPOA
-            spoa_indices.push_back(i);
+            continue;
+        }
+
+        // --- Case 2: Small block → direct SPOA ---
+        if (avg_len <= MAX_BLOCK_SIZE) {
             SpoaTaskParams params;
             params.data = &data;
             params.range = &parallel_align_range[i];
             params.task_index = i;
             params.seq_num = seq_num;
             params.result_store = &fast_parallel_string[i];
+            params.result_local = nullptr; // Not used for direct SPOA
             spoa_params.push_back(params);
             ++count_spoa;
+            continue;
         }
+
+        // --- Case 3: Large block → subdivide ---
+        ++count_split;
+
+        SubBlockInfo sub_info;
+        sub_info.block_index = i;
+
+        size_t pos = 0;
+
+        // Generate overlapping sub-blocks
+        while (pos < max_len) {
+            size_t end = std::min(pos + MAX_BLOCK_SIZE, max_len);
+
+            // Add overlap to the end (except for last block)
+            if (end < max_len) {
+                end = std::min(end + OVERLAP_SIZE, max_len);
+            }
+
+            sub_info.sub_block_starts.push_back(pos);
+            sub_info.sub_block_ends.push_back(end);
+
+            // Extract sub-fragments
+            std::vector<std::string> sub_fragments(seq_num);
+            for (uint_t s = 0; s < seq_num; ++s) {
+                const std::string &seq = fragments[s];
+                if (seq.empty()) {
+                    sub_fragments[s] = "";
+                } else {
+                    size_t real_start = std::min(pos, seq.size());
+                    size_t real_end = std::min(end, seq.size());
+                    if (real_start < real_end) {
+                        sub_fragments[s] = seq.substr(real_start, real_end - real_start);
+                    } else {
+                        sub_fragments[s] = "";
+                    }
+                }
+            }
+
+            // Create SPOA task for this sub-block
+            SpoaTaskParams sub_params;
+            sub_params.task_index = i;
+            sub_params.seq_num = seq_num;
+            sub_params.data = nullptr;
+            sub_params.range = nullptr;
+            sub_params.result_store = nullptr;
+            sub_params.local_sequences = sub_fragments;
+            sub_params.result_local = std::make_shared<std::vector<std::string>>();
+            spoa_params.push_back(sub_params);
+            ++count_spoa;
+
+            // Move to next sub-block (with overlap)
+            pos += (MAX_BLOCK_SIZE - OVERLAP_SIZE);
+            if (pos >= max_len)
+                break;
+        }
+
+        subdivided_blocks.push_back(std::move(sub_info));
     }
 
-    // Execução paralela de SPOA
+    // ============================================================
+    // PASS 2: Execute all SPOA tasks in parallel
+    // ============================================================
     if (!spoa_params.empty()) {
         ThreadPool pool(global_args.thread);
-        for (size_t idx = 0; idx < spoa_params.size(); ++idx) {
-            pool.add_task([&, idx]() { spoa_task(&spoa_params[idx]); });
+
+        for (auto &params : spoa_params) {
+            pool.add_task([&params]() {
+                if (params.data != nullptr) {
+                    // Direct SPOA task (small block)
+                    spoa_task(&params);
+                } else {
+                    // Subdivision SPOA task
+                    std::vector<std::string> aligned = run_spoa_local(params.local_sequences);
+                    *(params.result_local) = aligned;
+                }
+            });
         }
+
         pool.shutdown();
     }
 
+    // ============================================================
+    // PASS 3: Merge subdivided blocks with overlap trimming
+    // ============================================================
+    for (auto &sub_info : subdivided_blocks) {
+        uint_t block_idx = sub_info.block_index;
+        std::vector<std::string> merged(seq_num, "");
+
+        // Collect all sub-block results
+        std::vector<std::vector<std::string>> sub_results;
+        // size_t param_idx = 0;
+
+        for (auto &p : spoa_params) {
+            if (p.task_index == block_idx && p.result_local != nullptr) {
+                sub_results.push_back(*(p.result_local));
+            }
+        }
+
+        if (sub_results.empty()) {
+            // Safety: if no results, fill with gaps
+            size_t expected_len = 0;
+            for (uint_t s = 0; s < seq_num; ++s) {
+                auto [start, len] = parallel_align_range[block_idx][s];
+                expected_len = std::max(expected_len, static_cast<size_t>(len));
+            }
+            fast_parallel_string[block_idx] = std::vector<std::string>(seq_num, std::string(expected_len, '-'));
+            continue;
+        }
+
+        // Merge sub-blocks
+        for (size_t sub_idx = 0; sub_idx < sub_results.size(); ++sub_idx) {
+            const auto &sub_result = sub_results[sub_idx];
+
+            if (sub_idx == 0) {
+                // First sub-block: copy everything
+                for (uint_t s = 0; s < seq_num; ++s) {
+                    merged[s] = sub_result[s];
+                }
+            } else {
+                // Subsequent sub-blocks: trim overlap and concatenate
+                size_t overlap_in_coords = OVERLAP_SIZE;
+
+                // Calculate actual overlap in aligned coordinates
+                // We need to find how many aligned columns correspond to ~OVERLAP_SIZE bases
+                size_t overlap_cols = 0;
+
+                for (uint_t s = 0; s < seq_num; ++s) {
+                    if (sub_result[s].empty())
+                        continue;
+
+                    // Count non-gap characters in the beginning of current sub-block
+                    size_t non_gaps = 0;
+                    overlap_cols = 0;
+                    for (size_t col = 0; col < sub_result[s].size() && non_gaps < overlap_in_coords; ++col) {
+                        if (sub_result[s][col] != '-') {
+                            non_gaps++;
+                        }
+                        overlap_cols = col + 1;
+                    }
+                    break; // Use first non-empty sequence as reference
+                }
+
+                // Trim overlap region (keep at least MIN_OVERLAP_TRIM to avoid over-trimming)
+                size_t trim_amount = overlap_cols / 2; // Trim half of the overlap
+                trim_amount = std::min(trim_amount, overlap_cols - MIN_OVERLAP_TRIM);
+
+                for (uint_t s = 0; s < seq_num; ++s) {
+                    if (trim_amount < sub_result[s].size()) {
+                        merged[s] += sub_result[s].substr(trim_amount);
+                    }
+                }
+            }
+        }
+
+        fast_parallel_string[block_idx] = merged;
+    }
+
+    // ============================================================
+    // Verbose output
+    // ============================================================
     if (global_args.verbose) {
-        print_table_line("Blocks resolved by copy: " + std::to_string(count_exact));
-        print_table_line("Blocks aligned in memory (SPOA): " + std::to_string(count_spoa));
+        print_table_line("Blocks copied directly: " + std::to_string(count_exact));
+        print_table_line("Blocks aligned by SPOA: " + std::to_string(count_spoa));
+        print_table_line("Large blocks subdivided: " + std::to_string(count_split));
     }
 
     return fast_parallel_string;
+}
+
+/**
+ * @brief Runs SPOA alignment on a set of sequences (helper for subdivisions)
+ * @param seqs Input sequences (may contain empty strings)
+ * @return Aligned sequences with gaps
+ */
+std::vector<std::string> run_spoa_local(const std::vector<std::string> &seqs) {
+    if (seqs.empty())
+        return {};
+
+    // FIXED: Use correct SPOA parameters (match=5, mismatch=-4, gap=-8)
+    auto aligner = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8);
+    spoa::Graph graph;
+
+    std::vector<size_t> non_empty_indices;
+
+    // Add only non-empty sequences
+    for (size_t i = 0; i < seqs.size(); ++i) {
+        if (seqs[i].empty())
+            continue;
+
+        auto alignment = aligner->Align(seqs[i], graph);
+        graph.AddAlignment(alignment, seqs[i]);
+        non_empty_indices.push_back(i);
+    }
+
+    // If all empty, return empty strings
+    if (non_empty_indices.empty()) {
+        return std::vector<std::string>(seqs.size(), "");
+    }
+
+    // Generate MSA
+    auto msa_compact = graph.GenerateMultipleSequenceAlignment();
+    size_t aln_len = msa_compact.empty() ? 0 : msa_compact[0].size();
+
+    // Rebuild to original size
+    std::vector<std::string> msa(seqs.size(), std::string(aln_len, '-'));
+    for (size_t k = 0; k < non_empty_indices.size(); ++k) {
+        msa[non_empty_indices[k]] = std::move(msa_compact[k]);
+    }
+
+    return msa;
 }
 
 /**

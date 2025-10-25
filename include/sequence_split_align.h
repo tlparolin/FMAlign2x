@@ -63,11 +63,13 @@ struct ParallelAlignParams {
 };
 
 struct SpoaTaskParams {
-    const std::vector<std::string> *data;
-    const std::vector<std::pair<int_t, int_t>> *range;
-    uint_t task_index;
-    uint_t seq_num;
-    std::vector<std::string> *result_store;
+    const std::vector<std::string> *data = nullptr;              // Pointer to input sequences (optional)
+    const std::vector<std::pair<int_t, int_t>> *range = nullptr; // Input range (for direct block alignment)
+    std::vector<std::string> local_sequences;                    // Used when aligning subdivided sub-blocks
+    std::shared_ptr<std::vector<std::string>> result_local;      // Result container for local sub-blocks
+    std::vector<std::string> *result_store = nullptr;            // Destination for aligned output
+    uint_t seq_num = 0;                                          // Number of sequences in alignment
+    uint_t task_index = 0;                                       // Block index
 };
 
 /**
@@ -93,6 +95,8 @@ std::string generateRandomString(int length);
  */
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name,
                               std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence);
+
+std::vector<std::string> run_spoa_local(const std::vector<std::string> &seqs);
 
 /**
  * @brief Preprocesses alignment blocks between MEMs to reduce load on external aligners.
