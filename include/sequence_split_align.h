@@ -31,6 +31,7 @@
 #include "common.h"
 #include "utils.h"
 #include <algorithm>
+#include <format>
 #include <spoa/spoa.hpp>
 #include <sstream>
 #ifdef __linux__
@@ -110,7 +111,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
  * @note This function assumes that `spoa_align()` is implemented and available in scope.
  *       It is intended to be used directly after `get_parallel_align_range()` in the FMAlign2 pipeline.
  */
-std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>
+std::vector<std::vector<std::string>>
 preprocess_parallel_blocks(const std::vector<std::string> &data,
                            const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range);
 
