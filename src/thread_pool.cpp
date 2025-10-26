@@ -16,8 +16,16 @@ void ThreadPool::add_task(std::function<void()> task) {
     cv_.notify_one();
 }
 
+void ThreadPool::wait_for_tasks() {
+    std::unique_lock lock(mutex_);
+    cv_done_.wait(lock, [this] { return tasks_.empty() && active_tasks_ == 0; });
+}
+
 void ThreadPool::shutdown() {
-    quitting_ = true;
+    {
+        std::lock_guard lock(mutex_);
+        quitting_ = true;
+    }
     cv_.notify_all();
 
     for (auto &worker : workers_) {
@@ -30,7 +38,6 @@ void ThreadPool::shutdown() {
 void ThreadPool::worker_thread() {
     while (true) {
         std::function<void()> task;
-
         {
             std::unique_lock lock(mutex_);
             cv_.wait(lock, [this] { return quitting_ || !tasks_.empty(); });
@@ -40,8 +47,16 @@ void ThreadPool::worker_thread() {
 
             task = std::move(tasks_.front());
             tasks_.pop();
+            ++active_tasks_;
         }
 
         task();
+
+        {
+            std::lock_guard lock(mutex_);
+            --active_tasks_;
+            if (tasks_.empty() && active_tasks_ == 0)
+                cv_done_.notify_all();
+        }
     }
 }

@@ -82,7 +82,7 @@ std::string generateRandomString(int length) {
 std::string random_file_end;
 
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name,
-                              std::vector<std::vector<std::pair<int_t, int_t>>> chain) {
+                              std::vector<std::vector<std::pair<int_t, int_t>>> chain, ThreadPool &pool) {
     if (global_args.verbose) {
         std::cout << "#                Parallel Aligning...                       #" << std::endl;
         print_table_divider();
@@ -105,11 +105,10 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     }
 
     if (global_args.min_seq_coverage == 1) {
-        ThreadPool pool(global_args.thread);
         for (uint_t i = 0; i < chain_num; i++) {
             pool.add_task([&, i]() { expand_chain(&params[i]); });
         }
-        pool.shutdown();
+        pool.wait_for_tasks();
     } else {
         for (uint_t i = 0; i < chain_num; i++) {
             expand_chain(&params[i]);
@@ -130,7 +129,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     // === SPOA-BASED ALIGNMENT (IN-MEMORY ONLY) ===
     std::vector<std::vector<std::string>> spoa_parallel_string;
 
-    spoa_parallel_string = preprocess_parallel_blocks(data, parallel_align_range);
+    spoa_parallel_string = preprocess_parallel_blocks(data, parallel_align_range, pool);
 
     if (global_args.verbose) {
         print_table_line(std::format("Parallel Align Time: {:.2f} seconds.", timer.elapsed_time()));
@@ -218,10 +217,9 @@ void *spoa_task(void *arg) {
  */
 std::vector<std::vector<std::string>>
 preprocess_parallel_blocks(const std::vector<std::string> &data,
-                           const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range) {
+                           const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range, ThreadPool &pool) {
     const size_t MAX_BLOCK_SIZE = 15000; // Maximum block size for SPOA (in bases)
     const size_t OVERLAP_SIZE = 200;     // Overlap between consecutive sub-blocks
-    const size_t MIN_OVERLAP_TRIM = 50;  // Minimum overlap to trim (avoid over-trimming)
 
     uint_t parallel_num = parallel_align_range.size();
     uint_t seq_num = data.size();
@@ -352,7 +350,6 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
     // PASS 2: Execute all SPOA tasks in parallel
     // ============================================================
     if (!spoa_params.empty()) {
-        ThreadPool pool(global_args.thread);
 
         for (auto &params : spoa_params) {
             pool.add_task([&params]() {
@@ -367,7 +364,7 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
             });
         }
 
-        pool.shutdown();
+        pool.wait_for_tasks();
     }
 
     // ============================================================
@@ -409,36 +406,39 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
                 }
             } else {
                 // Subsequent sub-blocks: trim overlap and concatenate
-                size_t overlap_in_coords = OVERLAP_SIZE;
+                const size_t overlap_in_coords = OVERLAP_SIZE;
 
-                // Calculate actual overlap in aligned coordinates
-                // We need to find how many aligned columns correspond to ~OVERLAP_SIZE bases
-                size_t overlap_cols = 0;
+                // Extrair o topo do bloco anterior (merged) e o início do bloco atual (sub_result)
+                std::vector<std::string> overlap_prev(seq_num);
+                std::vector<std::string> overlap_curr(seq_num);
 
-                for (uint_t s = 0; s < seq_num; ++s) {
-                    if (sub_result[s].empty())
-                        continue;
+                for (size_t s = 0; s < seq_num; ++s) {
+                    const std::string &prev_seq = merged[s];
+                    const std::string &curr_seq = sub_result[s];
 
-                    // Count non-gap characters in the beginning of current sub-block
-                    size_t non_gaps = 0;
-                    overlap_cols = 0;
-                    for (size_t col = 0; col < sub_result[s].size() && non_gaps < overlap_in_coords; ++col) {
-                        if (sub_result[s][col] != '-') {
-                            non_gaps++;
-                        }
-                        overlap_cols = col + 1;
-                    }
-                    break; // Use first non-empty sequence as reference
+                    size_t len_prev = std::min(overlap_in_coords, prev_seq.size());
+                    size_t len_curr = std::min(overlap_in_coords, curr_seq.size());
+
+                    overlap_prev[s] = prev_seq.substr(prev_seq.size() - len_prev);
+                    overlap_curr[s] = curr_seq.substr(0, len_curr);
                 }
 
-                // Trim overlap region (keep at least MIN_OVERLAP_TRIM to avoid over-trimming)
-                size_t trim_amount = overlap_cols / 2; // Trim half of the overlap
-                trim_amount = std::min(trim_amount, overlap_cols - MIN_OVERLAP_TRIM);
+                // Cria sequência intermediária juntando as bordas
+                std::vector<std::string> bridge_fragments(seq_num);
+                for (size_t s = 0; s < seq_num; ++s)
+                    bridge_fragments[s] = overlap_prev[s] + overlap_curr[s];
 
-                for (uint_t s = 0; s < seq_num; ++s) {
-                    if (trim_amount < sub_result[s].size()) {
-                        merged[s] += sub_result[s].substr(trim_amount);
-                    }
+                // Alinhar a ponte com SPOA
+                std::vector<std::string> bridge_aln = run_spoa_local(bridge_fragments);
+
+                // Escolher ponto de corte no meio do alinhamento da ponte
+                size_t bridge_cut = bridge_aln[0].size() / 2;
+
+                // Aplicar o merge SPOA das bordas refinadas
+                for (size_t s = 0; s < seq_num; ++s) {
+                    size_t trim_len = std::min(overlap_in_coords, merged[s].size());
+                    merged[s].erase(merged[s].size() - trim_len);  // remove fim antigo
+                    merged[s] += bridge_aln[s].substr(bridge_cut); // anexa parte refinada
                 }
             }
         }
@@ -961,216 +961,6 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const
     }
 
     return transpose_res;
-}
-
-/**
- * @brief Function for parallel alignment of sequences.
- * This function aligns a subset of input sequences in parallel using multiple threads.
- * @param arg Pointer to a ParallelAlignParams struct which contains the input data, the range of sequences to align,
- * the index of the current task, and a pointer to the storage for the aligned sequences.
- * @return NULL
- */
-void *parallel_align(void *arg) {
-    // Cast input parameters to the correct struct type.
-    ParallelAlignParams *ptr = static_cast<ParallelAlignParams *>(arg);
-
-    // if not fallback_needed, the block was resolved by SPOA directly. Nothing to do.
-    // if (!(*ptr->fallback_needed)[ptr->task_index]) {
-    //     return nullptr;
-    // }
-
-    // Use references to avoid copying the vectors.
-    const std::vector<std::string> &data = *(ptr->data);
-    const std::vector<std::pair<int_t, int_t>> &parallel_range = *(ptr->parallel_range);
-    const uint_t task_index = ptr->task_index;
-    const uint_t seq_num = data.size();
-
-    // Construct the file name.
-    std::string file_name = TMP_FOLDER + "task-" + std::to_string(task_index) + "_" + random_file_end + ".fasta";
-
-    // Open the output file.
-    std::ofstream file(file_name);
-    if (!file.is_open()) {
-        std::cerr << file_name << " failed to open!" << std::endl;
-        exit(1);
-    }
-
-    // Reserve space in the vector to avoid reallocations.
-    std::vector<uint_t> aligned_seq_index;
-    aligned_seq_index.reserve(seq_num);
-
-    // Write directly to the file.
-    for (uint_t i = 0; i < seq_num; i++) {
-        // Check if the sequence should be aligned.
-        if (parallel_range[i].first >= 0) {
-            // Extract the desired substring from the sequence.
-            std::string seq_content = data[i].substr(parallel_range[i].first, parallel_range[i].second);
-            // Write the header and sequence directly to the file.
-            file << ">SEQUENCE" << i << "\n" << seq_content << "\n";
-            aligned_seq_index.push_back(i);
-        }
-    }
-    file.close();
-
-    // Call the align_fasta function to align the sequences in the file.
-    std::string res_file_name = align_fasta(file_name);
-
-    // Read the alignment results.
-    std::vector<std::string> aligned_seq;
-    std::vector<std::string> aligned_name;
-    read_data(res_file_name.c_str(), aligned_seq, aligned_name, false);
-
-    // Map the aligned sequences back to their original indices.
-    std::vector<std::string> final_aligned_seq(seq_num, "");
-    for (size_t i = 0; i < aligned_seq_index.size(); i++) {
-        final_aligned_seq[aligned_seq_index[i]] = std::move(aligned_seq[i]);
-    }
-    // Store the final aligned sequences with move semantics to avoid unnecessary copies.
-    *(ptr->result_store) = std::move(final_aligned_seq);
-
-    return NULL;
-}
-
-/**
- * @brief Align sequences in a FASTA file using either halign or mafft package.
- * @param file_name The name of the FASTA file to align.
- * @return The name of the resulting aligned FASTA file.
- */
-std::string align_fasta(const std::string &file_name) {
-
-    std::ifstream file(file_name, std::ios::binary | std::ios::ate);
-    int_t size = file.tellg() / (1024 * 1024);
-    file.close();
-    int_t t_int = 1;
-    if (ceil(size / global_args.avg_file_size) + 1 < global_args.thread) {
-        t_int = (int_t)(ceil(size / global_args.avg_file_size) + 1);
-    } else {
-        t_int = global_args.thread;
-    }
-    std::string t = std::to_string(t_int);
-    // std::cout << size << " "<< global_args.avg_file_size <<" " << t <<std::endl;
-    // Construct command string based on selected alignment package and operating system
-    std::string cmnd = "";
-    std::string res_file_name = file_name.substr(0, file_name.find(".fasta")) + ".aligned.fasta";
-    if (global_args.package == "halign3") {
-        cmnd.append("java -jar ./ext/halign3/share/halign-stmsa.jar ")
-            .append("-t ")
-            .append(t)
-            .append(" -o ")
-            .append(res_file_name)
-            .append(" ")
-            .append(file_name);
-#if (defined(__linux__))
-        cmnd.append(" > /dev/null");
-#else
-        cmnd.append(" > NUL");
-#endif
-    } else if (global_args.package == "halign2") {
-        cmnd.append("java -jar ./ext/halign2/HAlign2.1.jar ")
-            .append("-localMSA ")
-            .append(file_name)
-            .append(" ")
-            .append(res_file_name)
-            .append(" 0");
-
-#if (defined(__linux__))
-        cmnd.append(" > /dev/null");
-#else
-        cmnd.append(" > NUL");
-#endif
-    } else if (global_args.package == "mafft") {
-
-#if (defined(__linux__))
-        cmnd.append("./ext/mafft/linux/usr/libexec/mafft/disttbfast ")
-            .append("-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C ")
-            .append(t)
-            .append(" -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -i ")
-            .append(file_name)
-            .append(" > ")
-            .append(res_file_name);
-        cmnd.append(" 2> /dev/null");
-#else
-        cmnd.append(".\\ext\\mafft\\win\\usr\\lib\\mafft\\disttbfast.exe ")
-            .append("-q 0 -E 1 -V -1.53 -s 0.0 -W 6 -O -C ")
-            .append(t)
-            .append(" -b 62 -g 0 -f -1.53 -Q 100.0 -h 0 -F -X 0.1 -i ")
-            .append(file_name)
-            .append(" > ")
-            .append(res_file_name);
-        cmnd.append(" 2> NUL");
-#endif
-    }
-
-    try {
-        // Execute the command and check for errors
-        int res = system(cmnd.c_str());
-        if (res != 0) {
-            std::string out = "Warning: Starts calling FMAlign2x recursively to align " + file_name;
-            print_table_line(out);
-            cmnd = "";
-#if (defined(__linux__))
-            cmnd.append("./FMAlign2x ")
-                .append("-i ")
-                .append(file_name)
-                .append(" -o ")
-                .append(res_file_name)
-                .append(" -p ")
-                .append(global_args.package)
-                .append(" -t ")
-                .append(t)
-                .append(" -v 0")
-                .append(" -d ")
-                .append(std::to_string(global_args.degree + 1));
-            cmnd.append(" &> /dev/null");
-#else
-            cmnd.append("./FMAlign2x.exe ")
-                .append("-i ")
-                .append(file_name)
-                .append(" -o ")
-                .append(res_file_name)
-                .append(" -p ")
-                .append(global_args.package)
-                .append(" -t ")
-                .append(t)
-                .append(" -v 0")
-                .append(" -d ")
-                .append(std::to_string(global_args.degree + 1));
-            cmnd.append(" &> NUL");
-#endif
-            res = system(cmnd.c_str());
-            if (res != 0) {
-                throw "Fail to align in parallel!";
-            }
-        }
-    } catch (const char *e) { // Catch any bad allocations and print an error message.
-        std::cerr << "Error: " << e << std::endl;
-        exit(1);
-    }
-
-    return res_file_name;
-}
-
-/**
- * @brief Deletes temporary files generated during sequence alignment tasks.
- * @param task_count The number of tasks for which temporary files were created.
- * @param fallback_needed A boolean value that identifies if the file needs to be deleted
- */
-void delete_tmp_folder(uint_t task_count, const std::vector<bool> &fallback_needed) {
-    for (uint_t i = 0; i < task_count; i++) {
-        if (!fallback_needed[i])
-            continue; // just del if the file was created
-
-        std::string file_name = TMP_FOLDER + "task-" + std::to_string(i) + "_" + random_file_end + ".fasta";
-        std::string res_file_name = TMP_FOLDER + "task-" + std::to_string(i) + "_" + random_file_end + ".aligned.fasta";
-
-        if (std::remove(file_name.c_str()) != 0) {
-            std::cerr << "Error deleting file " << file_name << std::endl;
-        }
-
-        if (std::remove(res_file_name.c_str()) != 0) {
-            std::cerr << "Error deleting file " << res_file_name << std::endl;
-        }
-    }
 }
 
 /**

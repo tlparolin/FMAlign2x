@@ -14,22 +14,26 @@ class ThreadPool {
     explicit ThreadPool(size_t max_threads);
     ~ThreadPool();
 
-    // Adiciona uma tarefa para execução
+    // Adds a new task to the pool
     void add_task(std::function<void()> task);
 
-    // Espera todas as tarefas finalizarem e destrói o pool
+    // Waits for all tasks to finish
+    void wait_for_tasks();
+
+    // Waits for all tasks to finish and finalizes the pool
     void shutdown();
 
   private:
     void worker_thread();
 
+    size_t max_threads_;
     std::vector<std::thread> workers_;
     std::queue<std::function<void()>> tasks_;
-
     std::mutex mutex_;
     std::condition_variable cv_;
-    std::atomic<bool> quitting_{false};
-    size_t max_threads_;
+    std::condition_variable cv_done_;
+    bool quitting_ = false;
+    size_t active_tasks_ = 0;
 };
 
 #endif // THREAD_POOL_H

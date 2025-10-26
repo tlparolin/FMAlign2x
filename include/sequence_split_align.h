@@ -94,7 +94,7 @@ std::string generateRandomString(int length);
  * @return void
  */
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name,
-                              std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence);
+                              std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence, ThreadPool &pool);
 
 std::vector<std::string> run_spoa_local(const std::vector<std::string> &seqs);
 
@@ -117,7 +117,7 @@ std::vector<std::string> run_spoa_local(const std::vector<std::string> &seqs);
  */
 std::vector<std::vector<std::string>>
 preprocess_parallel_blocks(const std::vector<std::string> &data,
-                           const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range);
+                           const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range, ThreadPool &pool);
 
 /**
  * @brief Performs multiple sequence alignment using SPOA (Partial Order Alignment).
@@ -192,29 +192,6 @@ std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment align
  */
 std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const std::vector<std::string> &data,
                                                                            const std::vector<std::vector<std::pair<int_t, int_t>>> &chain);
-
-/**
- * @brief Function for parallel alignment of sequences.
- * This function aligns a subset of input sequences in parallel using multiple threads.
- * @param arg Pointer to a ParallelAlignParams struct which contains the input data, the range of sequences to align,
- * the index of the current task, and a pointer to the storage for the aligned sequences.
- * @return NULL
- */
-void *parallel_align(void *arg);
-
-/**
- * @brief Align sequences in a FASTA file using either halign or mafft package.
- * @param file_name The name of the FASTA file to align.
- * @return The name of the resulting aligned FASTA file.
- */
-std::string align_fasta(const std::string &file_name);
-
-/**
- * @brief Deletes temporary files generated during sequence alignment tasks.
- * @param task_count The number of tasks for which temporary files were created.
- * @param fallback_needed A boolean value that identifies if the file needs to be deleted
- */
-void delete_tmp_folder(uint_t task_count, const std::vector<bool> &fallback_needed);
 
 /**
  * @brief Concatenate multiple sequence alignments into a single alignment and write the result to an output file.

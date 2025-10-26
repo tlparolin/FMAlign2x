@@ -103,14 +103,14 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<me
  * @param sequence_num Number of sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vector<mem> &mems, uint_t sequence_num);
+std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vector<mem> &mems, uint_t sequence_num, ThreadPool &pool);
 
 /**
  * @brief Find MEMs in a set of sequences.
  * @param data A vector of strings representing the sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std::string> &data);
+std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std::string> &data, ThreadPool &pool);
 
 /**
  * @brief Concatenates a vector of strings with separator 1 and a terminating 0.

@@ -54,10 +54,6 @@ int main(int argc, char **argv) {
         "c",
         "A floating-point parameter that specifies the minimum coverage across all sequences, with values ranging from 0 to 1. The default \
 setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7.");
-    parser.add_argument("x", false, "1");
-    parser.add_argument_help("x", "Enable in-memory alignment of small blocks between MEMs. Should be 0 or 1. Default is 1.");
-    parser.add_argument("p", false, "mafft");
-    parser.add_argument_help("p", "The MSA method used in parallel align. for example, halign3, halign2 and mafft.");
     parser.add_argument("o", false, "output.fmaligned2.fasta");
     parser.add_argument_help("o", "The path to the output file.");
     parser.add_argument("d", false, "0");
@@ -96,11 +92,6 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
             throw "filer mode --f parameter should be global or local!";
         }
 
-        global_args.extended = parser.get("x") == "1";
-        if (global_args.extended != 0 && global_args.extended != 1) {
-            throw "extended (-x) should be 1 or 0";
-        }
-
         global_args.verbose = std::stoi(parser.get("v"));
         if (global_args.verbose != 0 && global_args.verbose != 1) {
             throw "verbose should be 1 or 0";
@@ -121,12 +112,6 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
             }
         }
 
-        global_args.package = parser.get("p");
-        std::set<std::string> valid_methods = {"halign2", "halign3", "mafft"};
-        if (valid_methods.find(global_args.package) == valid_methods.end()) {
-            throw std::invalid_argument("Error: " + global_args.package + " is an invalid method!");
-        }
-
         global_args.output_path = parser.get("o");
     } // Catch any invalid arguments and print the help message.
     catch (const std::invalid_argument &e) {
@@ -142,26 +127,25 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
     std::vector<std::string> data;
     std::vector<std::string> name;
 
+    ThreadPool pool(global_args.thread);
     try {
         // Read data from the input file and store in data and name vectors
         read_data(global_args.data_path.c_str(), data, name, true);
 
         // Find MEMs in the sequences and split the sequences into fragments for parallel alignment.
-        std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data);
+        std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence = find_mem(data, pool);
 
-        split_and_parallel_align(data, name, split_points_on_sequence);
+        split_and_parallel_align(data, name, split_points_on_sequence, pool);
     } catch (const std::bad_alloc &e) { // Catch any bad allocations and print an error message.
         print_table_bound();
         std::cerr << "Error: " << e.what() << std::endl;
         std::cout << "Program Exit!" << std::endl;
         exit(1);
     }
+    pool.shutdown();
 
-    double total_time = timer.elapsed_time();
-    std::stringstream s;
-    s << std::fixed << std::setprecision(2) << total_time;
     if (global_args.verbose) {
-        print_table_line("FMAlign2x total time: " + s.str() + " seconds.");
+        print_table_line(std::format("FMAlign2x total time: {:.2f} seconds.", timer.elapsed_time()));
         print_table_bound();
     }
 
