@@ -35,7 +35,7 @@
 
 void *find_optimal_chain(void *arg) {
     FindOptimalChainParams *ptr = static_cast<FindOptimalChainParams *>(arg);
-    std::vector<std::pair<int_t, int_t>> chains = *(ptr->chains);
+    std::vector<std::pair<int_t, int_t>> &chains = *(ptr->chains);
     std::vector<std::pair<int_t, int_t>> new_chains;
 
     uint_t chain_num = chains.size();
@@ -43,10 +43,9 @@ void *find_optimal_chain(void *arg) {
     std::vector<int_t> prev(chain_num, -1);
     // Iterate over all "mem" objects and calculate their size and update dynamic programming tables
     for (uint_t i = 0; i < chain_num; i++) {
-        double len = chains[i].second;
-        dp[i] += len;
+        dp[i] += chains[i].second;
         for (uint_t j = i + 1; j < chain_num; j++) {
-            if (chains[i].first + len < chains[j].first && dp[i] > dp[j]) {
+            if (chains[i].first + chains[i].second < chains[j].first && dp[i] > dp[j]) {
                 dp[j] = dp[i];
                 prev[j] = i;
             }
@@ -78,7 +77,7 @@ void *find_optimal_chain(void *arg) {
 
     *(ptr->chains) = new_chains;
 
-    return NULL;
+    return nullptr;
 }
 
 /**
@@ -91,39 +90,36 @@ void *find_optimal_chain(void *arg) {
  */
 std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vector<mem> &mems, uint_t sequence_num, ThreadPool &pool) {
     // delete MEM full of "-"
-    std::vector<mem>::iterator mem_it = mems.begin();
-    while (mem_it != mems.end()) {
-        mem tmp_mem = *mem_it;
-        if (tmp_mem.mem_length <= 0) {
-            mem_it = mems.erase(mem_it);
-        } else {
-            mem_it++;
-        }
-    }
+    std::erase_if(mems, [](const auto &m) { return m.mem_length <= 0; });
     uint_t mem_num = mems.size();
     // Initialize a vector of vectors of pairs of integers to represent the split points for each sequence
-    std::vector<std::vector<std::pair<int_t, int_t>>> split_point_on_sequence(
-        sequence_num, std::vector<std::pair<int_t, int_t>>(mem_num, std::make_pair(-1, -1)));
+    std::vector<std::vector<std::pair<int_t, int_t>>> split_point_on_sequence(sequence_num);
+    for (auto &seq : split_point_on_sequence)
+        seq.resize(mem_num, std::make_pair(-1, -1));
     // Loop through each non-conflicting MEM in the input
     for (uint_t i = 0; i < mem_num; i++) {
-        // Get the current MEM and its substring positions
-        mem tmp_mem = mems[i];
-        // Loop through each substring of the current MEM
-        for (uint_t j = 0; j < tmp_mem.substrings.size(); j++) {
-            // Create a pair of the substring position and the length of the MEM
-            std::pair<int_t, int_t> p(tmp_mem.substrings[j].position, tmp_mem.mem_length);
-            // If this split point is already set for this sequence and it is farther from the average position,
-            // skip this split point and move to the next one
-            if (split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i].first != -1) {
-                if (abs(p.first - tmp_mem.avg_pos) >
-                    abs(split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i].first - tmp_mem.avg_pos)) {
-                    continue;
+
+        pool.add_task([&, i]() {
+            // Get the current MEM and its substring positions
+            mem tmp_mem = mems[i];
+            // Loop through each substring of the current MEM
+            for (uint_t j = 0; j < tmp_mem.substrings.size(); j++) {
+                // Create a pair of the substring position and the length of the MEM
+                std::pair<int_t, int_t> p(tmp_mem.substrings[j].position, tmp_mem.mem_length);
+                // If this split point is already set for this sequence and it is farther from the average position,
+                // skip this split point and move to the next one
+                if (split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i].first != -1) {
+                    if (abs(p.first - tmp_mem.avg_pos) >
+                        abs(split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i].first - tmp_mem.avg_pos)) {
+                        continue;
+                    }
                 }
+                // Set this split point for this sequence to the current substring position and MEM length
+                split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i] = p;
             }
-            // Set this split point for this sequence to the current substring position and MEM length
-            split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i] = p;
-        }
+        });
     }
+    pool.wait_for_tasks();
 
     std::vector<FindOptimalChainParams> find_optimal_chain_params(sequence_num);
 
@@ -147,6 +143,8 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vecto
             selected_cols.push_back(j);
         }
     }
+
+    // Building results
     std::vector<std::vector<std::pair<int_t, int_t>>> chain(sequence_num);
     for (uint_t i = 0; i < selected_cols.size(); i++) {
         for (uint_t j = 0; j < split_point_on_sequence.size(); j++) {
@@ -164,17 +162,9 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_accurate(std::vecto
  * @param sequence_num Number of sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<mem> &mems, uint_t sequence_num) {
+std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<mem> &mems, uint_t sequence_num, ThreadPool &pool) {
     // delete MEM full of "-"
-    std::vector<mem>::iterator mem_it = mems.begin();
-    while (mem_it != mems.end()) {
-        mem tmp_mem = *mem_it;
-        if (tmp_mem.mem_length <= 0) {
-            mem_it = mems.erase(mem_it);
-        } else {
-            mem_it++;
-        }
-    }
+    std::erase_if(mems, [](const auto &m) { return m.mem_length <= 0; });
     // Initialize dynamic programming tables to keep track of size and previous indices
     uint_t mem_num = mems.size();
     std::vector<double> dp(mem_num, 0);
@@ -212,24 +202,27 @@ std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<me
 
     // Loop through each non-conflicting MEM in the input
     for (uint_t i = 0; i < mems_without_conflict.size(); i++) {
-        // Get the current MEM and its substring positions
-        mem tmp_mem = mems[mems_without_conflict[i]];
-        // Loop through each substring of the current MEM
-        for (uint_t j = 0; j < tmp_mem.substrings.size(); j++) {
-            // Create a pair of the substring position and the length of the MEM
-            std::pair<int_t, int_t> p(tmp_mem.substrings[j].position, tmp_mem.mem_length);
-            // If this split point is already set for this sequence and it is farther from the average position,
-            // skip this split point and move to the next one
-            if (split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i].first != -1) {
-                if (abs(p.first - tmp_mem.avg_pos) >
-                    abs(split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i].first - tmp_mem.avg_pos)) {
-                    continue;
+        pool.add_task([&, i]() {
+            // Get the current MEM and its substring positions
+            mem tmp_mem = mems[mems_without_conflict[i]];
+            // Loop through each substring of the current MEM
+            for (uint_t j = 0; j < tmp_mem.substrings.size(); j++) {
+                // Create a pair of the substring position and the length of the MEM
+                std::pair<int_t, int_t> p(tmp_mem.substrings[j].position, tmp_mem.mem_length);
+                // If this split point is already set for this sequence and it is farther from the average position,
+                // skip this split point and move to the next one
+                if (split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i].first != -1) {
+                    if (abs(p.first - tmp_mem.avg_pos) >
+                        abs(split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i].first - tmp_mem.avg_pos)) {
+                        continue;
+                    }
                 }
+                // Set this split point for this sequence to the current substring position and MEM length
+                split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i] = p;
             }
-            // Set this split point for this sequence to the current substring position and MEM length
-            split_point_on_sequence[tmp_mem.substrings[j].sequence_index][i] = p;
-        }
+        });
     }
+    pool.wait_for_tasks();
 
     // Loop through each sequence in the input
     for (uint_t i = 0; i < sequence_num; i++) {
@@ -305,7 +298,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
     Timer timer;
     size_t n = 0;
 
-    unsigned char *concat_data = concat_strings(data, n);
+    std::unique_ptr<unsigned char[]> concat_data(concat_strings(data, n));
 
     if (global_args.min_mem_length < 0) {
         int_t l = ceil(pow(n, 1 / (global_args.degree + 2)));
@@ -339,8 +332,8 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
     std::vector<int_t> SA(n);
     std::vector<int_t> PLCP(n);
 
-    LIBSAIS_OMP(concat_data, SA.data(), n, 0, NULL, global_args.thread);
-    LIBSAIS_PLCP_OMP(concat_data, SA.data(), PLCP.data(), n, global_args.thread);
+    LIBSAIS_OMP(concat_data.get(), SA.data(), n, 0, NULL, global_args.thread);
+    LIBSAIS_PLCP_OMP(concat_data.get(), SA.data(), PLCP.data(), n, global_args.thread);
 
     if (global_args.verbose) {
         print_table_line(std::format("Suffix construction time: {:.2f} seconds", timer.elapsed_time()));
@@ -364,17 +357,15 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
     // Allocate space for MEMs and conversion parameters.
     std::vector<mem> mems(interval_size);
     // Convert each interval to a MEM in parallel
-    IntervalToMemConversionParams *params = new IntervalToMemConversionParams[interval_size];
-
+    std::vector<IntervalToMemConversionParams> params(interval_size);
     for (uint_t i = 0; i < interval_size; i++) {
         params[i].SA = &SA;
         params[i].interval = intervals[i];
-        params[i].concat_data = concat_data;
+        params[i].concat_data = concat_data.get();
         params[i].result_store = mems.begin() + i;
         params[i].min_mem_length = min_mem_length;
         params[i].joined_sequence_bound = joined_sequence_bound;
-
-        pool.add_task([&, i]() { interval2mem(params + i); });
+        pool.add_task([i, &params]() { interval2mem(&params[i]); });
     }
     pool.wait_for_tasks();
 
@@ -385,12 +376,9 @@ std::vector<std::vector<std::pair<int_t, int_t>>> find_mem(const std::vector<std
     // Sort the MEMs and map them to the original data.
     sort_mem(mems, data);
 
-    free(concat_data);
-    delete[] params;
-
     uint_t sequence_num = data.size();
     auto split_point_on_sequence =
-        (global_args.filter_mode == "global") ? filter_mem_fast(mems, sequence_num) : filter_mem_accurate(mems, sequence_num, pool);
+        (global_args.filter_mode == "global") ? filter_mem_fast(mems, sequence_num, pool) : filter_mem_accurate(mems, sequence_num, pool);
 
     global_args.avg_file_size = (n / (split_point_on_sequence[0].size() + 1)) / std::pow(2, 20);
 
@@ -447,7 +435,7 @@ std::vector<std::pair<uint_t, uint_t>> get_lcp_intervals(const int_t *plcp_array
     intervals.reserve(n / (min_cross_sequence > 0 ? min_cross_sequence : 1) + 1);
 
     if (global_args.verbose) {
-        print_table_line("Minimal cross sequence number: " + std::to_string(min_cross_sequence));
+        print_table_line(std::format("Minimal cross sequence number: {}", std::to_string(min_cross_sequence)));
     }
 
     int_t left = 0, right = 0;

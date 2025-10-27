@@ -93,7 +93,7 @@ struct FindOptimalChainParams {
  * @param sequence_num Number of sequences.
  * @return Vector of split points for each sequence.
  */
-std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<mem> &mems, uint_t sequence_num);
+std::vector<std::vector<std::pair<int_t, int_t>>> filter_mem_fast(std::vector<mem> &mems, uint_t sequence_num, ThreadPool &pool);
 
 /**
  * @brief DP sequence number times!Filter out overlapping memory regions and generate split points for each sequence.
