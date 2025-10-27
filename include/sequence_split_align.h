@@ -139,21 +139,6 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
 std::vector<std::string> spoa_align(const std::vector<std::string> &sequences);
 
 /**
- * @brief Selects columns from a sequence of split points to enable multi thread.
- * @param split_points_on_sequence A vector of vectors of pairs, where each pair represents the start and mem length
- * @return A vector of indices of the selected columns.
- */
-std::vector<int_t> select_columns(std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence);
-
-/**
- * @brief Get a vector of integers that are not in the selected_cols vector and have a maximum value of n.
- * @param n The maximum value of the integers in the resulting vector.
- * @param selected_cols A vector of integers that are already selected.
- * @return A vector of integers that are not in selected_cols and have a maximum value of n.
- */
-std::vector<int_t> get_remaining_cols(int_t n, const std::vector<int_t> selected_cols);
-
-/**
 @brief Expands the chain at the given index for all sequences in the input data.
 This function takes a void pointer to input arguments and casts it to the correct struct type.
 It then retrieves the required variables, which include the data and chain input parameters, and the chain index.
@@ -198,7 +183,7 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const
  * @param concat_string A 2D vector of strings containing the aligned sequences to concatenate.
  * @param name A vector of strings containing the names of the sequences.
  */
-void concat_alignment(std::vector<std::vector<std::string>> &concat_string, std::vector<std::string> &name);
+void concat_alignment(const std::vector<std::vector<std::string>> &concat_string, const std::vector<std::string> &name);
 
 /**
  * @brief Convert sequence fragments into profile by aligning missing fragments with existing ones.
