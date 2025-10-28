@@ -94,8 +94,13 @@ std::string generateRandomString(int length);
  * @return void
  */
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name,
-                              std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence, ThreadPool &pool);
+                              std::vector<std::vector<std::pair<int_t, int_t>>> chain, ThreadPool &pool);
 
+/**
+ * @brief Runs SPOA alignment on a set of sequences (helper for subdivisions)
+ * @param seqs Input sequences (may contain empty strings)
+ * @return Aligned sequences with gaps
+ */
 std::vector<std::string> run_spoa_local(const std::vector<std::string> &seqs);
 
 /**

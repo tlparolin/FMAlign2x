@@ -87,7 +87,7 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 
     if (global_args.min_seq_coverage == 1) {
         for (uint_t i = 0; i < chain_num; i++) {
-            pool.add_task([&, i]() { expand_chain(&params[i]); });
+            pool.add_task([i, &params]() { expand_chain(&params[i]); });
         }
         pool.wait_for_tasks();
     } else {
@@ -127,9 +127,10 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     for (auto &block : spoa_parallel_string) {
         if (block.size() != seq_num) {
             size_t L = 0;
-            for (auto &s : block)
+            for (const auto &s : block)
                 L = std::max(L, s.size());
-            block.resize(seq_num, std::string(L, '-'));
+            block.resize(seq_num);
+            std::fill(block.begin() + (block.size() - (seq_num - block.size())), block.end(), std::string(L, '-'));
         }
     }
 
@@ -173,10 +174,10 @@ void *spoa_task(void *arg) {
         if (start != -1 && len > 0) {
             // Extract a valid fragment from sequence
             fragments[s] = (*params->data)[s].substr(start, len);
-        } else {
-            // For invalid range, set fragment as empty string
-            fragments[s] = "";
-        }
+        } // } else {
+        //     // For invalid range, set fragment as empty string
+        //     fragments[s] = "";
+        // }
     }
 
     // Run the SPOA alignment on the extracted fragments
@@ -359,19 +360,24 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
     // ============================================================
     // PASS 3: Merge subdivided blocks with overlap trimming
     // ============================================================
+    static const std::vector<std::vector<std::string>> empty_results;
+
+    // Populate a map for quick access to sub-block results
+    std::unordered_map<uint_t, std::vector<std::vector<std::string>>> block_results_map;
+    for (const auto &p : spoa_params) {
+        if (p.result_local != nullptr) {
+            block_results_map[p.task_index].push_back(*(p.result_local));
+        }
+    }
+
+    // Process each subdivided block
     for (auto &sub_info : subdivided_blocks) {
         uint_t block_idx = sub_info.block_index;
         std::vector<std::string> merged(seq_num, "");
 
         // Collect all sub-block results
-        std::vector<std::vector<std::string>> sub_results;
-        // size_t param_idx = 0;
-
-        for (auto &p : spoa_params) {
-            if (p.task_index == block_idx && p.result_local != nullptr) {
-                sub_results.push_back(*(p.result_local));
-            }
-        }
+        auto it = block_results_map.find(block_idx);
+        const auto &sub_results = (it != block_results_map.end()) ? it->second : empty_results;
 
         if (sub_results.empty()) {
             // Safety: if no results, fill with gaps
@@ -385,6 +391,10 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
         }
 
         // Merge sub-blocks
+        std::vector<std::string> overlap_prev(seq_num);
+        std::vector<std::string> overlap_curr(seq_num);
+        std::vector<std::string> bridge_fragments(seq_num);
+
         for (size_t sub_idx = 0; sub_idx < sub_results.size(); ++sub_idx) {
             const auto &sub_result = sub_results[sub_idx];
 
@@ -398,8 +408,6 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
                 const size_t overlap_in_coords = OVERLAP_SIZE;
 
                 // Extract the top of the previous block (merged) and the beginning of the current block (sub_result)
-                std::vector<std::string> overlap_prev(seq_num);
-                std::vector<std::string> overlap_curr(seq_num);
 
                 for (size_t s = 0; s < seq_num; ++s) {
                     const std::string &prev_seq = merged[s];
@@ -413,7 +421,6 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
                 }
 
                 // Creates intermediate sequence by joining edges
-                std::vector<std::string> bridge_fragments(seq_num);
                 for (size_t s = 0; s < seq_num; ++s)
                     bridge_fragments[s] = overlap_prev[s] + overlap_curr[s];
 
@@ -461,6 +468,7 @@ std::vector<std::string> run_spoa_local(const std::vector<std::string> &seqs) {
     spoa::Graph graph;
 
     std::vector<size_t> non_empty_indices;
+    non_empty_indices.reserve(seqs.size());
 
     // Add only non-empty sequences
     for (size_t i = 0; i < seqs.size(); ++i) {
@@ -642,131 +650,127 @@ void *expand_chain(void *arg) {
  */
 std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment alignment, std::string &ref, std::string &query,
                                            std::vector<std::string> &res_store, uint_t seq_index) {
-    // Extract cigar string from the alignment
-    std::vector<unsigned int> cigar = alignment.cigar;
-    // Extract the start and end positions of the alignment on the reference sequence
+    // Get a constant reference to the cigar vector from the alignment to avoid copying
+    std::vector<unsigned int> const &cigar = alignment.cigar;
     int_t ref_begin = alignment.ref_begin;
     int_t ref_end = alignment.ref_end;
-
     uint_t query_begin = 0;
-
-    std::string aligned_result = "";
-    // If the alignment failed, return (-1,-1)
-    if (ref_begin <= -1) {
-        res_store[seq_index] = aligned_result;
-        return std::make_pair(-1, -1);
+    // If the alignment failed (ref_begin < 0), clear the result and return failure pair (-1, -1)
+    if (ref_begin < 0) {
+        res_store[seq_index].clear();
+        return {-1, -1};
     }
 
+    // Variables to count soft clipped bases and total query length
     int_t S_count = 0;
     int_t total_length = alignment.query_end;
     int_t new_ref_begin = ref_begin;
     uint_t new_ref_end = ref_end;
-    if (cigar_int_to_op(cigar[0]) == 'S') {
-        S_count += cigar_int_to_len(cigar[0]);
-        if (new_ref_begin - cigar_int_to_len(cigar[0]) < 0) {
-            new_ref_begin = 0;
-        } else {
-            new_ref_begin = new_ref_begin - cigar_int_to_len(cigar[0]);
-        }
+
+    // Lambdas to extract length and operation from cigar integer encoding for convenience
+    auto cigar_len = [](auto c) { return cigar_int_to_len(c); };
+    auto cigar_op = [](auto c) { return cigar_int_to_op(c); };
+
+    // Adjust new_ref_begin and S_count if the first cigar operation is soft clip (S)
+    if (cigar_op(cigar.front()) == 'S') {
+        auto len = cigar_len(cigar.front());
+        S_count += len;
+        new_ref_begin = std::max(int_t{0}, new_ref_begin - static_cast<int_t>(len));
     }
-    if (cigar_int_to_op(cigar[cigar.size() - 1]) == 'S') {
-        S_count += cigar_int_to_len(cigar[cigar.size() - 1]);
-        total_length += cigar_int_to_len(cigar[cigar.size() - 1]);
-        if (new_ref_end + cigar_int_to_len(cigar[cigar.size() - 1]) > (uint_t)ref.length() - 1) {
-            new_ref_end = ref.length() - 1;
-        } else {
-            new_ref_end = new_ref_end + cigar_int_to_len(cigar[cigar.size() - 1]);
-        }
+    // Adjust new_ref_end and S_count if the last cigar operation is soft clip (S)
+    if (cigar_op(cigar.back()) == 'S') {
+        auto len = cigar_len(cigar.back());
+        S_count += len;
+        total_length += len;
+        new_ref_end = std::min(uint_t(ref.length() - 1), new_ref_end + len);
     }
 
-    if (S_count > ceil(0.8 * total_length)) {
-        res_store[seq_index] = aligned_result;
-        return std::make_pair(-1, -1);
+    // If the amount of soft clipping is too large relative to the total length, clear result and return failure
+    if (S_count > static_cast<int_t>(std::ceil(0.8 * total_length))) {
+        res_store[seq_index].clear();
+        return {-1, -1};
     }
-    uint_t p_ref = 0;
-    uint_t p_query = 0;
 
-    for (uint_t i = 0; i < cigar.size(); i++) {
-        char op = cigar_int_to_op(cigar[i]);
-        int_t len = cigar_int_to_len(cigar[i]);
+    // String to accumulate the aligned reference sequence result
+    std::string aligned_result;
+    // Pointers tracking positions in reference and query sequences
+    uint_t p_ref = 0, p_query = 0;
 
+    // Iterate over each cigar operation, handling accordingly
+    for (auto const &c : cigar) {
+        char op = cigar_op(c);
+        int_t len = cigar_len(c);
         switch (op) {
         case 'S': {
-            // Handle soft clipping at the beginning and end of the alignment
-            if (i == 0) {
+            // Handle soft clipping differently for the start and end of the alignment
+            if (&c == &cigar.front()) {
                 int_t tmp_len = len;
+                // If clipping length exceeds beginning of alignment, pad with gaps
                 if (ref_begin <= len) {
                     while (tmp_len > ref_begin) {
-                        aligned_result += "-";
-                        tmp_len--;
+                        aligned_result += '-';
+                        --tmp_len;
                     }
                 }
-                for (int_t j = ref_begin - tmp_len; j < ref_begin; j++) {
+                // Append clipped reference bases after gaps
+                for (int_t j = ref_begin - tmp_len; j < ref_begin; ++j) {
                     aligned_result += ref[j];
                 }
             } else {
                 int_t tmp_len = len;
-                for (uint_t j = ref_end + 1; j < ref.length() && tmp_len > 0; j++) {
+                // Append clipped reference bases immediately after alignment end
+                for (uint_t j = ref_end + 1; j < ref.length() && tmp_len > 0; ++j) {
                     aligned_result += ref[j];
-                    tmp_len--;
+                    --tmp_len;
                 }
+                // Pad with gaps if clipped length exceeds available reference
                 while (tmp_len > 0) {
-                    aligned_result += "-";
-                    tmp_len--;
+                    aligned_result += '-';
+                    --tmp_len;
                 }
             }
-            p_query += len;
+            p_query += len; // Advance query pointer by soft clip length
             break;
         }
         case 'M':
         case 'X':
         case '=': {
-            // Handle match, mismatch, and substitution operations
-            for (int_t j = 0; j < len; j++) {
-                aligned_result += ref[ref_begin + p_ref + j];
-            }
-            p_ref += len;
-            p_query += len;
+            // For match, mismatch and equal operations, append reference substring of length len
+            aligned_result.append(ref.begin() + ref_begin + p_ref, ref.begin() + ref_begin + p_ref + len);
+            p_ref += len;   // Advance reference pointer
+            p_query += len; // Advance query pointer
             break;
         }
         case 'I': {
-            // Handle insertion operations
-            for (int_t j = 0; j < len; j++) {
-                aligned_result += '-';
-            }
-            p_query += len;
+            // For insertion operations, append gap characters to alignment
+            aligned_result.append(len, '-');
+            p_query += len; // Advance query pointer
             break;
         }
         case 'D': {
-            // Handle deletion operations
-            std::string gaps = "";
-            for (int_t j = 0; j < len; j++) {
-                gaps += '-';
-            }
-            for (int_t j = 0; j < len; j++) {
-                aligned_result += ref[ref_begin + p_ref + j];
-            }
-            p_ref += len;
+            // For deletions, append deleted reference bases
+            std::string gaps(len, '-'); // Create gap string to insert into query sequences
+            aligned_result.append(ref.begin() + ref_begin + p_ref, ref.begin() + ref_begin + p_ref + len);
+            p_ref += len; // Advance reference pointer
 
+            // Insert gaps into query and all previous result sequences at correct positions
             query.insert(query_begin + p_query, gaps);
-            for (uint_t j = 0; j < seq_index; j++) {
-                if (res_store[j].length() != 0) {
+            for (uint_t j = 0; j < seq_index; ++j) {
+                if (!res_store[j].empty()) {
                     res_store[j].insert(query_begin + p_query, gaps);
                 }
             }
-            p_query += len;
+            p_query += len; // Advance query pointer for deletion length
             break;
         }
-
-        default:
-            break;
         }
     }
 
-    res_store[seq_index] = aligned_result;
+    // Store the aligned result string in the results vector at the appropriate index
+    res_store[seq_index] = std::move(aligned_result);
 
-    std::pair<int, int> p(new_ref_begin, new_ref_end - new_ref_begin + 1);
-    return p;
+    // Return the adjusted reference begin position and length of the alignment on the reference
+    return {new_ref_begin, new_ref_end - new_ref_begin + 1};
 }
 
 /**
