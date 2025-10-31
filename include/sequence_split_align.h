@@ -31,6 +31,7 @@
 #include "common.h"
 #include "utils.h"
 #include <algorithm>
+#include <format>
 #include <spoa/spoa.hpp>
 #include <sstream>
 #ifdef __linux__
@@ -62,11 +63,13 @@ struct ParallelAlignParams {
 };
 
 struct SpoaTaskParams {
-    const std::vector<std::string> *data;
-    const std::vector<std::pair<int_t, int_t>> *range;
-    uint_t task_index;
-    uint_t seq_num;
-    std::vector<std::string> *result_store;
+    const std::vector<std::string> *data = nullptr;              // Pointer to input sequences (optional)
+    const std::vector<std::pair<int_t, int_t>> *range = nullptr; // Input range (for direct block alignment)
+    std::vector<std::string> local_sequences;                    // Used when aligning subdivided sub-blocks
+    std::shared_ptr<std::vector<std::string>> result_local;      // Result container for local sub-blocks
+    std::vector<std::string> *result_store = nullptr;            // Destination for aligned output
+    uint_t seq_num = 0;                                          // Number of sequences in alignment
+    uint_t task_index = 0;                                       // Block index
 };
 
 /**
@@ -91,7 +94,14 @@ std::string generateRandomString(int length);
  * @return void
  */
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name,
-                              std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence);
+                              std::vector<std::vector<std::pair<int_t, int_t>>> chain, ThreadPool &pool);
+
+/**
+ * @brief Runs SPOA alignment on a set of sequences (helper for subdivisions)
+ * @param seqs Input sequences (may contain empty strings)
+ * @return Aligned sequences with gaps
+ */
+std::vector<std::string> run_spoa_local(const std::vector<std::string> &seqs);
 
 /**
  * @brief Preprocesses alignment blocks between MEMs to reduce load on external aligners.
@@ -110,9 +120,9 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
  * @note This function assumes that `spoa_align()` is implemented and available in scope.
  *       It is intended to be used directly after `get_parallel_align_range()` in the FMAlign2 pipeline.
  */
-std::pair<std::vector<std::vector<std::string>>, std::vector<bool>>
+std::vector<std::vector<std::string>>
 preprocess_parallel_blocks(const std::vector<std::string> &data,
-                           const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range);
+                           const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range, ThreadPool &pool);
 
 /**
  * @brief Performs multiple sequence alignment using SPOA (Partial Order Alignment).
@@ -132,21 +142,6 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
  * @see https://github.com/rvaser/spoa for more details on the SPOA library.
  */
 std::vector<std::string> spoa_align(const std::vector<std::string> &sequences);
-
-/**
- * @brief Selects columns from a sequence of split points to enable multi thread.
- * @param split_points_on_sequence A vector of vectors of pairs, where each pair represents the start and mem length
- * @return A vector of indices of the selected columns.
- */
-std::vector<int_t> select_columns(std::vector<std::vector<std::pair<int_t, int_t>>> split_points_on_sequence);
-
-/**
- * @brief Get a vector of integers that are not in the selected_cols vector and have a maximum value of n.
- * @param n The maximum value of the integers in the resulting vector.
- * @param selected_cols A vector of integers that are already selected.
- * @return A vector of integers that are not in selected_cols and have a maximum value of n.
- */
-std::vector<int_t> get_remaining_cols(int_t n, const std::vector<int_t> selected_cols);
 
 /**
 @brief Expands the chain at the given index for all sequences in the input data.
@@ -189,34 +184,11 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const
                                                                            const std::vector<std::vector<std::pair<int_t, int_t>>> &chain);
 
 /**
- * @brief Function for parallel alignment of sequences.
- * This function aligns a subset of input sequences in parallel using multiple threads.
- * @param arg Pointer to a ParallelAlignParams struct which contains the input data, the range of sequences to align,
- * the index of the current task, and a pointer to the storage for the aligned sequences.
- * @return NULL
- */
-void *parallel_align(void *arg);
-
-/**
- * @brief Align sequences in a FASTA file using either halign or mafft package.
- * @param file_name The name of the FASTA file to align.
- * @return The name of the resulting aligned FASTA file.
- */
-std::string align_fasta(const std::string &file_name);
-
-/**
- * @brief Deletes temporary files generated during sequence alignment tasks.
- * @param task_count The number of tasks for which temporary files were created.
- * @param fallback_needed A boolean value that identifies if the file needs to be deleted
- */
-void delete_tmp_folder(uint_t task_count, const std::vector<bool> &fallback_needed);
-
-/**
  * @brief Concatenate multiple sequence alignments into a single alignment and write the result to an output file.
  * @param concat_string A 2D vector of strings containing the aligned sequences to concatenate.
  * @param name A vector of strings containing the names of the sequences.
  */
-void concat_alignment(std::vector<std::vector<std::string>> &concat_string, std::vector<std::string> &name);
+void concat_alignment(const std::vector<std::vector<std::string>> &concat_string, const std::vector<std::string> &name);
 
 /**
  * @brief Convert sequence fragments into profile by aligning missing fragments with existing ones.

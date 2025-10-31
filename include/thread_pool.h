@@ -3,9 +3,10 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <deque>
 #include <functional>
 #include <mutex>
-#include <queue>
+#include <optional>
 #include <thread>
 #include <vector>
 
@@ -14,22 +15,28 @@ class ThreadPool {
     explicit ThreadPool(size_t max_threads);
     ~ThreadPool();
 
-    // Adiciona uma tarefa para execução
     void add_task(std::function<void()> task);
-
-    // Espera todas as tarefas finalizarem e destrói o pool
+    void wait_for_tasks();
     void shutdown();
 
   private:
-    void worker_thread();
+    void worker_thread(size_t index);
+    std::optional<std::function<void()>> steal_task(size_t thief_index);
 
-    std::vector<std::thread> workers_;
-    std::queue<std::function<void()>> tasks_;
-
-    std::mutex mutex_;
-    std::condition_variable cv_;
-    std::atomic<bool> quitting_{false};
     size_t max_threads_;
+    std::vector<std::thread> workers_;
+
+    // Cada thread tem seu deque de tarefas
+    std::vector<std::deque<std::function<void()>>> task_queues_;
+    // Mutex individual para cada fila (protege acesso ao deque desta thread)
+    std::vector<std::mutex> queue_mutexes_;
+
+    std::condition_variable_any cv_; // Usar cv_any pois teremos vários mutexes
+    std::atomic<bool> quitting_{false};
+
+    std::atomic<size_t> active_tasks_{0};
+    std::mutex wait_mutex_;
+    std::condition_variable cv_done_;
 };
 
 #endif // THREAD_POOL_H

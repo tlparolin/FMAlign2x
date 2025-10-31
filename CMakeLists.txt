@@ -73,33 +73,11 @@ CPMAddPackage(
     "SPOA_OPTIMIZE_FOR_NATIVE ON"
 )
 
-# MAFFT Directories
-set(MAFFT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/ext/mafft/mafft-7.526)
-set(MAFFT_BINARIES ${CMAKE_SOURCE_DIR}/ext/mafft/linux/usr)
-
-# MAFFT binary path (to check if mafft was compiled and exists)
-set(MAFFT_BIN_CHECK ${MAFFT_BINARIES}/libexec/mafft/disttbfast)
-
-# Create target for mafft
-add_custom_command(
-    OUTPUT ${MAFFT_BIN_CHECK}
-    COMMAND make clean
-    COMMAND make -j
-    COMMAND make install
-    COMMAND make clean
-    COMMAND chmod 777 ${MAFFT_BIN_CHECK}
-    WORKING_DIRECTORY ${MAFFT_SOURCE_DIR}/core
-    COMMENT "Building MAFFT"
-    DEPENDS ${MAFFT_SOURCE_DIR}/core/Makefile
-)
-
-add_custom_target(mafft DEPENDS ${MAFFT_BIN_CHECK})
-
 add_executable(FMAlign2x ${SOURCES})
 target_link_libraries(FMAlign2x libsais spoa)
 
-# FMAlign2 depends on mafft
-add_dependencies(FMAlign2x mafft spoa)
+# FMAlign2 depends on spoa
+add_dependencies(FMAlign2x libsais spoa)
 
 # Clean Rules
 add_custom_target(clean-all
