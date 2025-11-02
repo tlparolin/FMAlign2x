@@ -263,9 +263,6 @@ void print_algorithm_info() {
         print_table_line(std::format("Sequence coverage: {}", global_args.min_mem_length));
     }
 
-    print_table_line(std::format("Align in memory: {}", global_args.extended ? "enabled" : "disabled"));
-    print_table_line(std::format("Parallel align method: {}", global_args.package));
-
     print_table_bound();
 }
 
