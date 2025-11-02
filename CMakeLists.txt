@@ -66,7 +66,7 @@ CPMAddPackage(
 CPMAddPackage(
   NAME spoa
   GITHUB_REPOSITORY rvaser/spoa
-  GIT_TAG 4.1.0
+  GIT_TAG 4.1.5
   OPTIONS
     "SPOA_BUILD_SHARED OFF"
     "SPOA_ENABLE_CPU_DISPATCH ON"
