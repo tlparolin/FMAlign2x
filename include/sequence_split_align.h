@@ -74,6 +74,8 @@ struct SpoaTaskParams {
     std::vector<std::string> *result_store = nullptr;            // Destination for aligned output
     uint_t seq_num = 0;                                          // Number of sequences in alignment
     uint_t task_index = 0;                                       // Block index
+    bool use_batch;                                              // Whether to use batch SPOA alignment
+    size_t batch_size;                                           // Batch size for SPOA alignment
 };
 
 struct SubBlockInfo {

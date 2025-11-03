@@ -174,15 +174,16 @@ void *spoa_task(void *arg) {
         if (start != -1 && len > 0) {
             // Extract a valid fragment from sequence
             fragments[s] = (*params->data)[s].substr(start, len);
-        } // } else {
-        //     // For invalid range, set fragment as empty string
-        //     fragments[s] = "";
-        // }
+        }
     }
 
     // Run the SPOA alignment on the extracted fragments
     // and store the result at the designated location
-    *(params->result_store) = spoa_align(fragments);
+    if (params->use_batch) {
+        *(params->result_store) = spoa_align_batch(fragments, params->batch_size);
+    } else {
+        *(params->result_store) = spoa_align(fragments);
+    }
 
     return nullptr;
 }
@@ -309,8 +310,9 @@ std::vector<std::string> spoa_align_batch(const std::vector<std::string> &sequen
 std::vector<std::vector<std::string>>
 preprocess_parallel_blocks(const std::vector<std::string> &data,
                            const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range, ThreadPool &pool) {
-    const size_t MAX_BLOCK_SIZE = 15000; // Maximum block size for SPOA (in bases)
-    const size_t OVERLAP_SIZE = 200;     // Overlap between consecutive sub-blocks
+    const size_t MAX_BLOCK_SIZE = 15000;    // Maximum block size for SPOA (in bases)
+    const size_t OVERLAP_SIZE = 200;        // Overlap between consecutive sub-blocks
+    const size_t DEFAULT_BATCH_SIZE = 2000; // Default batch size for SPOA alignment
 
     uint_t parallel_num = parallel_align_range.size();
     uint_t seq_num = data.size();
@@ -366,6 +368,15 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
             params.seq_num = seq_num;
             params.result_store = &fast_parallel_string[i];
             params.result_local = nullptr; // Not used for direct SPOA
+            // Decide whether to use batch SPOA based on number of sequences
+            if (seq_num > DEFAULT_BATCH_SIZE) {
+                params.use_batch = true;
+                params.batch_size = DEFAULT_BATCH_SIZE;
+            } else {
+                params.use_batch = false;
+                params.batch_size = 0;
+            }
+
             spoa_params.push_back(params);
             count_spoa++;
             continue;
