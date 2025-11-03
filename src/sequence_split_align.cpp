@@ -184,8 +184,109 @@ void *spoa_task(void *arg) {
     // and store the result at the designated location
     *(params->result_store) = spoa_align(fragments);
 
-    // Return nullptr as this function is intended for threading interface compatibility
     return nullptr;
+}
+
+/**
+ * @brief Runs SPOA alignment on a set of sequences in batches to handle large datasets.
+ * This function divides the input sequences into smaller batches, aligns each batch
+ * using the SPOA algorithm, and then progressively merges the alignments of each batch
+ * into a final multiple sequence alignment. The merging is done by aligning the consensus
+ * sequences of each batch.
+ * @param sequences A vector of input sequences to be aligned.
+ * @param batch_size The maximum number of sequences to include in each batch for alignment.
+ * @return A vector of aligned sequences with gaps, representing the final multiple sequence alignment.
+ */
+std::vector<std::string> spoa_align_batch(const std::vector<std::string> &sequences, size_t batch_size) {
+    if (sequences.empty())
+        return {};
+
+    size_t total = sequences.size();
+    std::vector<std::vector<std::string>> batch_results;
+    batch_results.reserve((total + batch_size - 1) / batch_size);
+
+    // --- Etapa 1: alinhar por lotes ---
+    for (size_t i = 0; i < total; i += batch_size) {
+        size_t end = std::min(total, i + batch_size);
+        std::vector<std::string> batch(sequences.begin() + i, sequences.begin() + end);
+
+        auto engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8);
+        spoa::Graph graph;
+        for (const auto &s : batch) {
+            auto alignment = engine->Align(s, graph);
+            graph.AddAlignment(alignment, s);
+        }
+
+        batch_results.push_back(graph.GenerateMultipleSequenceAlignment());
+    }
+
+    // --- Etapa 2: mesclar progressivamente os alinhamentos ---
+    if (batch_results.size() == 1)
+        return batch_results.front(); // só um batch, já está alinhado
+
+    // Cria um vetor de consensos para cada batch
+    std::vector<std::string> batch_consensuses;
+    batch_consensuses.reserve(batch_results.size());
+    for (auto &msa : batch_results) {
+        // SPOA gera MSA: cada sequência tem o mesmo comprimento
+        // Pega consenso do batch (você pode usar o SPOA para isso também)
+        std::string consensus;
+        size_t len = msa.front().size();
+        consensus.resize(len, '-');
+
+        for (size_t j = 0; j < len; ++j) {
+            std::unordered_map<char, int> freq;
+            for (auto &seq : msa) {
+                char c = seq[j];
+                if (c != '-')
+                    freq[c]++;
+            }
+            if (!freq.empty()) {
+                consensus[j] = std::max_element(freq.begin(), freq.end(), [](auto &a, auto &b) { return a.second < b.second; })->first;
+            }
+        }
+        batch_consensuses.push_back(consensus);
+    }
+
+    // --- Etapa 3: alinhar consensos entre batches ---
+    auto engine_merge = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8);
+    spoa::Graph merge_graph;
+    for (auto &c : batch_consensuses) {
+        auto aln = engine_merge->Align(c, merge_graph);
+        merge_graph.AddAlignment(aln, c);
+    }
+
+    // Alinhamento final dos consensos
+    std::vector<std::string> merged_consensus_alignment = merge_graph.GenerateMultipleSequenceAlignment();
+
+    // --- Etapa 4: reexpandir os MSAs de cada batch para esse alinhamento global ---
+    // Esta parte insere gaps extras para que todas as sequências fiquem alinhadas
+    // segundo o alinhamento global dos consensos.
+    size_t num_batches = batch_results.size();
+    std::vector<std::string> final_alignment;
+    final_alignment.reserve(total);
+
+    for (size_t b = 0; b < num_batches; ++b) {
+        const auto &batch_msa = batch_results[b];
+        const auto &global_aln = merged_consensus_alignment[b];
+
+        // Mapear gaps do consenso global para o MSA local
+        for (const auto &seq : batch_msa) {
+            std::string expanded;
+            expanded.reserve(global_aln.size());
+            size_t local_pos = 0;
+            for (char gc : global_aln) {
+                if (gc == '-') {
+                    expanded.push_back('-');
+                } else {
+                    expanded.push_back(seq[local_pos++]);
+                }
+            }
+            final_alignment.push_back(expanded);
+        }
+    }
+
+    return final_alignment;
 }
 
 /**
@@ -220,14 +321,6 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
     uint_t count_spoa = 0;
     uint_t count_split = 0;
 
-    // Structure to hold subdivision info
-    struct SubBlockInfo {
-        uint_t block_index;
-        std::vector<std::vector<std::string>> sub_results; // One result per sub-block
-        std::vector<size_t> sub_block_starts;              // Start position of each sub-block
-        std::vector<size_t> sub_block_ends;                // End position of each sub-block
-    };
-
     std::vector<SubBlockInfo> subdivided_blocks;
     std::vector<SpoaTaskParams> spoa_params;
 
@@ -260,7 +353,7 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
         // --- Case 1: All fragments identical → direct copy ---
         if (all_equal) {
             std::fill(fast_parallel_string[i].begin(), fast_parallel_string[i].end(), fragments[0]);
-            ++count_exact;
+            count_exact++;
             continue;
         }
 
@@ -274,12 +367,12 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
             params.result_store = &fast_parallel_string[i];
             params.result_local = nullptr; // Not used for direct SPOA
             spoa_params.push_back(params);
-            ++count_spoa;
+            count_spoa++;
             continue;
         }
 
         // --- Case 3: Large block → subdivide ---
-        ++count_split;
+        count_split++;
 
         SubBlockInfo sub_info;
         sub_info.block_index = i;
@@ -325,7 +418,7 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
             sub_params.local_sequences = sub_fragments;
             sub_params.result_local = std::make_shared<std::vector<std::string>>();
             spoa_params.push_back(sub_params);
-            ++count_spoa;
+            //++count_spoa;
 
             // Move to next sub-block (with overlap)
             pos += (MAX_BLOCK_SIZE - OVERLAP_SIZE);
@@ -448,7 +541,7 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
     if (global_args.verbose) {
         print_table_line("Blocks copied directly: " + std::to_string(count_exact));
         print_table_line("Blocks aligned by SPOA: " + std::to_string(count_spoa));
-        print_table_line("Large blocks subdivided: " + std::to_string(count_split));
+        print_table_line("Long blocks subdivided: " + std::to_string(count_split));
     }
 
     return fast_parallel_string;

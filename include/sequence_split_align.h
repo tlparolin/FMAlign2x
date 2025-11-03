@@ -32,8 +32,12 @@
 #include "utils.h"
 #include <algorithm>
 #include <format>
+#include <future>
+#include <iostream>
 #include <spoa/spoa.hpp>
 #include <sstream>
+#include <string>
+#include <vector>
 #ifdef __linux__
 #include <sys/stat.h>
 #else
@@ -72,6 +76,13 @@ struct SpoaTaskParams {
     uint_t task_index = 0;                                       // Block index
 };
 
+struct SubBlockInfo {
+    uint_t block_index;
+    std::vector<std::vector<std::string>> sub_results; // One result per sub-block
+    std::vector<size_t> sub_block_starts;              // Start position of each sub-block
+    std::vector<size_t> sub_block_ends;                // End position of each sub-block
+};
+
 /**
  * @brief Generates a random string of the specified length.
  * This function generates a random string of the specified length. The generated string
@@ -102,6 +113,18 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
  * @return Aligned sequences with gaps
  */
 std::vector<std::string> run_spoa_local(const std::vector<std::string> &seqs);
+
+/**
+ * @brief Runs SPOA alignment on a set of sequences in batches to handle large datasets.
+ * This function divides the input sequences into smaller batches, aligns each batch
+ * using the SPOA algorithm, and then progressively merges the alignments of each batch
+ * into a final multiple sequence alignment. The merging is done by aligning the consensus
+ * sequences of each batch.
+ * @param sequences A vector of input sequences to be aligned.
+ * @param batch_size The maximum number of sequences to include in each batch for alignment.
+ * @return A vector of aligned sequences with gaps, representing the final multiple sequence alignment.
+ */
+std::vector<std::string> spoa_align_batch(const std::vector<std::string> &sequences, size_t batch_size = 2000);
 
 /**
  * @brief Preprocesses alignment blocks between MEMs to reduce load on external aligners.
