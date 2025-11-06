@@ -1,6 +1,7 @@
 name: fmalign2x
 channels:
   - conda-forge
+  - bioconda
 dependencies:
   - gcc=14
   - gxx=14
@@ -12,6 +13,7 @@ dependencies:
   - libstdcxx-devel_linux-64
   - sysroot_linux-64
   - openmp
+  - seqkit
   - git
   - curl
   - wget
