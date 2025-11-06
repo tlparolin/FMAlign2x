@@ -311,7 +311,7 @@ std::vector<std::vector<std::string>>
 preprocess_parallel_blocks(const std::vector<std::string> &data,
                            const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range, ThreadPool &pool) {
     const size_t MAX_BLOCK_SIZE = 15000;    // Maximum block size for SPOA (in bases)
-    const size_t OVERLAP_SIZE = 200;        // Overlap between consecutive sub-blocks
+    const size_t OVERLAP_SIZE = 500;        // Overlap between consecutive sub-blocks
     const size_t DEFAULT_BATCH_SIZE = 2000; // Default batch size for SPOA alignment
 
     uint_t parallel_num = parallel_align_range.size();
@@ -524,21 +524,37 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
                     overlap_curr[s] = curr_seq.substr(0, len_curr);
                 }
 
-                // Creates intermediate sequence by joining edges
-                for (size_t s = 0; s < seq_num; ++s)
-                    bridge_fragments[s] = overlap_prev[s] + overlap_curr[s];
-
-                // Align the bridge with SPOA
-                std::vector<std::string> bridge_aln = run_spoa_local(bridge_fragments);
-
-                // Choose cut point in the middle of the bridge alignment
-                size_t bridge_cut = bridge_aln[0].size() / 2;
-
-                // Apply SPOA merge of refined edges
+                // Iterate over each sequence to merge the overlaps individually
                 for (size_t s = 0; s < seq_num; ++s) {
-                    size_t trim_len = std::min(overlap_in_coords, merged[s].size());
-                    merged[s].erase(merged[s].size() - trim_len);  // remove fim antigo
-                    merged[s] += bridge_aln[s].substr(bridge_cut); // anexa parte refinada
+                    // Get the current merged sequence and the new sub-block result for sequence s
+                    const std::string &prev_seq = merged[s];
+                    const std::string &curr_seq = sub_result[s];
+
+                    // Calculate the lengths of overlap regions in each sequence,
+                    // ensuring we do not exceed the actual sizes
+                    size_t len_prev = std::min(overlap_in_coords, prev_seq.size());
+                    size_t len_curr = std::min(overlap_in_coords, curr_seq.size());
+
+                    // Extract the overlap region at the end of the previously merged block
+                    std::string overlap_prev = prev_seq.substr(prev_seq.size() - len_prev);
+
+                    // Extract the overlap region at the start of the current sub-block
+                    std::string overlap_curr = curr_seq.substr(0, len_curr);
+
+                    // Create a vector to hold the two overlap regions for multiple sequence alignment
+                    std::vector<std::string> overlap_pair = {overlap_prev, overlap_curr};
+
+                    // Perform multiple sequence alignment (MSA) on the two overlap sequences using SPOA
+                    // This realigns the overlapping regions avoiding arbitrary cuts in the middle
+                    std::vector<std::string> aligned_pair = run_spoa_local(overlap_pair);
+
+                    // Remove the old overlap region from the end of the merged sequence
+                    // This avoids duplication when adding the realigned overlap
+                    merged[s].erase(merged[s].size() - len_prev);
+
+                    // Append the realigned overlap region derived from the first aligned sequence
+                    // This retains the full alignment in the merged block correctly
+                    merged[s] += aligned_pair[0];
                 }
             }
         }
