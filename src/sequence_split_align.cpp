@@ -382,27 +382,25 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
             continue;
         }
 
-        // --- Case 3: Large block → subdivide ---
+        // --- Case 3: Large block → subdivide with sliding windows ---
         count_split++;
-
         SubBlockInfo sub_info;
         sub_info.block_index = i;
 
+        // Calculate sliding window parameters
+        const size_t window_size = DEFAULT_BATCH_SIZE; // Use batch size as window size
+        const size_t step_size = window_size / 2;      // 50% overlap between windows
+
         size_t pos = 0;
 
-        // Generate overlapping sub-blocks
+        // Generate overlapping sub-blocks with sliding windows
         while (pos < max_len) {
-            size_t end = std::min(pos + MAX_BLOCK_SIZE, max_len);
-
-            // Add overlap to the end (except for last block)
-            if (end < max_len) {
-                end = std::min(end + OVERLAP_SIZE, max_len);
-            }
+            size_t end = std::min(pos + window_size, max_len);
 
             sub_info.sub_block_starts.push_back(pos);
             sub_info.sub_block_ends.push_back(end);
 
-            // Extract sub-fragments
+            // Extract sub-fragments for this window
             std::vector<std::string> sub_fragments(seq_num);
             for (uint_t s = 0; s < seq_num; ++s) {
                 const std::string &seq = fragments[s];
@@ -428,11 +426,11 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
             sub_params.result_store = nullptr;
             sub_params.local_sequences = sub_fragments;
             sub_params.result_local = std::make_shared<std::vector<std::string>>();
-            spoa_params.push_back(sub_params);
-            //++count_spoa;
 
-            // Move to next sub-block (with overlap)
-            pos += (MAX_BLOCK_SIZE - OVERLAP_SIZE);
+            spoa_params.push_back(sub_params);
+
+            // Move to next window with step_size overlap
+            pos += step_size;
             if (pos >= max_len)
                 break;
         }
@@ -460,9 +458,8 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
 
         pool.wait_for_tasks();
     }
-
     // ============================================================
-    // PASS 3: Merge subdivided blocks with overlap trimming
+    // PASS 3: Merge subdivided blocks - CORRECTED APPROACH
     // ============================================================
     static const std::vector<std::vector<std::string>> empty_results;
 
@@ -494,67 +491,66 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
             continue;
         }
 
-        // Merge sub-blocks
-        std::vector<std::string> overlap_prev(seq_num);
-        std::vector<std::string> overlap_curr(seq_num);
-        std::vector<std::string> bridge_fragments(seq_num);
-
+        // Merge sub-blocks sequentially
         for (size_t sub_idx = 0; sub_idx < sub_results.size(); ++sub_idx) {
             const auto &sub_result = sub_results[sub_idx];
 
             if (sub_idx == 0) {
-                // First sub-block: copy everything
+                // First sub-block: copy everything as-is
                 for (uint_t s = 0; s < seq_num; ++s) {
                     merged[s] = sub_result[s];
                 }
             } else {
-                // Subsequent sub-blocks: trim overlap and concatenate
-                const size_t overlap_in_coords = OVERLAP_SIZE;
+                // Subsequent sub-blocks: merge by realigning the overlap region
 
-                // Extract the top of the previous block (merged) and the beginning of the current block (sub_result)
+                // Define overlap size (50% of window_size)
+                size_t window_size = DEFAULT_BATCH_SIZE;
+                size_t overlap_size = window_size / 2;
 
-                for (size_t s = 0; s < seq_num; ++s) {
+                // For each sequence, extract overlaps and realign them
+                for (uint_t s = 0; s < seq_num; ++s) {
                     const std::string &prev_seq = merged[s];
                     const std::string &curr_seq = sub_result[s];
 
-                    size_t len_prev = std::min(overlap_in_coords, prev_seq.size());
-                    size_t len_curr = std::min(overlap_in_coords, curr_seq.size());
+                    // Determine actual overlap lengths (cannot exceed sequence lengths)
+                    size_t prev_overlap_len = std::min(overlap_size, prev_seq.size());
+                    size_t curr_overlap_len = std::min(overlap_size, curr_seq.size());
 
-                    overlap_prev[s] = prev_seq.substr(prev_seq.size() - len_prev);
-                    overlap_curr[s] = curr_seq.substr(0, len_curr);
-                }
+                    if (prev_overlap_len == 0 || curr_overlap_len == 0) {
+                        // No valid overlap region, just concatenate
+                        merged[s] += curr_seq;
+                        continue;
+                    }
 
-                // Iterate over each sequence to merge the overlaps individually
-                for (size_t s = 0; s < seq_num; ++s) {
-                    // Get the current merged sequence and the new sub-block result for sequence s
-                    const std::string &prev_seq = merged[s];
-                    const std::string &curr_seq = sub_result[s];
+                    // Extract the overlap regions
+                    std::string prev_overlap = prev_seq.substr(prev_seq.size() - prev_overlap_len);
+                    std::string curr_overlap = curr_seq.substr(0, curr_overlap_len);
 
-                    // Calculate the lengths of overlap regions in each sequence,
-                    // ensuring we do not exceed the actual sizes
-                    size_t len_prev = std::min(overlap_in_coords, prev_seq.size());
-                    size_t len_curr = std::min(overlap_in_coords, curr_seq.size());
+                    // Create vector with both overlaps for pairwise alignment
+                    std::vector<std::string> overlap_pair = {prev_overlap, curr_overlap};
 
-                    // Extract the overlap region at the end of the previously merged block
-                    std::string overlap_prev = prev_seq.substr(prev_seq.size() - len_prev);
-
-                    // Extract the overlap region at the start of the current sub-block
-                    std::string overlap_curr = curr_seq.substr(0, len_curr);
-
-                    // Create a vector to hold the two overlap regions for multiple sequence alignment
-                    std::vector<std::string> overlap_pair = {overlap_prev, overlap_curr};
-
-                    // Perform multiple sequence alignment (MSA) on the two overlap sequences using SPOA
-                    // This realigns the overlapping regions avoiding arbitrary cuts in the middle
+                    // Realign the two overlaps together
                     std::vector<std::string> aligned_pair = run_spoa_local(overlap_pair);
 
-                    // Remove the old overlap region from the end of the merged sequence
-                    // This avoids duplication when adding the realigned overlap
-                    merged[s].erase(merged[s].size() - len_prev);
+                    if (aligned_pair.size() < 2) {
+                        // Fallback if SPOA failed
+                        merged[s].erase(merged[s].size() - prev_overlap_len);
+                        merged[s] += curr_seq;
+                        continue;
+                    }
 
-                    // Append the realigned overlap region derived from the first aligned sequence
-                    // This retains the full alignment in the merged block correctly
+                    // Remove old overlap from merged
+                    merged[s].erase(merged[s].size() - prev_overlap_len);
+
+                    // Add the realigned pair intelligently:
+                    // Use aligned_pair[0] as the consensus of the prev overlap
+                    // Then add the non-overlapping part of curr_seq
                     merged[s] += aligned_pair[0];
+
+                    // Append remaining non-overlapping part of current sub-block
+                    if (curr_overlap_len < curr_seq.size()) {
+                        merged[s] += curr_seq.substr(curr_overlap_len);
+                    }
                 }
             }
         }
