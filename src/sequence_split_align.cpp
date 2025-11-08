@@ -110,6 +110,13 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     // === SPOA-BASED ALIGNMENT (IN-MEMORY ONLY) ===
     std::vector<std::vector<std::string>> spoa_parallel_string;
 
+    // === Sort by total length descending to balance workload ===
+    std::sort(parallel_align_range.begin(), parallel_align_range.end(), [](auto &a, auto &b) {
+        auto len_a = std::accumulate(a.begin(), a.end(), 0L, [](auto s, auto &p) { return s + p.second; });
+        auto len_b = std::accumulate(b.begin(), b.end(), 0L, [](auto s, auto &p) { return s + p.second; });
+        return len_a > len_b;
+    });
+
     spoa_parallel_string = preprocess_parallel_blocks(data, parallel_align_range, pool);
 
     if (global_args.verbose) {
@@ -148,6 +155,235 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 }
 
 /**
+ * @brief Alinha múltiplas sequências usando WFA2-lib com MSA progressivo
+ * Para blocos grandes (>15kbp), substitui SPOA usando C++ bindings nativo
+ *
+ * @param sequences Vetor de sequências de entrada
+ * @param memory_mode String com modo de memória ("high", "med", "low", "ultralow")
+ * @return Vetor de sequências alinhadas com gaps
+ */
+std::vector<std::string> wfa2_align(const std::vector<std::string> &sequences) {
+
+    if (sequences.empty())
+        return {};
+
+    // Mapear índices de sequências não vazias
+    std::vector<size_t> non_empty_indices;
+    non_empty_indices.reserve(sequences.size());
+
+    for (size_t i = 0; i < sequences.size(); ++i) {
+        if (!sequences[i].empty()) {
+            non_empty_indices.push_back(i);
+        }
+    }
+
+    // Se todas estão vazias
+    if (non_empty_indices.empty()) {
+        return std::vector<std::string>(sequences.size(), "");
+    }
+
+    // Se apenas uma sequência não vazia
+    if (non_empty_indices.size() == 1) {
+        std::vector<std::string> result(sequences.size());
+        size_t len = sequences[non_empty_indices[0]].length();
+        for (size_t i = 0; i < sequences.size(); ++i) {
+            result[i] = sequences[i].empty() ? std::string(len, '-') : sequences[i];
+        }
+        return result;
+    }
+
+    // Converter string de modo de memória para enum WFA
+    // wfa::WFAligner::MemoryModel memo_mode = wfa::WFAligner::MemoryHigh;
+
+    // if (memory_mode == "med")
+    //     memo_mode = wfa::WFAligner::MemoryMed;
+    // else if (memory_mode == "low")
+    //     memo_mode = wfa::WFAligner::MemoryLow;
+    // else if (memory_mode == "ultralow")
+    //     memo_mode = wfa::WFAligner::MemoryUltralow;
+
+    // Criar alinhador WFA2 com gap-affine
+    // Parâmetros: mismatch=4, gap_open=6, gap_extend=2
+    wfa::WFAlignerGapAffine aligner(4,                         // mismatch cost
+                                    6,                         // gap opening
+                                    2,                         // gap extension
+                                    wfa::WFAligner::Alignment, // compute full alignment (CIGAR)
+                                    wfa::WFAligner::MemoryHigh // memory mode
+    );
+
+    std::vector<std::string> aligned;
+    aligned.reserve(non_empty_indices.size());
+
+    // Começar com primeira sequência como "consenso"
+    std::string consensus = sequences[non_empty_indices[0]];
+    aligned.push_back(consensus);
+
+    // Alinhamento progressivo: consenso com cada nova sequência
+    for (size_t idx = 1; idx < non_empty_indices.size(); ++idx) {
+        size_t seq_idx = non_empty_indices[idx];
+        const std::string &current_seq = sequences[seq_idx];
+
+        try {
+            // Alinhar consenso (pattern/reference) contra current_seq (text/query)
+            // alignEnd2End realiza alinhamento global (end-to-end)
+            aligner.alignEnd2End(consensus.c_str(), consensus.length(), current_seq.c_str(), current_seq.length());
+
+            // Extrair sequências alinhadas do CIGAR
+            std::string aligned_consensus, aligned_current;
+
+            // getAlignment() retorna raw CIGAR (e.g., "MMMDDDXD")
+            std::string raw_cigar = aligner.getAlignment();
+
+            size_t con_idx = 0, cur_idx = 0;
+
+            for (char op : raw_cigar) {
+                switch (op) {
+                case 'M': // Match
+                case '=':
+                case 'X': // Mismatch
+                    aligned_consensus += consensus[con_idx++];
+                    aligned_current += current_seq[cur_idx++];
+                    break;
+                case 'I': // Insertion em current (gap em consensus)
+                    aligned_consensus += '-';
+                    aligned_current += current_seq[cur_idx++];
+                    break;
+                case 'D': // Deletion em current (gap em current)
+                    aligned_consensus += consensus[con_idx++];
+                    aligned_current += '-';
+                    break;
+                }
+            }
+
+            // Atualizar consenso para próxima iteração
+            consensus = aligned_consensus;
+
+            // Inserir gaps nas sequências já alinhadas para manter sincronismo
+            for (size_t j = 0; j < aligned.size(); ++j) {
+                std::string updated;
+                updated.reserve(aligned_consensus.length());
+
+                size_t old_pos = 0;
+                for (char c : aligned_consensus) {
+                    if (c == '-') {
+                        updated += '-';
+                    } else {
+                        if (old_pos < aligned[j].length()) {
+                            updated += aligned[j][old_pos++];
+                        } else {
+                            updated += '-';
+                        }
+                    }
+                }
+                aligned[j] = std::move(updated);
+            }
+
+            // Adicionar nova sequência alinhada
+            aligned.push_back(aligned_current);
+
+        } catch (const std::exception &e) {
+            // Em caso de erro, preencher com gaps
+            if (global_args.verbose) {
+                std::cerr << "Warning: WFA2 alignment failed for sequence " << seq_idx << ": " << e.what() << "\n";
+            }
+            std::string gap_seq(consensus.length(), '-');
+            aligned.push_back(gap_seq);
+        }
+    }
+
+    // Reconstruir vetor com tamanho original (preservando posições vazias)
+    size_t aln_len = aligned.empty() ? 0 : aligned[0].size();
+    std::vector result(sequences.size(), std::string(aln_len, '-'));
+
+    for (size_t i = 0; i < non_empty_indices.size(); ++i) {
+        result[non_empty_indices[i]] = std::move(aligned[i]);
+    }
+
+    return result;
+}
+
+/**
+ * @brief Versão simplificada de pairwise com CIGAR
+ * Exatamente como você mostrou no exemplo inicial
+ *
+ * Uso:
+ *   std::string cigar = wfa_pairwise_cigar(
+ *       "TCTTTACTCGCGCGTTGGAGAAATACAATAGT",
+ *       "TCTATACTGCGCGTTTGGAGAAATAAAATAGT",
+ *       4, 6, 2);
+ *   cout << "SAM CIGAR: " << cigar << "\n";  // Ex: "8M1X23M"
+ */
+std::string wfa_pairwise_cigar(const std::string &pattern, const std::string &text, int mismatch, int gap_open, int gap_extend) {
+
+    // Determinar modo de memória conforme global_args
+    // Se global_args.memory_mode não existir, use valor padrão
+    wfa::WFAligner::MemoryModel memo_mode = wfa::WFAligner::MemoryHigh;
+
+    // if (global_args.memory_mode == "med")
+    //     memo_mode = wfa::WFAligner::MemoryMed;
+    // else if (global_args.memory_mode == "low")
+    //     memo_mode = wfa::WFAligner::MemoryLow;
+    // else if (global_args.memory_mode == "ultralow")
+    //     memo_mode = wfa::WFAligner::MemoryUltralow;
+
+    // Criar alinhador WFA2 com gap-affine
+    // Parâmetros: mismatch, gap_open, gap_extend, Alignment (full CIGAR), memory_mode
+    wfa::WFAlignerGapAffine aligner(mismatch,                  // cost de mismatch
+                                    gap_open,                  // custo de abrir gap
+                                    gap_extend,                // custo de estender gap
+                                    wfa::WFAligner::Alignment, // compute full alignment (not just score)
+                                    memo_mode                  // memory mode (high/med/low/ultralow)
+    );
+
+    // Perform global (end-to-end) alignment
+    // - pattern is treated as reference (primeiro argumento)
+    // - text is treated as query (segundo argumento)
+    aligner.alignEnd2End(pattern.c_str(), pattern.size(), text.c_str(), text.size());
+
+    // Retrieve the SAM CIGAR string representing the alignment
+    // - pass false to omit verbose header info
+    return aligner.getCIGAR(false);
+}
+
+/**
+ * @brief Versão pairwise com score e sequências alinhadas
+ *
+ * Retorna tuple: (aligned_query, aligned_target, score)
+ */
+std::tuple<std::string, std::string, int> wfa2_align_pairwise(const std::string &query, const std::string &target) {
+
+    wfa::WFAlignerGapAffine aligner(4, 6, 2, wfa::WFAligner::Alignment, wfa::WFAligner::MemoryUltralow);
+
+    aligner.alignEnd2End(target.c_str(), target.length(), query.c_str(), query.length());
+
+    // Reconstruir sequências alinhadas
+    std::string aligned_query, aligned_target;
+    std::string raw_cigar = aligner.getAlignment();
+
+    size_t q_idx = 0, t_idx = 0;
+    for (char op : raw_cigar) {
+        switch (op) {
+        case 'M':
+        case '=':
+        case 'X':
+            aligned_query += query[q_idx++];
+            aligned_target += target[t_idx++];
+            break;
+        case 'I':
+            aligned_query += query[q_idx++];
+            aligned_target += '-';
+            break;
+        case 'D':
+            aligned_query += '-';
+            aligned_target += target[t_idx++];
+            break;
+        }
+    }
+
+    return std::make_tuple(aligned_query, aligned_target, aligner.getAlignmentScore());
+}
+
+/**
  * @brief Executes a SPOA (Simd Partial Order Alignment) task on a set of DNA sequence fragments.
  * This function is designed to be run as a thread. It extracts subsequences from the input data
  * based on the provided ranges, constructs a vector of fragments, and performs multiple sequence
@@ -172,14 +408,14 @@ void *spoa_task(void *arg) {
     for (uint_t s = 0; s < params->seq_num; ++s) {
         auto [start, len] = (*params->range)[s];
         if (start != -1 && len > 0) {
-            // Extract a valid fragment from sequence
             fragments[s] = (*params->data)[s].substr(start, len);
         }
     }
 
-    // Run the SPOA alignment on the extracted fragments
-    // and store the result at the designated location
-    if (params->use_batch) {
+    // Escolher método baseado na flag
+    if (params->use_wfa2) {
+        *(params->result_store) = wfa2_align(fragments);
+    } else if (params->use_batch) {
         *(params->result_store) = spoa_align_batch(fragments, params->batch_size);
     } else {
         *(params->result_store) = spoa_align(fragments);
@@ -382,62 +618,20 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
             continue;
         }
 
-        // --- Case 3: Large block → subdivide ---
-        count_split++;
+        // --- Case 3: Large block → use WFA2 instead of subdivision ---
+        count_split++; // Manter contador para estatísticas
 
-        SubBlockInfo sub_info;
-        sub_info.block_index = i;
+        SpoaTaskParams params;
+        params.data = &data;
+        params.range = &parallel_align_range[i];
+        params.task_index = i;
+        params.seq_num = seq_num;
+        params.result_store = &fast_parallel_string[i];
+        params.use_wfa2 = true; // Flag para indicar uso de WFA2
+        params.use_batch = false;
+        params.batch_size = 0;
 
-        size_t pos = 0;
-
-        // Generate overlapping sub-blocks
-        while (pos < max_len) {
-            size_t end = std::min(pos + MAX_BLOCK_SIZE, max_len);
-
-            // Add overlap to the end (except for last block)
-            if (end < max_len) {
-                end = std::min(end + OVERLAP_SIZE, max_len);
-            }
-
-            sub_info.sub_block_starts.push_back(pos);
-            sub_info.sub_block_ends.push_back(end);
-
-            // Extract sub-fragments
-            std::vector<std::string> sub_fragments(seq_num);
-            for (uint_t s = 0; s < seq_num; ++s) {
-                const std::string &seq = fragments[s];
-                if (seq.empty()) {
-                    sub_fragments[s] = "";
-                } else {
-                    size_t real_start = std::min(pos, seq.size());
-                    size_t real_end = std::min(end, seq.size());
-                    if (real_start < real_end) {
-                        sub_fragments[s] = seq.substr(real_start, real_end - real_start);
-                    } else {
-                        sub_fragments[s] = "";
-                    }
-                }
-            }
-
-            // Create SPOA task for this sub-block
-            SpoaTaskParams sub_params;
-            sub_params.task_index = i;
-            sub_params.seq_num = seq_num;
-            sub_params.data = nullptr;
-            sub_params.range = nullptr;
-            sub_params.result_store = nullptr;
-            sub_params.local_sequences = sub_fragments;
-            sub_params.result_local = std::make_shared<std::vector<std::string>>();
-            spoa_params.push_back(sub_params);
-            //++count_spoa;
-
-            // Move to next sub-block (with overlap)
-            pos += (MAX_BLOCK_SIZE - OVERLAP_SIZE);
-            if (pos >= max_len)
-                break;
-        }
-
-        subdivided_blocks.push_back(std::move(sub_info));
+        spoa_params.push_back(params);
     }
 
     // ============================================================

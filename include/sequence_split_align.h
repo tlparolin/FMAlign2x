@@ -28,6 +28,7 @@
 
 #include "../ext/SW/ssw.h"
 #include "../ext/SW/ssw_cpp.h"
+#include "bindings/cpp/WFAligner.hpp"
 #include "common.h"
 #include "utils.h"
 #include <algorithm>
@@ -76,6 +77,7 @@ struct SpoaTaskParams {
     uint_t task_index = 0;                                       // Block index
     bool use_batch;                                              // Whether to use batch SPOA alignment
     size_t batch_size;                                           // Batch size for SPOA alignment
+    bool use_wfa2 = false;                                       // Flag para usar WFA2 ao invés de SPOA
 };
 
 struct SubBlockInfo {
@@ -108,6 +110,13 @@ std::string generateRandomString(int length);
  */
 void split_and_parallel_align(std::vector<std::string> data, std::vector<std::string> name,
                               std::vector<std::vector<std::pair<int_t, int_t>>> chain, ThreadPool &pool);
+
+/**
+ * @brief Alinha múltiplas sequências usando WFA2-lib com alinhamento progressivo
+ * @param sequences Vetor de sequências de entrada
+ * @return Vetor de sequências alinhadas com gaps
+ */
+std::vector<std::string> wfa2_align(const std::vector<std::string> &sequences);
 
 /**
  * @brief Runs SPOA alignment on a set of sequences (helper for subdivisions)

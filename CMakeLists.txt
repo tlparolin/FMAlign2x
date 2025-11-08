@@ -73,11 +73,27 @@ CPMAddPackage(
     "SPOA_OPTIMIZE_FOR_NATIVE ON"
 )
 
+# WFA2 Config
+CPMAddPackage(
+  NAME wfa2
+  GITHUB_REPOSITORY smarco/WFA2-lib
+  GIT_TAG v2.3.5
+  OPTIONS
+    "OPENMP TRUE"
+)
+
+if(wfa2_ADDED)
+    # INTERFACE to simplify include/link
+    add_library(wfa2lib INTERFACE)
+    target_include_directories(wfa2lib INTERFACE ${wfa2_SOURCE_DIR}/bindings/cpp)
+    target_link_libraries(wfa2lib INTERFACE wfa2cpp)
+endif()
+
 add_executable(FMAlign2x ${SOURCES})
-target_link_libraries(FMAlign2x libsais spoa)
+target_link_libraries(FMAlign2x libsais spoa wfa2lib)
 
 # FMAlign2 depends on spoa
-add_dependencies(FMAlign2x libsais spoa)
+add_dependencies(FMAlign2x libsais spoa wfa2lib)
 
 # Clean Rules
 add_custom_target(clean-all
