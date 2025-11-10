@@ -124,8 +124,6 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     }
 
     timer.reset();
-    // fallback to empty structure if not extended
-    spoa_parallel_string.resize(parallel_align_range.size(), std::vector<std::string>(seq_num, ""));
 
     // === CONCATENATION ===
     std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
@@ -389,7 +387,7 @@ std::tuple<std::string, std::string, int> wfa2_align_pairwise(const std::string 
  * based on the provided ranges, constructs a vector of fragments, and performs multiple sequence
  * alignment using the SPOA algorithm. The result is stored in the location pointed to by
  * `params->result_store`.
- * @param arg A pointer to a `SpoaTaskParams` structure containing:
+ * @param arg A pointer to a `MSATaskParams` structure containing:
  *  - the number of sequences (`seq_num`),
  *  - the input data (`data`),
  *  - the ranges to extract from each sequence (`range`),
@@ -397,9 +395,9 @@ std::tuple<std::string, std::string, int> wfa2_align_pairwise(const std::string 
  * @return Always returns `nullptr`. The result of the alignment is stored via the pointer in `params`.
  * @note If a sequence has an invalid range (start == -1 or length <= 0), an empty string is used.
  */
-void *spoa_task(void *arg) {
+void *msa_task(void *arg) {
     // Cast the argument to the expected structure
-    SpoaTaskParams *params = static_cast<SpoaTaskParams *>(arg);
+    MSATaskParams *params = static_cast<MSATaskParams *>(arg);
 
     // Prepare a vector to hold extracted fragments for each sequence
     std::vector<std::string> fragments(params->seq_num);
@@ -560,7 +558,7 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
     uint_t count_split = 0;
 
     std::vector<SubBlockInfo> subdivided_blocks;
-    std::vector<SpoaTaskParams> spoa_params;
+    std::vector<MSATaskParams> spoa_params;
 
     // ============================================================
     // PASS 1: Classify blocks and prepare tasks
@@ -597,7 +595,7 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
 
         // --- Case 2: Small block → direct SPOA ---
         if (avg_len <= MAX_BLOCK_SIZE) {
-            SpoaTaskParams params;
+            MSATaskParams params;
             params.data = &data;
             params.range = &parallel_align_range[i];
             params.task_index = i;
@@ -621,7 +619,7 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
         // --- Case 3: Large block → use WFA2 instead of subdivision ---
         count_split++; // Manter contador para estatísticas
 
-        SpoaTaskParams params;
+        MSATaskParams params;
         params.data = &data;
         params.range = &parallel_align_range[i];
         params.task_index = i;
@@ -643,7 +641,7 @@ preprocess_parallel_blocks(const std::vector<std::string> &data,
             pool.add_task([&params]() {
                 if (params.data != nullptr) {
                     // Direct SPOA task (small block)
-                    spoa_task(&params);
+                    msa_task(&params);
                 } else {
                     // Subdivision SPOA task
                     std::vector<std::string> aligned = run_spoa_local(params.local_sequences);

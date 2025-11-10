@@ -67,7 +67,7 @@ struct ParallelAlignParams {
     const std::vector<bool> *fallback_needed;
 };
 
-struct SpoaTaskParams {
+struct MSATaskParams {
     const std::vector<std::string> *data = nullptr;              // Pointer to input sequences (optional)
     const std::vector<std::pair<int_t, int_t>> *range = nullptr; // Input range (for direct block alignment)
     std::vector<std::string> local_sequences;                    // Used when aligning subdivided sub-blocks
