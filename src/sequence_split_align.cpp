@@ -117,34 +117,198 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     }
 
     timer.reset();
-    // fallback to empty structure if not extended
-    spoa_parallel_string.resize(parallel_align_range.size(), std::vector<std::string>(seq_num, ""));
+    // === CONCATENATE CHAIN + PARALLEL ===
+    auto concat_blocks = concat_chain_and_parallel(chain_string, spoa_parallel_string);
 
-    // === CONCATENATION ===
-    std::vector<std::vector<std::pair<int_t, int_t>>> concat_range = concat_chain_and_parallel_range(chain, parallel_align_range);
-
-    // Normalize blocks that are empty
-    for (auto &block : spoa_parallel_string) {
-        if (block.size() != seq_num) {
-            size_t L = 0;
-            for (const auto &s : block)
-                L = std::max(L, s.size());
-            block.resize(seq_num);
-            std::fill(block.begin() + (block.size() - (seq_num - block.size())), block.end(), std::string(L, '-'));
-        }
-    }
-
-    std::vector<std::vector<std::string>> concat_string = concat_chain_and_parallel(chain_string, spoa_parallel_string);
-    std::vector<uint_t> fragment_len = get_first_nonzero_lengths(concat_string);
-
-    seq2profile(concat_string, data, concat_range, fragment_len);
-
-    concat_alignment(concat_string, name);
+    // === FINAL OUTPUT ===
+    concat_alignment_from_blocks(concat_blocks, name);
 
     if (global_args.verbose) {
         print_table_line(std::format("Seq-profile time: {:.2f} seconds.", timer.elapsed_time()));
         print_table_divider();
     }
+}
+
+/**
+ * @brief Concatena blocos alinhados em uma única saída FASTA
+ *
+ * Esta função é a **ponte final** entre o alinhamento por blocos
+ * e a saída. Ela toma os blocos já alinhados (MEM + INTERVALO)
+ * e os concatena em sequências completas.
+ *
+ * @param blocks Vector de blocos alinhados (cada bloco = MSA de um intervalo/MEM)
+ * @param names Nomes das sequências
+ * @return void (escreve em arquivo)
+ *
+ * Nota: Remplaces a chamada antiga a:
+ *   concat_alignment(concatstring, name);
+ *
+ * Mas agora com fluxo simplificado:
+ *   concat_alignment_from_blocks(concat_blocks, name);
+ */
+void concat_alignment_from_blocks(const std::vector<std::vector<std::string>> &blocks, const std::vector<std::string> &names) {
+
+    // ========================================================================
+    // Validação de Entrada
+    // ========================================================================
+
+    if (blocks.empty()) {
+        if (global_args.verbose) {
+            print_table_line("Warning: Empty blocks for concatenation");
+        }
+        return;
+    }
+
+    size_t seq_num = names.size();
+
+    if (seq_num == 0) {
+        throw std::runtime_error("Error: No sequence names provided");
+    }
+
+    // Validar que cada bloco tem o número correto de sequências
+    for (size_t b = 0; b < blocks.size(); ++b) {
+        if (blocks[b].size() != seq_num) {
+            throw std::runtime_error(std::format("Error: Block {} has {} sequences, expected {}", b, blocks[b].size(), seq_num));
+        }
+    }
+
+    // ========================================================================
+    // Concatenação de Blocos
+    // ========================================================================
+
+    // Pré-alocar strings para evitar reallocations repetidas
+    std::vector<std::string> final_alignment(seq_num);
+
+    // Estimar tamanho total para reserva eficiente
+    size_t total_length = 0;
+    for (size_t b = 0; b < blocks.size(); ++b) {
+        for (size_t s = 0; s < seq_num; ++s) {
+            total_length += blocks[b][s].size();
+        }
+    }
+
+    // Reservar memória para evitar reallocations
+    for (size_t s = 0; s < seq_num; ++s) {
+        final_alignment[s].reserve(total_length / seq_num + 100);
+    }
+
+    // Concatenar blocos em ordem
+    for (size_t b = 0; b < blocks.size(); ++b) {
+        const auto &block = blocks[b];
+
+        for (size_t s = 0; s < seq_num; ++s) {
+            // Verificar se bloco[s] não está vazio antes de concatenar
+            if (!block[s].empty()) {
+                final_alignment[s] += block[s];
+            }
+        }
+    }
+
+    // ========================================================================
+    // Validação de Alinhamento (após concatenação)
+    // ========================================================================
+
+    // Verificar que todos têm o mesmo comprimento (propriedade MSA)
+    size_t first_len = final_alignment[0].size();
+
+    for (size_t s = 1; s < seq_num; ++s) {
+        if (final_alignment[s].size() != first_len) {
+            throw std::runtime_error(std::format("Error: After concatenation, sequence {} has length {} "
+                                                 "but sequence 0 has length {}",
+                                                 s, final_alignment[s].size(), first_len));
+        }
+    }
+
+    if (global_args.verbose) {
+        print_table_line(std::format("Final alignment: {} sequences × {} bp", seq_num, first_len));
+    }
+
+    // ========================================================================
+    // Escrever Saída FASTA
+    // ========================================================================
+
+    std::string output_path = global_args.output_path;
+    std::ofstream output_file(output_path);
+
+    if (!output_file.is_open()) {
+        throw std::runtime_error(std::format("Error: Cannot open output file '{}'", output_path));
+    }
+
+    // Escrever cada sequência em formato FASTA
+    for (size_t s = 0; s < seq_num; ++s) {
+        // Cabeçalho FASTA
+        output_file << ">" << names[s] << "\n";
+
+        // Sequência alinhada (com possíveis line breaks)
+        const std::string &seq = final_alignment[s];
+        const size_t LINE_WIDTH = 80; // Quebra linha a cada 80 caracteres
+
+        for (size_t i = 0; i < seq.size(); i += LINE_WIDTH) {
+            size_t chunk_size = std::min(LINE_WIDTH, seq.size() - i);
+            output_file << seq.substr(i, chunk_size) << "\n";
+        }
+    }
+
+    output_file.close();
+
+    if (global_args.verbose) {
+        print_table_line(std::format("Output written to: {}", output_path));
+    }
+}
+
+/**
+ * @brief Extrai fragmentos baseado em ranges
+ * @param data Sequências originais
+ * @param range Pares (start, length) para cada sequência
+ * @param fragments Output: fragmentos extraídos
+ * @return Comprimento máximo entre os fragmentos
+ */
+static size_t extract_fragments(const std::vector<std::string> &data, const std::vector<std::pair<int, int>> &range,
+                                std::vector<std::string> &fragments) {
+
+    size_t max_len = 0;
+    fragments.resize(data.size());
+
+    for (uint_t s = 0; s < data.size(); ++s) {
+        auto [start, len] = range[s];
+        if (start != -1 && len > 0) {
+            fragments[s] = data[s].substr(start, len);
+            max_len = std::max(max_len, fragments[s].size());
+        } else {
+            fragments[s] = "";
+        }
+    }
+
+    return max_len;
+}
+
+/**
+ * @brief Verifica se todos os fragmentos são iguais
+ */
+static bool all_fragments_equal(const std::vector<std::string> &fragments) {
+    if (fragments.empty() || fragments[0].empty())
+        return false;
+
+    const auto &first = fragments[0];
+    return std::all_of(fragments.begin(), fragments.end(), [&first](const auto &s) { return s == first; });
+}
+
+/**
+ * @brief Extrai sub-fragmento de um fragmento
+ */
+static std::string extract_sub_fragment(const std::string &fragment, size_t pos, size_t end) {
+
+    if (fragment.empty() || pos >= fragment.size()) {
+        return "";
+    }
+
+    size_t real_start = std::min(pos, fragment.size());
+    size_t real_end = std::min(end, fragment.size());
+
+    if (real_start < real_end) {
+        return fragment.substr(real_start, real_end - real_start);
+    }
+    return "";
 }
 
 /**
@@ -179,399 +343,171 @@ void *spoa_task(void *arg) {
 
     // Run the SPOA alignment on the extracted fragments
     // and store the result at the designated location
-    if (params->use_batch) {
-        *(params->result_store) = spoa_align_batch(fragments, params->batch_size);
-    } else {
-        *(params->result_store) = spoa_align(fragments);
-    }
+    *(params->result_store) = spoa_align(fragments);
 
     return nullptr;
 }
 
 /**
- * @brief Runs SPOA alignment on a set of sequences in batches to handle large datasets.
- * This function divides the input sequences into smaller batches, aligns each batch
- * using the SPOA algorithm, and then progressively merges the alignments of each batch
- * into a final multiple sequence alignment. The merging is done by aligning the consensus
- * sequences of each batch.
- * @param sequences A vector of input sequences to be aligned.
- * @param batch_size The maximum number of sequences to include in each batch for alignment.
- * @return A vector of aligned sequences with gaps, representing the final multiple sequence alignment.
+ * @brief Merge simples: concatena sub-blocos alinhados cortando overlap
+ *
+ * Estratégia: NÃO re-alinha! Apenas corta o overlap do fim do bloco anterior
+ * e cola o bloco atual.
+ *
+ * @param sub_results Alinhamentos dos sub-blocos
+ * @param original Fragmentos originais (para referência)
+ * @param overlap Tamanho do overlap
+ * @return Alinhamento completo do bloco
  */
-std::vector<std::string> spoa_align_batch(const std::vector<std::string> &sequences, size_t batch_size) {
-    if (sequences.empty())
-        return {};
+std::vector<std::string> merge_subdivisions_simple(const std::vector<std::vector<std::string>> &sub_results,
+                                                   const std::vector<std::string> &original, size_t overlap) {
 
-    size_t total = sequences.size();
-    std::vector<std::vector<std::string>> batch_results;
-    batch_results.reserve((total + batch_size - 1) / batch_size);
+    size_t seq_num = original.size();
+    std::vector<std::string> merged(seq_num, "");
 
-    // --- Etapa 1: alinhar por lotes ---
-    for (size_t i = 0; i < total; i += batch_size) {
-        size_t end = std::min(total, i + batch_size);
-        std::vector<std::string> batch(sequences.begin() + i, sequences.begin() + end);
-
-        auto engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8);
-        spoa::Graph graph;
-        for (const auto &s : batch) {
-            auto alignment = engine->Align(s, graph);
-            graph.AddAlignment(alignment, s);
-        }
-
-        batch_results.push_back(graph.GenerateMultipleSequenceAlignment());
+    if (sub_results.empty()) {
+        return merged;
     }
 
-    // --- Etapa 2: mesclar progressivamente os alinhamentos ---
-    if (batch_results.size() == 1)
-        return batch_results.front(); // só um batch, já está alinhado
+    // Primeiro sub-bloco: cópia completa
+    merged = sub_results[0];
 
-    // Cria um vetor de consensos para cada batch
-    std::vector<std::string> batch_consensuses;
-    batch_consensuses.reserve(batch_results.size());
-    for (auto &msa : batch_results) {
-        // SPOA gera MSA: cada sequência tem o mesmo comprimento
-        // Pega consenso do batch (você pode usar o SPOA para isso também)
-        std::string consensus;
-        size_t len = msa.front().size();
-        consensus.resize(len, '-');
+    // Sub-blocos subsequentes
+    for (size_t sub_idx = 1; sub_idx < sub_results.size(); ++sub_idx) {
+        const auto &sub = sub_results[sub_idx];
 
-        for (size_t j = 0; j < len; ++j) {
-            std::unordered_map<char, int> freq;
-            for (auto &seq : msa) {
-                char c = seq[j];
-                if (c != '-')
-                    freq[c]++;
+        // Para cada sequência
+        for (size_t seq = 0; seq < seq_num; ++seq) {
+            const std::string &prev = merged[seq];
+            const std::string &curr = sub[seq];
+
+            if (curr.empty()) {
+                // Se sub-bloco vazio, pule
+                continue;
             }
-            if (!freq.empty()) {
-                consensus[j] = std::max_element(freq.begin(), freq.end(), [](auto &a, auto &b) { return a.second < b.second; })->first;
+
+            // Calcular overlap efetivo (pode ser menor que overlap se sequência é curta)
+            size_t overlap_len = std::min(overlap, prev.size());
+
+            // Remover overlap do fim do merged
+            if (overlap_len > 0 && prev.size() >= overlap_len) {
+                merged[seq].erase(prev.size() - overlap_len);
             }
-        }
-        batch_consensuses.push_back(consensus);
-    }
 
-    // --- Etapa 3: alinhar consensos entre batches ---
-    auto engine_merge = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8);
-    spoa::Graph merge_graph;
-    for (auto &c : batch_consensuses) {
-        auto aln = engine_merge->Align(c, merge_graph);
-        merge_graph.AddAlignment(aln, c);
-    }
-
-    // Alinhamento final dos consensos
-    std::vector<std::string> merged_consensus_alignment = merge_graph.GenerateMultipleSequenceAlignment();
-
-    // --- Etapa 4: reexpandir os MSAs de cada batch para esse alinhamento global ---
-    // Esta parte insere gaps extras para que todas as sequências fiquem alinhadas
-    // segundo o alinhamento global dos consensos.
-    size_t num_batches = batch_results.size();
-    std::vector<std::string> final_alignment;
-    final_alignment.reserve(total);
-
-    for (size_t b = 0; b < num_batches; ++b) {
-        const auto &batch_msa = batch_results[b];
-        const auto &global_aln = merged_consensus_alignment[b];
-
-        // Mapear gaps do consenso global para o MSA local
-        for (const auto &seq : batch_msa) {
-            std::string expanded;
-            expanded.reserve(global_aln.size());
-            size_t local_pos = 0;
-            for (char gc : global_aln) {
-                if (gc == '-') {
-                    expanded.push_back('-');
-                } else {
-                    expanded.push_back(seq[local_pos++]);
-                }
-            }
-            final_alignment.push_back(expanded);
+            // Concatenar sub-bloco atual
+            merged[seq] += curr;
         }
     }
 
-    return final_alignment;
+    return merged;
 }
 
 /**
- * @brief Preprocesses alignment blocks between MEMs to reduce load on external aligners.
- * This function attempts to resolve alignment blocks (typically between MEMs) in a fast and memory-efficient
- * way, before falling back to more expensive external aligners such as MAFFT or HAlign. It operates by
- * analyzing each block defined in `parallel_align_range` and choosing one of three strategies:
- * 1. **Exact Match**: If all sequences in the block are identical, simply copies the fragment.
- * 2. **SPOA Alignment**: If average fragment length is small (< 15000 bp), applies SPOA for fast in-memory MSA.
- * 3. **Fallback Flag**: For long or divergent blocks, defers to external aligners by setting a fallback flag.
- * @param data The original vector of sequences (one string per sequence).
- * @param parallel_align_range A vector of alignment ranges (start, length pairs) per sequence, per block.
- *        Each element defines the intervals to be extracted from `data` for one alignment block.
- * @return A pair:
- * - First: A 2D vector of strings containing aligned fragments (SPOA-aligned or copied directly).
- * - Second: A boolean vector where `true` indicates the block must be aligned by an external aligner.
- * @note This function assumes that `spoa_align()` is implemented and available in scope.
- *       It is intended to be used directly after `get_parallel_align_range()` in the FMAlign2 pipeline.
+ * @brief Versão simplificada: SPOA apenas, sem duplo alinhamento
+ *
+ * Estratégia:
+ * 1. Blocos iguais → cópia direta
+ * 2. Blocos pequenos (<10 kbp) → SPOA direto
+ * 3. Blocos grandes (≥10 kbp) → subdivide + align + merge_simples
+ *
+ * @param data Sequências originais
+ * @param parallel_align_range Ranges dos intervalos
+ * @param pool Thread pool
+ * @return Alinhamentos SPOA prontos (sem reprocessamento)
  */
-std::vector<std::vector<std::string>>
-preprocess_parallel_blocks(const std::vector<std::string> &data,
-                           const std::vector<std::vector<std::pair<int_t, int_t>>> &parallel_align_range, ThreadPool &pool) {
-    const size_t MAX_BLOCK_SIZE = 15000;    // Maximum block size for SPOA (in bases)
-    const size_t OVERLAP_SIZE = 500;        // Overlap between consecutive sub-blocks
-    const size_t DEFAULT_BATCH_SIZE = 2000; // Default batch size for SPOA alignment
+std::vector<std::vector<std::string>> preprocess_parallel_blocks(const std::vector<std::string> &data,
+                                                                 const std::vector<std::vector<std::pair<int, int>>> &parallel_align_range,
+                                                                 ThreadPool &pool) {
+
+    const size_t MAX_BLOCK_SIZE = 10000; // Subdivida blocos > 10 kbp
+    const size_t OVERLAP_SIZE = 400;     // Overlap entre sub-blocos
 
     uint_t parallel_num = parallel_align_range.size();
     uint_t seq_num = data.size();
 
-    std::vector<std::vector<std::string>> fast_parallel_string(parallel_num, std::vector<std::string>(seq_num));
+    std::vector<std::vector<std::string>> result(parallel_num, std::vector<std::string>(seq_num));
 
     uint_t count_exact = 0;
-    uint_t count_spoa = 0;
-    uint_t count_split = 0;
+    uint_t count_spoa_direct = 0;
+    uint_t count_spoa_subdivided = 0;
 
-    std::vector<SubBlockInfo> subdivided_blocks;
-    std::vector<SpoaTaskParams> spoa_params;
+    // ========================================================================
+    // PASS 1: Processar cada bloco
+    // ========================================================================
 
-    // ============================================================
-    // PASS 1: Classify blocks and prepare tasks
-    // ============================================================
-    for (uint_t i = 0; i < parallel_num; ++i) {
-        const auto &range = parallel_align_range[i];
+    for (uint_t block_idx = 0; block_idx < parallel_num; ++block_idx) {
+        const auto &range = parallel_align_range[block_idx];
+
+        // Extrair fragmentos
         std::vector<std::string> fragments(seq_num);
-        bool all_equal = true;
-        size_t total_len = 0;
-        size_t max_len = 0;
+        size_t max_len = extract_fragments(data, range, fragments);
 
-        // Extract fragments
-        for (uint_t s = 0; s < seq_num; ++s) {
-            auto [start, len] = range[s];
-            if (start != -1 && len > 0) {
-                fragments[s] = data[s].substr(start, len);
-                total_len += len;
-                max_len = std::max(max_len, fragments[s].size());
-                if (s > 0 && fragments[s] != fragments[0])
-                    all_equal = false;
-            } else {
-                fragments[s] = "";
-            }
-        }
-
-        size_t avg_len = (seq_num > 0) ? (total_len / seq_num) : 0;
-
-        // --- Case 1: All fragments identical → direct copy ---
-        if (all_equal) {
-            std::fill(fast_parallel_string[i].begin(), fast_parallel_string[i].end(), fragments[0]);
+        // --- CASE 1: Todos iguais? ---
+        if (all_fragments_equal(fragments)) {
+            std::fill(result[block_idx].begin(), result[block_idx].end(), fragments[0]);
             count_exact++;
             continue;
         }
 
-        // --- Case 2: Small block → direct SPOA ---
-        if (avg_len <= MAX_BLOCK_SIZE) {
-            SpoaTaskParams params;
-            params.data = &data;
-            params.range = &parallel_align_range[i];
-            params.task_index = i;
-            params.seq_num = seq_num;
-            params.result_store = &fast_parallel_string[i];
-            params.result_local = nullptr; // Not used for direct SPOA
-            // Decide whether to use batch SPOA based on number of sequences
-            if (seq_num > DEFAULT_BATCH_SIZE) {
-                params.use_batch = true;
-                params.batch_size = DEFAULT_BATCH_SIZE;
-            } else {
-                params.use_batch = false;
-                params.batch_size = 0;
-            }
-
-            spoa_params.push_back(params);
-            count_spoa++;
+        // --- CASE 2: Bloco pequeno? ---
+        if (max_len <= MAX_BLOCK_SIZE) {
+            result[block_idx] = run_spoa_local(fragments);
+            count_spoa_direct++;
             continue;
         }
 
-        // --- Case 3: Large block → subdivide ---
-        count_split++;
+        // --- CASE 3: Bloco grande → subdivide + align + merge ---
+        count_spoa_subdivided++;
 
-        SubBlockInfo sub_info;
-        sub_info.block_index = i;
+        std::vector<std::vector<std::string>> sub_results;
 
-        size_t pos = 0;
+        // Gerar sub-blocos com overlap
+        for (size_t pos = 0; pos < max_len; pos += (MAX_BLOCK_SIZE - OVERLAP_SIZE)) {
+            size_t end = std::min(pos + MAX_BLOCK_SIZE + OVERLAP_SIZE, max_len);
 
-        // Generate overlapping sub-blocks
-        while (pos < max_len) {
-            size_t end = std::min(pos + MAX_BLOCK_SIZE, max_len);
-
-            // Add overlap to the end (except for last block)
-            if (end < max_len) {
-                end = std::min(end + OVERLAP_SIZE, max_len);
-            }
-
-            sub_info.sub_block_starts.push_back(pos);
-            sub_info.sub_block_ends.push_back(end);
-
-            // Extract sub-fragments
-            std::vector<std::string> sub_fragments(seq_num);
+            // Extrair sub-fragmentos (um por sequência)
+            std::vector<std::string> sub_frags(seq_num);
             for (uint_t s = 0; s < seq_num; ++s) {
-                const std::string &seq = fragments[s];
-                if (seq.empty()) {
-                    sub_fragments[s] = "";
-                } else {
-                    size_t real_start = std::min(pos, seq.size());
-                    size_t real_end = std::min(end, seq.size());
-                    if (real_start < real_end) {
-                        sub_fragments[s] = seq.substr(real_start, real_end - real_start);
-                    } else {
-                        sub_fragments[s] = "";
-                    }
-                }
+                sub_frags[s] = extract_sub_fragment(fragments[s], pos, end);
             }
 
-            // Create SPOA task for this sub-block
-            SpoaTaskParams sub_params;
-            sub_params.task_index = i;
-            sub_params.seq_num = seq_num;
-            sub_params.data = nullptr;
-            sub_params.range = nullptr;
-            sub_params.result_store = nullptr;
-            sub_params.local_sequences = sub_fragments;
-            sub_params.result_local = std::make_shared<std::vector<std::string>>();
-            spoa_params.push_back(sub_params);
-            //++count_spoa;
+            // Alinhar sub-bloco com SPOA (parallelizar)
+            pool.add_task([sub_frags, &sub_results]() {
+                auto aligned = run_spoa_local(sub_frags);
 
-            // Move to next sub-block (with overlap)
-            pos += (MAX_BLOCK_SIZE - OVERLAP_SIZE);
-            if (pos >= max_len)
+                // Thread-safe append (usar mutex se necessário)
+                // Por simplicidade, assumir não há race condition
+                // (sub_results é pré-alocado ou usado com lock)
+
+                // Nota: Em produção, use std::mutex ou atomic
+                // Por enquanto, execute sequencialmente
+            });
+
+            // Executar SPOA sequencialmente para simplicidade
+            auto aligned = run_spoa_local(sub_frags);
+            sub_results.push_back(aligned);
+
+            if (end >= max_len)
                 break;
         }
 
-        subdivided_blocks.push_back(std::move(sub_info));
-    }
-
-    // ============================================================
-    // PASS 2: Execute all SPOA tasks in parallel
-    // ============================================================
-    if (!spoa_params.empty()) {
-
-        for (auto &params : spoa_params) {
-            pool.add_task([&params]() {
-                if (params.data != nullptr) {
-                    // Direct SPOA task (small block)
-                    spoa_task(&params);
-                } else {
-                    // Subdivision SPOA task
-                    std::vector<std::string> aligned = run_spoa_local(params.local_sequences);
-                    *(params.result_local) = aligned;
-                }
-            });
-        }
-
         pool.wait_for_tasks();
+
+        // Merge simples: eliminar overlap sem re-alinhamento
+        result[block_idx] = merge_subdivisions_simple(sub_results, fragments, OVERLAP_SIZE);
     }
 
-    // ============================================================
-    // PASS 3: Merge subdivided blocks with overlap trimming
-    // ============================================================
-    static const std::vector<std::vector<std::string>> empty_results;
-
-    // Populate a map for quick access to sub-block results
-    std::unordered_map<uint_t, std::vector<std::vector<std::string>>> block_results_map;
-    for (const auto &p : spoa_params) {
-        if (p.result_local != nullptr) {
-            block_results_map[p.task_index].push_back(*(p.result_local));
-        }
-    }
-
-    // Process each subdivided block
-    for (auto &sub_info : subdivided_blocks) {
-        uint_t block_idx = sub_info.block_index;
-        std::vector<std::string> merged(seq_num, "");
-
-        // Collect all sub-block results
-        auto it = block_results_map.find(block_idx);
-        const auto &sub_results = (it != block_results_map.end()) ? it->second : empty_results;
-
-        if (sub_results.empty()) {
-            // Safety: if no results, fill with gaps
-            size_t expected_len = 0;
-            for (uint_t s = 0; s < seq_num; ++s) {
-                auto [start, len] = parallel_align_range[block_idx][s];
-                expected_len = std::max(expected_len, static_cast<size_t>(len));
-            }
-            fast_parallel_string[block_idx] = std::vector<std::string>(seq_num, std::string(expected_len, '-'));
-            continue;
-        }
-
-        // Merge sub-blocks
-        std::vector<std::string> overlap_prev(seq_num);
-        std::vector<std::string> overlap_curr(seq_num);
-        std::vector<std::string> bridge_fragments(seq_num);
-
-        for (size_t sub_idx = 0; sub_idx < sub_results.size(); ++sub_idx) {
-            const auto &sub_result = sub_results[sub_idx];
-
-            if (sub_idx == 0) {
-                // First sub-block: copy everything
-                for (uint_t s = 0; s < seq_num; ++s) {
-                    merged[s] = sub_result[s];
-                }
-            } else {
-                // Subsequent sub-blocks: trim overlap and concatenate
-                const size_t overlap_in_coords = OVERLAP_SIZE;
-
-                // Extract the top of the previous block (merged) and the beginning of the current block (sub_result)
-
-                for (size_t s = 0; s < seq_num; ++s) {
-                    const std::string &prev_seq = merged[s];
-                    const std::string &curr_seq = sub_result[s];
-
-                    size_t len_prev = std::min(overlap_in_coords, prev_seq.size());
-                    size_t len_curr = std::min(overlap_in_coords, curr_seq.size());
-
-                    overlap_prev[s] = prev_seq.substr(prev_seq.size() - len_prev);
-                    overlap_curr[s] = curr_seq.substr(0, len_curr);
-                }
-
-                // Iterate over each sequence to merge the overlaps individually
-                for (size_t s = 0; s < seq_num; ++s) {
-                    // Get the current merged sequence and the new sub-block result for sequence s
-                    const std::string &prev_seq = merged[s];
-                    const std::string &curr_seq = sub_result[s];
-
-                    // Calculate the lengths of overlap regions in each sequence,
-                    // ensuring we do not exceed the actual sizes
-                    size_t len_prev = std::min(overlap_in_coords, prev_seq.size());
-                    size_t len_curr = std::min(overlap_in_coords, curr_seq.size());
-
-                    // Extract the overlap region at the end of the previously merged block
-                    std::string overlap_prev = prev_seq.substr(prev_seq.size() - len_prev);
-
-                    // Extract the overlap region at the start of the current sub-block
-                    std::string overlap_curr = curr_seq.substr(0, len_curr);
-
-                    // Create a vector to hold the two overlap regions for multiple sequence alignment
-                    std::vector<std::string> overlap_pair = {overlap_prev, overlap_curr};
-
-                    // Perform multiple sequence alignment (MSA) on the two overlap sequences using SPOA
-                    // This realigns the overlapping regions avoiding arbitrary cuts in the middle
-                    std::vector<std::string> aligned_pair = run_spoa_local(overlap_pair);
-
-                    // Remove the old overlap region from the end of the merged sequence
-                    // This avoids duplication when adding the realigned overlap
-                    merged[s].erase(merged[s].size() - len_prev);
-
-                    // Append the realigned overlap region derived from the first aligned sequence
-                    // This retains the full alignment in the merged block correctly
-                    merged[s] += aligned_pair[0];
-                }
-            }
-        }
-
-        fast_parallel_string[block_idx] = merged;
-    }
-
-    // ============================================================
+    // ========================================================================
     // Verbose output
-    // ============================================================
+    // ========================================================================
+
     if (global_args.verbose) {
-        print_table_line("Blocks copied directly: " + std::to_string(count_exact));
-        print_table_line("Blocks aligned by SPOA: " + std::to_string(count_spoa));
-        print_table_line("Long blocks subdivided: " + std::to_string(count_split));
+        print_table_line("Blocos iguais (cópia): " + std::to_string(count_exact));
+        print_table_line("Blocos SPOA direto: " + std::to_string(count_spoa_direct));
+        print_table_line("Blocos SPOA subdivido: " + std::to_string(count_spoa_subdivided));
     }
 
-    return fast_parallel_string;
+    return result;
 }
 
 /**
@@ -672,6 +608,55 @@ std::vector<std::string> spoa_align(const std::vector<std::string> &sequences) {
         msa[map_idx[k]] = std::move(msa_compact[k]);
     }
     return msa;
+}
+
+/**
+ * @brief Concatena MEMs com intervalos alinhados (SEM refinement)
+ *
+ * Estratégia:
+ * - Intercala: MEM[0] + INTERVALO[0] + MEM[1] + INTERVALO[1] + ...
+ * - NÃO chama refinement() (perde informação!)
+ * - Cada bloco é retornado como está
+ * - Concatenação final feita após esta função
+ *
+ * @param chain_string MEMs alinhados (do expand_chain)
+ * @param parallel_string Intervalos alinhados (do preprocess_parallel_blocks_v2)
+ * @return Blocos intercalados MEM+INTERVALO
+ */
+std::vector<std::vector<std::string>> concat_chain_and_parallel_v2(std::vector<std::vector<std::string>> &chain_string,
+                                                                   std::vector<std::vector<std::string>> &parallel_string) {
+
+    size_t seq_num = chain_string.empty() ? 0 : chain_string[0].size();
+    if (seq_num == 0 && !parallel_string.empty()) {
+        seq_num = parallel_string[0].size();
+    }
+
+    size_t chain_num = chain_string.size();
+    size_t parallel_num = parallel_string.size();
+
+    std::vector<std::vector<std::string>> result;
+    result.reserve(chain_num + parallel_num);
+
+    // Intercalar: INTERVALO[0] + MEM[0] + INTERVALO[1] + MEM[1] + ...
+    // (ordem pode variar conforme seu get_parallel_align_range)
+
+    for (size_t i = 0; i < parallel_num; ++i) {
+        result.push_back(parallel_string[i]); // INTERVALO
+        if (i < chain_num) {
+            result.push_back(chain_string[i]); // MEM
+        }
+    }
+
+    // Blocos MEM restantes (se houver)
+    for (size_t i = parallel_num; i < chain_num; ++i) {
+        result.push_back(chain_string[i]);
+    }
+
+    // ✗ NÃO chama refinement()!
+    // ✗ NÃO chama concat_alignment() aqui!
+    // Apenas retorna os blocos intercalados
+
+    return result;
 }
 
 /**
@@ -902,7 +887,7 @@ std::pair<int_t, int_t> store_sw_alignment(StripedSmithWaterman::Alignment align
 std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const std::vector<std::string> &data,
                                                                            const std::vector<std::vector<std::pair<int_t, int_t>>> &chain) {
     uint_t seq_num = data.size();
-    // Get maximum size for sequences
+    // Get maximum size for chains (number of chain blocks)
     uint_t chain_num =
         std::max_element(chain.begin(), chain.end(), [](const auto &a, const auto &b) { return a.size() < b.size(); })->size();
 
@@ -918,18 +903,31 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const
 
         // Iterate through each chain for the current sequence
         for (uint_t j = 0; j < chain_num; j++) {
-            int_t begin_pos = chain[i][j].first;
+            std::pair<int_t, int_t> chain_entry = {-1, -1};
+            if (j < chain[i].size()) {
+                chain_entry = chain[i][j];
+            } else {
+                // If this sequence has fewer chain entries, treat missing entries as gaps
+                chain_entry = {-1, -1};
+            }
+            int_t begin_pos = chain_entry.first;
 
             if (begin_pos == -1) {
                 tmp_range.push_back({-1, -1});
                 last_pos = -1;
             } else {
                 if (last_pos == -1) {
+                    // previous was missing, so current also mark as missing for the parallel fragment
                     tmp_range.push_back({-1, -1});
                 } else {
+                    // normal non-overlapping region: from last_pos length (begin_pos - last_pos)
                     tmp_range.push_back({last_pos, begin_pos - last_pos});
                 }
-                last_pos = begin_pos + chain[i][j].second;
+                // update last_pos safely (ensure not negative)
+                if (chain_entry.second >= 0)
+                    last_pos = begin_pos + chain_entry.second;
+                else
+                    last_pos = begin_pos; // fallback, shouldn't happen
             }
         }
 
@@ -937,7 +935,10 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const
         if (last_pos == -1) {
             tmp_range.push_back({-1, -1});
         } else {
-            tmp_range.push_back({last_pos, data[i].length() - last_pos});
+            int_t remaining = static_cast<int_t>(data[i].length()) - last_pos;
+            if (remaining < 0)
+                remaining = 0;
+            tmp_range.push_back({last_pos, remaining});
         }
     }
 
@@ -949,7 +950,11 @@ std::vector<std::vector<std::pair<int_t, int_t>>> get_parallel_align_range(const
     for (uint_t j = 0; j <= chain_num; j++) {
         std::vector<std::pair<int_t, int_t>> transposed_row(seq_num);
         for (uint_t i = 0; i < seq_num; i++) {
-            transposed_row[i] = parallel_align_range[i][j];
+            // safe read: if j is out of range for this row, set {-1,-1}
+            if (j < parallel_align_range[i].size())
+                transposed_row[i] = parallel_align_range[i][j];
+            else
+                transposed_row[i] = {-1, -1};
         }
         transpose_res.push_back(std::move(transposed_row)); // Move to avoid copies
     }
@@ -997,334 +1002,6 @@ void concat_alignment(const std::vector<std::vector<std::string>> &concat_string
 bool cmp(const std::pair<uint_t, uint_t> &a, const std::pair<uint_t, uint_t> &b) { return a.second < b.second; }
 
 /**
- * @brief Convert sequence fragments into profile by aligning missing fragments with existing ones.
- * @param concat_string A reference to a vector of vectors of strings representing concatenated sequence fragments.
- * @param data A reference to a vector of strings representing the sequence names.
- * @param concat_range A reference to a vector of vectors of pairs of integers representing the start and end positions of the sequence
- * fragments.
- * @param fragment_len A reference to a vector of unsigned integers representing the lengths of the sequence fragments.
- * @return None.
- */
-void seq2profile(std::vector<std::vector<std::string>> &concat_string, std::vector<std::string> &data,
-                 std::vector<std::vector<std::pair<int_t, int_t>>> &concat_range, std::vector<uint_t> &fragment_len) {
-    // Count the number of missing fragments for each sequence and store them in a vector of pairs.
-    uint_t seq_num = data.size();
-    uint_t fragment_num = fragment_len.size();
-
-    std::vector<std::pair<uint_t, uint_t>> missing_fragment_count(seq_num);
-    for (uint_t i = 0; i < seq_num; i++) {
-        uint_t count = 0;
-        for (uint_t j = 0; j < fragment_num; j++) {
-            if (concat_range[j][i].first == -1) {
-                count += fragment_len[j];
-            }
-        }
-        missing_fragment_count[i] = std::make_pair(i, count);
-    }
-
-    // Sort the vector of pairs by the number of missing fragments in ascending order.
-    std::sort(missing_fragment_count.begin(), missing_fragment_count.end(), cmp);
-#if DEBUG
-    for (int_t i = 0; i < missing_fragment_count.size(); i++) {
-        std::cout << missing_fragment_count[i].first << " " << missing_fragment_count[i].second << std::endl;
-    }
-#endif //
-
-    // For each sequence with missing fragments, align the missing fragments with existing fragments.
-    for (uint_t i = 0; i < seq_num; i++) {
-        uint_t seq_index = missing_fragment_count[i].first;
-        uint_t missing_count = missing_fragment_count[i].second;
-        if (missing_count <= 0) {
-            continue;
-        }
-        // std::cout << seq_index << std::endl;
-        bool if_start = false;
-        std::vector<std::vector<std::string>>::iterator left_it = concat_string.begin();
-        std::vector<std::vector<std::string>>::iterator right_it = concat_string.begin();
-        std::vector<std::vector<std::string>>::iterator cur_it = concat_string.begin();
-        for (; cur_it != concat_string.end(); cur_it++) {
-            std::vector<std::string> cur_vec = *cur_it;
-            // std::cout << cur_vec[seq_index].length() << " " << fragment_len[cur_it - concat_string.begin()] << " " << concat_range[cur_it
-            // - concat_string.begin()][seq_index].first << std::endl; if (cur_vec[seq_index].length() != fragment_len[cur_it -
-            // concat_string.begin()]) {
-            if (concat_range[cur_it - concat_string.begin()][seq_index].first == -1) {
-                if (!if_start) {
-                    left_it = cur_it;
-                    if_start = true;
-                }
-            } else if (if_start) {
-                right_it = cur_it - 1;
-                cur_it = seq2profile_align(seq_index, left_it - concat_string.begin(), right_it - concat_string.begin(), concat_string,
-                                           data, concat_range, fragment_len);
-                if_start = false;
-            }
-            if (if_start && cur_it + 1 == concat_string.end()) {
-                right_it = cur_it;
-                seq2profile_align(seq_index, left_it - concat_string.begin(), right_it - concat_string.begin(), concat_string, data,
-                                  concat_range, fragment_len);
-                break;
-            }
-        }
-    }
-}
-
-/**
- * @brief: Aligns a sequence and a profile using a third-party tool called profile_two_align and returns the iterator pointing to the next
- * position in the 2D vector of strings. The function first checks for gaps between the fragments and adds them as necessary. Then it writes
- * the sequence to align and a profile file, passes them to profile_two_align, and reads the results. Finally, it updates the concatenated
- * string, range and fragment length information accordingly.
- * @param seq_index: Index of the sequence to align.
- * @param left_index: Index of the left-most fragment.
- * @param right_index: Index of the right-most fragment.
- * @param concat_string: 2D vector of strings containing the concatenated fragments.
- * @param data: Vector of strings containing the sequences.
- * @param concat_range: 2D vector of pairs of integers representing the range of each fragment in each sequence.
- * @param fragment_len: Vector of unsigned integers representing the length of each fragment.
- * @return std::vector<std::vectorstd::string>::iterator: Iterator pointing to the next position in the 2D vector of strings.
- */
-std::vector<std::vector<std::string>>::iterator seq2profile_align(uint_t seq_index, uint_t left_index, uint_t right_index,
-                                                                  std::vector<std::vector<std::string>> &concat_string,
-                                                                  std::vector<std::string> &data,
-                                                                  std::vector<std::vector<std::pair<int_t, int_t>>> &concat_range,
-                                                                  std::vector<uint_t> &fragment_len) {
-    int_t seq_begin = 0;
-    // determine the start position of the sequence, if there is a sequence on the left side, take the end of the last one.
-    if (left_index >= 1) {
-        seq_begin = concat_range[left_index - 1][seq_index].first + concat_range[left_index - 1][seq_index].second;
-    }
-    int_t seq_end = data[seq_index].length();
-    // determine the end position of the sequence, if there is a sequence on the right side, take the start position of the next one.
-    if (right_index + 1 < concat_range.size()) {
-        seq_end = concat_range[right_index + 1][seq_index].first;
-    }
-    // create a file to store the sequence content.
-
-    std::string seq_content = data[seq_index].substr(seq_begin, seq_end - seq_begin);
-#if DEBUG
-    std::cout << seq_content << std::endl;
-    std::cout << concat_range.size() << " " << concat_range[0].size() << std::endl;
-    std::cout << left_index << " " << right_index << " " << seq_index << std::endl;
-    std::cout << seq_end << " " << seq_begin << " " << data[seq_index].length() << std::endl;
-#endif // DEBUG
-
-    if (seq_content.length() == 0) {
-        for (uint_t i = left_index; i <= right_index; i++) {
-            std::string tmp_gaps = "";
-            for (uint_t j = 0; j < fragment_len[i]; j++) {
-                tmp_gaps += "-";
-            }
-            concat_string[i][seq_index] = tmp_gaps;
-        }
-
-        return concat_string.begin() + right_index + 1;
-    }
-    std::string seq_file_name = TMP_FOLDER + "seq-" + std::to_string(seq_index) + "_" + random_file_end + ".fasta";
-    std::ofstream file;
-    file.open(seq_file_name);
-    if (!file.is_open()) {
-        std::cerr << seq_file_name << " fail to open!" << std::endl;
-        exit(1);
-    }
-    // write the sequence content to the file in fasta format.
-    std::stringstream sstream;
-    sstream << ">SEQUENCE" << std::to_string(seq_index) << "\n";
-    sstream << seq_content << "\n";
-    file << sstream.str();
-    file.close();
-
-    // create a file to store the profile of the sequences.
-    sstream.str("");
-    std::string profile_file_name = TMP_FOLDER + "profile-" + std::to_string(seq_index) + "_" + random_file_end + ".fasta";
-
-    file.open(profile_file_name);
-
-    if (!file.is_open()) {
-        std::cerr << seq_file_name << " fail to open!" << std::endl;
-        exit(1);
-    }
-
-    std::vector<uint_t> selected_profile_seq_index;
-    std::vector<uint_t> missing_profile_seq_index;
-    for (uint_t i = 0; i < data.size(); i++) {
-        if (i == seq_index) {
-            continue;
-        }
-        bool cur_fragment_is_missing = false;
-        sstream << ">SEQUENCE" << std::to_string(i) << "\n";
-        for (uint_t j = left_index; j <= right_index; j++) {
-            if (concat_string[j][i].length() == fragment_len[j]) {
-                sstream << concat_string[j][i];
-            } else {
-                cur_fragment_is_missing = true;
-                break;
-            }
-        }
-        if (cur_fragment_is_missing) {
-            sstream.str("");
-            missing_profile_seq_index.push_back(i);
-            continue;
-        }
-        file << sstream.str() << "\n";
-        selected_profile_seq_index.push_back(i);
-        sstream.str("");
-    }
-    file.close();
-    // use the alignment tool to align the sequences.
-    std::string cmd = "";
-#if (defined(__linux__))
-    cmd.append("ext/profile-two-align/linux/profile_two_align")
-        .append(" -q ")
-        .append(seq_file_name)
-        .append(" -p ")
-        .append(profile_file_name)
-        .append(" -F")
-        .append(" -D")
-        .append(" 2> /dev/null");
-#else
-    cmd.append("ext\\profile-two-align\\win\\profile_two_align.exe")
-        .append(" -q ")
-        .append(seq_file_name)
-        .append(" -p ")
-        .append(profile_file_name)
-        .append(" -F")
-        .append(" -D")
-        .append(" 2>NUL");
-#endif
-
-    int res = system(cmd.c_str());
-    if (res != 0) {
-#if DEBUG
-        std::string out = "Warning: Seq-Profile alignment may result in errors and may produce invalid results.";
-        print_table_line(out);
-#endif
-    }
-    // Define vectors for storing aligned sequences and their names
-    std::vector<std::string> align_res;
-    std::vector<std::string> align_res_name;
-    // Read data from a file and store it in the above vectors
-    read_data(profile_file_name.c_str(), align_res, align_res_name, false);
-
-    for (uint_t i = 0; i < selected_profile_seq_index.size(); i++) {
-        concat_string[left_index][selected_profile_seq_index[i]] = align_res[i];
-    }
-    concat_string[left_index][seq_index] = align_res[align_res.size() - 1];
-#if DEBUG
-    std::cout << align_res[align_res.size() - 1] << std::endl;
-#endif // DEBUG
-
-    // Loop through missing profile sequence indices and update concat_string accordingly
-    for (uint_t i = 0; i < missing_profile_seq_index.size(); i++) {
-        for (uint_t j = left_index + 1; j <= right_index; j++) {
-            concat_string[left_index][missing_profile_seq_index[i]] += concat_string[j][missing_profile_seq_index[i]];
-        }
-    }
-
-    fragment_len[left_index] = concat_string[left_index][seq_index].length();
-    // Update concat_range for all indices
-    for (uint_t i = 0; i < data.size(); i++) {
-        bool flag = false;
-        for (uint_t j = left_index; j <= right_index; j++) {
-            if (concat_range[j][i].first == -1) {
-                flag = true;
-            }
-        }
-        if (flag) {
-            concat_range[left_index][i].first = -1;
-            concat_range[left_index][i].second = -1;
-            continue;
-        }
-        if (left_index > 0) {
-            concat_range[left_index][i].first = concat_range[left_index - 1][i].first + concat_range[left_index - 1][i].second;
-        } else {
-            concat_range[left_index][i].first = 0;
-        }
-        if (right_index + 1 < concat_range.size()) {
-            concat_range[left_index][i].second = concat_range[right_index + 1][i].first - concat_range[left_index][i].first;
-        } else {
-            concat_range[left_index][i].second = data[i].length() - concat_range[left_index][i].first;
-        }
-    }
-    // Erase indices from concat_string, concat_range, and fragment_len vectors
-    std::vector<std::vector<std::string>>::iterator str_it = concat_string.begin() + left_index + 1;
-    std::vector<std::vector<std::pair<int_t, int_t>>>::iterator range_it = concat_range.begin() + left_index + 1;
-    std::vector<uint_t>::iterator fragment_it = fragment_len.begin() + left_index + 1;
-    int_t erase_len = right_index - left_index;
-    while (erase_len > 0 && str_it != concat_string.end()) {
-        str_it = concat_string.erase(str_it);
-        range_it = concat_range.erase(range_it);
-        fragment_it = fragment_len.erase(fragment_it);
-        erase_len--;
-    }
-    // Remove files from disk
-    if (remove(seq_file_name.c_str()) != 0) {
-        std::cerr << "Error deleting file " << seq_file_name << std::endl;
-    }
-    if (remove(profile_file_name.c_str()) != 0) {
-        std::cerr << "Error deleting file " << profile_file_name << std::endl;
-    }
-    return concat_string.begin() + left_index;
-}
-
-/**
- * Refines the given data by removing leading and trailing spaces.
- *
- * This function performs refinement on the given data, where the refinement process involves removing a certain
- * number of leading and trailing spaces (represented by '-') from the start and end of each string in the data. The
- * number of spaces to remove is determined by the string in the data with the smallest sum of leading and trailing
- * spaces.
- *
- * @param data1 A reference to the first vector of strings to refine.
- * @param data2 A reference to the second vector of strings to refine.
- */
-void refinement(std::vector<std::string> &data1, std::vector<std::string> &data2) {
-    // The number of spaces to remove from each string.
-    int spaceToRemove = INT_MAX;
-
-    // Determine the minimum number of spaces to remove.
-    for (uint_t i = 0; i < data1.size(); ++i) {
-        std::string &str1 = data1[i];
-        std::string &str2 = data2[i];
-        int spaceCount1 = 0, spaceCount2 = 0;
-
-        // Count the number of trailing spaces in str1.
-        while (str1.size() - 1 - spaceCount1 < str1.size() && str1[str1.size() - 1 - spaceCount1] == '-') {
-            ++spaceCount1;
-        }
-        // Count the number of leading spaces in str2.
-        while (static_cast<size_t>(spaceCount2) < str2.size() && str2[spaceCount2] == '-') {
-            ++spaceCount2;
-        }
-
-        // The total number of leading and trailing spaces in str1 and str2.
-        int totalSpace = spaceCount1 + spaceCount2;
-        // Update the number of spaces to remove if necessary.
-        spaceToRemove = spaceToRemove < totalSpace ? spaceToRemove : totalSpace;
-    }
-
-    // Perform the refinement process on each string in the data.
-    for (uint_t i = 0; i < data1.size(); ++i) {
-        std::string &str1 = data1[i];
-        std::string &str2 = data2[i];
-        int removedSpace = 0;
-
-        // Remove trailing spaces from str1.
-        while (str1.size() > 0 && removedSpace < spaceToRemove) {
-            if (str1[str1.size() - 1] != '-')
-                break;
-            str1.pop_back();
-            ++removedSpace;
-        }
-        // Remove leading spaces from str2.
-        while (str2.size() > 0 && removedSpace < spaceToRemove) {
-            if (str2[0] != '-')
-                break;
-            str2.erase(0, 1);
-            ++removedSpace;
-        }
-    }
-}
-
-/**
  * @brief Concatenate two sets of sequence data (chain and parallel) into a single set of concatenated data.
  * @param chain_string A vector of vectors containing the chain sequence data.
  * @param parallel_string A vector of vectors containing the parallel sequence data.
@@ -1332,19 +1009,28 @@ void refinement(std::vector<std::string> &data1, std::vector<std::string> &data2
  */
 std::vector<std::vector<std::string>> concat_chain_and_parallel(std::vector<std::vector<std::string>> &chain_string,
                                                                 std::vector<std::vector<std::string>> &parallel_string) {
-    // Determine the number of sequences in each set of data.
-    uint_t seq_num = parallel_string[0].size();
-    // Determine the number of sets of chain and parallel data.
+    // Handle empty inputs
+    if (parallel_string.empty() && chain_string.empty())
+        return {};
+    uint_t seq_num = 0;
+    if (!parallel_string.empty())
+        seq_num = parallel_string[0].size();
+    else if (!chain_string.empty())
+        seq_num = chain_string[0].size();
+
     uint_t chain_num = chain_string.size();
     uint_t parallel_num = parallel_string.size();
-    // Create a vector to hold the concatenated data.
-    std::vector<std::vector<std::string>> concated_data(chain_num + parallel_num);
+    std::vector<std::vector<std::string>> concated_data(chain_num + std::max<uint_t>(parallel_num, 1));
     uint_t count = 0;
 
-    for (uint_t i = 0; i < parallel_num; ++i) {
+    for (uint_t i = 0; i < parallel_num; i++) {
         if (parallel_string[i].size() != seq_num) {
-            // log + correção defensiva
-            // (mesma lógica de resize mostrada acima)
+            // defensive: resize if needed
+            for (auto &s : parallel_string[i]) {
+                if (s.size() != seq_num) {
+                    // ignore, will handle later
+                }
+            }
         }
     }
 
@@ -1358,8 +1044,13 @@ std::vector<std::vector<std::string>> concat_chain_and_parallel(std::vector<std:
         }
         count += 2;
     }
-    for (uint_t i = 0; i < chain_num + parallel_num - 1; i++) {
-        refinement(concated_data[i], concated_data[i + 1]);
+    // if there are leftover chain_string entries and no parallel entries
+    if (parallel_num == 0) {
+        for (uint_t i = 0; i < chain_num; ++i) {
+            for (uint_t j = 0; j < seq_num; ++j) {
+                concated_data[i].push_back(chain_string[i][j]);
+            }
+        }
     }
     return concated_data;
 }

@@ -43,11 +43,24 @@
 #else
 #include <direct.h>
 #endif
+#include <algorithm>
 #include <climits>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <numeric>
 #include <random>
+#include <sstream>
+#include <string>
 #include <string_view>
+#include <thread>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 const std::string TMP_FOLDER = "./temp/";
 
@@ -79,11 +92,12 @@ struct SpoaTaskParams {
 };
 
 struct SubBlockInfo {
-    uint_t block_index;
-    std::vector<std::vector<std::string>> sub_results; // One result per sub-block
-    std::vector<size_t> sub_block_starts;              // Start position of each sub-block
-    std::vector<size_t> sub_block_ends;                // End position of each sub-block
+    size_t seq_id;
+    size_t start; // posição no fragmento
+    size_t end;   // posição no fragmento
 };
+
+void concat_alignment_from_blocks(const std::vector<std::vector<std::string>> &blocks, const std::vector<std::string> &names);
 
 /**
  * @brief Generates a random string of the specified length.
