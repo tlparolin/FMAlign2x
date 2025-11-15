@@ -263,20 +263,33 @@ void concat_alignment_from_blocks(const std::vector<std::vector<std::string>> &b
  * @param fragments Output: fragmentos extraídos
  * @return Comprimento máximo entre os fragmentos
  */
-static size_t extract_fragments(const std::vector<std::string> &data, const std::vector<std::pair<int, int>> &range,
-                                std::vector<std::string> &fragments) {
-
+size_t extract_fragments(const std::vector<std::string> &data, const std::vector<std::pair<int, int>> &range,
+                         std::vector<std::string> &fragments) {
     size_t max_len = 0;
     fragments.resize(data.size());
 
     for (uint_t s = 0; s < data.size(); ++s) {
-        auto [start, len] = range[s];
-        if (start != -1 && len > 0) {
-            fragments[s] = data[s].substr(start, len);
-            max_len = std::max(max_len, fragments[s].size());
-        } else {
+        // ✓ Validação: verificar bounds
+        if (s >= range.size()) {
             fragments[s] = "";
+            continue;
         }
+
+        auto [start, len] = range[s];
+
+        // ✓ Validação: verificar valores
+        if (start < 0 || len <= 0 || start >= (int)data[s].size()) {
+            fragments[s] = "";
+            continue;
+        }
+
+        // ✓ Validação: não ultrapassar tamanho
+        if (start + len > (int)data[s].size()) {
+            len = data[s].size() - start;
+        }
+
+        fragments[s] = data[s].substr(start, len);
+        max_len = std::max(max_len, fragments[s].size());
     }
 
     return max_len;
@@ -285,10 +298,9 @@ static size_t extract_fragments(const std::vector<std::string> &data, const std:
 /**
  * @brief Verifica se todos os fragmentos são iguais
  */
-static bool all_fragments_equal(const std::vector<std::string> &fragments) {
+bool all_fragments_equal(const std::vector<std::string> &fragments) {
     if (fragments.empty() || fragments[0].empty())
         return false;
-
     const auto &first = fragments[0];
     return std::all_of(fragments.begin(), fragments.end(), [&first](const auto &s) { return s == first; });
 }
@@ -296,9 +308,14 @@ static bool all_fragments_equal(const std::vector<std::string> &fragments) {
 /**
  * @brief Extrai sub-fragmento de um fragmento
  */
-static std::string extract_sub_fragment(const std::string &fragment, size_t pos, size_t end) {
-
+std::string extract_sub_fragment(const std::string &fragment, size_t pos, size_t end) {
+    // ✓ Validação: verificar bounds
     if (fragment.empty() || pos >= fragment.size()) {
+        return "";
+    }
+
+    // ✓ Garantir que pos < end
+    if (pos >= end) {
         return "";
     }
 
@@ -308,6 +325,7 @@ static std::string extract_sub_fragment(const std::string &fragment, size_t pos,
     if (real_start < real_end) {
         return fragment.substr(real_start, real_end - real_start);
     }
+
     return "";
 }
 
@@ -365,36 +383,53 @@ std::vector<std::string> merge_subdivisions_simple(const std::vector<std::vector
     size_t seq_num = original.size();
     std::vector<std::string> merged(seq_num, "");
 
+    // ✓ Validação: se sub_results vazio, retorna original
     if (sub_results.empty()) {
-        return merged;
+        return original;
     }
 
-    // Primeiro sub-bloco: cópia completa
+    // ✓ Validação: primeira entrada pode estar vazia
+    if (sub_results[0].size() != seq_num) {
+        // Sub_results corrompido, retorna original
+        return original;
+    }
+
+    // First sub-block: copy completely
     merged = sub_results[0];
 
-    // Sub-blocos subsequentes
+    // Subsequent sub-blocks
     for (size_t sub_idx = 1; sub_idx < sub_results.size(); ++sub_idx) {
+        // ✓ Validação: verificar tamanho
+        if (sub_results[sub_idx].size() != seq_num) {
+            continue; // Skip corrupted sub-result
+        }
+
         const auto &sub = sub_results[sub_idx];
 
-        // Para cada sequência
+        // For each sequence
         for (size_t seq = 0; seq < seq_num; ++seq) {
-            const std::string &prev = merged[seq];
-            const std::string &curr = sub[seq];
-
-            if (curr.empty()) {
-                // Se sub-bloco vazio, pule
+            // ✓ Validação: verificar se referências são válidas
+            if (seq >= merged.size() || seq >= sub.size()) {
                 continue;
             }
 
-            // Calcular overlap efetivo (pode ser menor que overlap se sequência é curta)
+            const std::string &prev = merged[seq];
+            const std::string &curr = sub[seq];
+
+            // ✓ Validação: curr pode ser vazio
+            if (curr.empty()) {
+                continue;
+            }
+
+            // Calculate effective overlap
             size_t overlap_len = std::min(overlap, prev.size());
 
-            // Remover overlap do fim do merged
+            // Remove overlap from end of merged
             if (overlap_len > 0 && prev.size() >= overlap_len) {
                 merged[seq].erase(prev.size() - overlap_len);
             }
 
-            // Concatenar sub-bloco atual
+            // Concatenate current sub-block
             merged[seq] += curr;
         }
     }
@@ -419,92 +454,106 @@ std::vector<std::vector<std::string>> preprocess_parallel_blocks(const std::vect
                                                                  const std::vector<std::vector<std::pair<int, int>>> &parallel_align_range,
                                                                  ThreadPool &pool) {
 
-    const size_t MAX_BLOCK_SIZE = 10000; // Subdivida blocos > 10 kbp
-    const size_t OVERLAP_SIZE = 400;     // Overlap entre sub-blocos
+    const size_t MAX_BLOCK_SIZE = 10000;
+    const size_t OVERLAP_SIZE = 400;
 
     uint_t parallel_num = parallel_align_range.size();
     uint_t seq_num = data.size();
 
     std::vector<std::vector<std::string>> result(parallel_num, std::vector<std::string>(seq_num));
 
-    uint_t count_exact = 0;
-    uint_t count_spoa_direct = 0;
-    uint_t count_spoa_subdivided = 0;
+    std::atomic<uint_t> count_exact(0);
+    std::atomic<uint_t> count_spoa_direct(0);
+    std::atomic<uint_t> count_spoa_subdivided(0);
+
+    const auto *data_ptr = &data;
+    const auto *range_ptr = &parallel_align_range;
 
     // ========================================================================
-    // PASS 1: Processar cada bloco
+    // PASS 1: Schedule ALL blocks as tasks
     // ========================================================================
 
     for (uint_t block_idx = 0; block_idx < parallel_num; ++block_idx) {
-        const auto &range = parallel_align_range[block_idx];
+        pool.add_task([block_idx, data_ptr, range_ptr, &result, &count_exact, &count_spoa_direct, &count_spoa_subdivided]() {
+            const auto &data = *data_ptr;
+            const auto &parallel_align_range_ref = *range_ptr;
 
-        // Extrair fragmentos
-        std::vector<std::string> fragments(seq_num);
-        size_t max_len = extract_fragments(data, range, fragments);
-
-        // --- CASE 1: Todos iguais? ---
-        if (all_fragments_equal(fragments)) {
-            std::fill(result[block_idx].begin(), result[block_idx].end(), fragments[0]);
-            count_exact++;
-            continue;
-        }
-
-        // --- CASE 2: Bloco pequeno? ---
-        if (max_len <= MAX_BLOCK_SIZE) {
-            result[block_idx] = run_spoa_local(fragments);
-            count_spoa_direct++;
-            continue;
-        }
-
-        // --- CASE 3: Bloco grande → subdivide + align + merge ---
-        count_spoa_subdivided++;
-
-        std::vector<std::vector<std::string>> sub_results;
-
-        // Gerar sub-blocos com overlap
-        for (size_t pos = 0; pos < max_len; pos += (MAX_BLOCK_SIZE - OVERLAP_SIZE)) {
-            size_t end = std::min(pos + MAX_BLOCK_SIZE + OVERLAP_SIZE, max_len);
-
-            // Extrair sub-fragmentos (um por sequência)
-            std::vector<std::string> sub_frags(seq_num);
-            for (uint_t s = 0; s < seq_num; ++s) {
-                sub_frags[s] = extract_sub_fragment(fragments[s], pos, end);
+            // ✓ Validação: verificar índice
+            if (block_idx >= parallel_align_range_ref.size()) {
+                return;
             }
 
-            // Alinhar sub-bloco com SPOA (parallelizar)
-            pool.add_task([sub_frags, &sub_results]() {
-                auto aligned = run_spoa_local(sub_frags);
+            const auto &range = parallel_align_range_ref[block_idx];
 
-                // Thread-safe append (usar mutex se necessário)
-                // Por simplicidade, assumir não há race condition
-                // (sub_results é pré-alocado ou usado com lock)
+            // Extract fragments for this block
+            std::vector<std::string> fragments(data.size());
+            size_t max_len = extract_fragments(data, range, fragments);
 
-                // Nota: Em produção, use std::mutex ou atomic
-                // Por enquanto, execute sequencialmente
-            });
+            // === CASE 1: All fragments equal? -> Copy directly ===
+            if (all_fragments_equal(fragments)) {
+                std::fill(result[block_idx].begin(), result[block_idx].end(), fragments[0]);
+                count_exact.fetch_add(1, std::memory_order_relaxed);
+                return;
+            }
 
-            // Executar SPOA sequencialmente para simplicidade
-            auto aligned = run_spoa_local(sub_frags);
-            sub_results.push_back(aligned);
+            // === CASE 2: Small block (<10kbp)? -> Direct SPOA alignment ===
+            if (max_len <= MAX_BLOCK_SIZE) {
+                result[block_idx] = run_spoa_local(fragments);
+                count_spoa_direct.fetch_add(1, std::memory_order_relaxed);
+                return;
+            }
 
-            if (end >= max_len)
-                break;
-        }
+            // === CASE 3: Large block (≥10kbp) -> Subdivide + Align + Merge ===
+            count_spoa_subdivided.fetch_add(1, std::memory_order_relaxed);
 
-        pool.wait_for_tasks();
+            size_t stride = MAX_BLOCK_SIZE - OVERLAP_SIZE;
+            size_t num_subblocks = (max_len + stride - 1) / stride;
 
-        // Merge simples: eliminar overlap sem re-alinhamento
-        result[block_idx] = merge_subdivisions_simple(sub_results, fragments, OVERLAP_SIZE);
+            // ✓ Validação: se num_subblocks é 0, não processar
+            if (num_subblocks == 0) {
+                result[block_idx] = fragments;
+                return;
+            }
+
+            std::vector<std::vector<std::string>> sub_results(num_subblocks);
+
+            size_t sub_idx = 0;
+            for (size_t pos = 0; pos < max_len; pos += stride) {
+                size_t end = std::min(pos + MAX_BLOCK_SIZE + OVERLAP_SIZE, max_len);
+
+                std::vector<std::string> sub_frags(data.size());
+                for (uint_t s = 0; s < data.size(); ++s) {
+                    sub_frags[s] = extract_sub_fragment(fragments[s], pos, end);
+                }
+
+                // ✓ Try-catch para SPOA que pode falhar
+                try {
+                    sub_results[sub_idx] = run_spoa_local(sub_frags);
+                } catch (...) {
+                    // Se SPOA falha, usa original
+                    sub_results[sub_idx] = sub_frags;
+                }
+
+                if (end >= max_len)
+                    break;
+
+                ++sub_idx;
+            }
+
+            // ✓ Merge com sub_results que pode estar parcialmente vazio
+            result[block_idx] = merge_subdivisions_simple(sub_results, fragments, OVERLAP_SIZE);
+        });
     }
 
     // ========================================================================
-    // Verbose output
+    // PASS 2: Wait for ALL blocks to complete
     // ========================================================================
+    pool.wait_for_tasks();
 
     if (global_args.verbose) {
-        print_table_line("Blocos iguais (cópia): " + std::to_string(count_exact));
-        print_table_line("Blocos SPOA direto: " + std::to_string(count_spoa_direct));
-        print_table_line("Blocos SPOA subdivido: " + std::to_string(count_spoa_subdivided));
+        print_table_line("Blocos iguais (cópia): " + std::to_string(count_exact.load(std::memory_order_relaxed)));
+        print_table_line("Blocos SPOA direto: " + std::to_string(count_spoa_direct.load(std::memory_order_relaxed)));
+        print_table_line("Blocos SPOA subdivido: " + std::to_string(count_spoa_subdivided.load(std::memory_order_relaxed)));
     }
 
     return result;
@@ -519,39 +568,56 @@ std::vector<std::string> run_spoa_local(const std::vector<std::string> &seqs) {
     if (seqs.empty())
         return {};
 
-    // Use SPOA parameters (match=5, mismatch=-4, gap=-8)
-    auto aligner = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8);
-    spoa::Graph graph;
+    try {
+        // Use SPOA parameters (match=5, mismatch=-4, gap=-8)
+        auto aligner = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 5, -4, -8);
+        spoa::Graph graph;
 
-    std::vector<size_t> non_empty_indices;
-    non_empty_indices.reserve(seqs.size());
+        std::vector<size_t> non_empty_indices;
+        non_empty_indices.reserve(seqs.size());
 
-    // Add only non-empty sequences
-    for (size_t i = 0; i < seqs.size(); ++i) {
-        if (seqs[i].empty())
-            continue;
+        // Add only non-empty sequences
+        for (size_t i = 0; i < seqs.size(); ++i) {
+            if (seqs[i].empty())
+                continue;
 
-        auto alignment = aligner->Align(seqs[i], graph);
-        graph.AddAlignment(alignment, seqs[i]);
-        non_empty_indices.push_back(i);
+            try {
+                auto alignment = aligner->Align(seqs[i], graph);
+                graph.AddAlignment(alignment, seqs[i]);
+                non_empty_indices.push_back(i);
+            } catch (...) {
+                // Se alguma sequência causar problema, skip
+                continue;
+            }
+        }
+
+        // If all empty, return empty strings
+        if (non_empty_indices.empty()) {
+            return std::vector<std::string>(seqs.size(), "");
+        }
+
+        // Generate MSA
+        auto msa_compact = graph.GenerateMultipleSequenceAlignment();
+        size_t aln_len = msa_compact.empty() ? 0 : msa_compact[0].size();
+
+        // ✓ Validação: se MSA vazio, retorna original
+        if (aln_len == 0) {
+            return seqs;
+        }
+
+        // Rebuild to original size: empty sequences become all gaps
+        std::vector<std::string> msa(seqs.size(), std::string(aln_len, '-'));
+        for (size_t k = 0; k < non_empty_indices.size(); ++k) {
+            if (k < msa_compact.size()) {
+                msa[non_empty_indices[k]] = std::move(msa_compact[k]);
+            }
+        }
+
+        return msa;
+    } catch (...) {
+        // Se SPOA falha completamente, retorna original
+        return seqs;
     }
-
-    // If all empty, return empty strings
-    if (non_empty_indices.empty()) {
-        return std::vector<std::string>(seqs.size(), "");
-    }
-
-    // Generate MSA
-    auto msa_compact = graph.GenerateMultipleSequenceAlignment();
-    size_t aln_len = msa_compact.empty() ? 0 : msa_compact[0].size();
-
-    // Rebuild to original size
-    std::vector<std::string> msa(seqs.size(), std::string(aln_len, '-'));
-    for (size_t k = 0; k < non_empty_indices.size(); ++k) {
-        msa[non_empty_indices[k]] = std::move(msa_compact[k]);
-    }
-
-    return msa;
 }
 
 /**
