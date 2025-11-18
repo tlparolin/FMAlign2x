@@ -206,10 +206,6 @@ void concat_alignment_from_blocks(const std::vector<std::vector<std::string>> &b
         }
     }
 
-    if (global_args.verbose) {
-        print_table_line(std::format("Final alignment: {} sequences × {} bp", seq_num, expected_len));
-    }
-
     // =========================================================================
     // Write FASTA Output
     // =========================================================================
@@ -225,10 +221,6 @@ void concat_alignment_from_blocks(const std::vector<std::vector<std::string>> &b
         output_file << ">" << names[s] << "\n" << final_alignment[s] << "\n";
     }
     // output_file will close automatically when going out of scope
-
-    if (global_args.verbose) {
-        print_table_line(std::format("Output written to: {}", output_path));
-    }
 }
 
 /**
@@ -433,8 +425,8 @@ std::vector<std::string> merge_subdivisions_simple(const std::vector<std::vector
  * `parallel_align_range`. The processing strategy is:
  *
  *   1. **Identical fragments** → direct copy (no alignment needed)
- *   2. **Small blocks (< MAX_BLOCK_SIZE)** → single-step SPOA alignment
- *   3. **Large blocks (>= MAX_BLOCK_SIZE)** → subdivide, align sub-blocks independently
+ *   2. **Small blocks (< global_args.max_block_size)** → single-step SPOA alignment
+ *   3. **Large blocks (>= global_args.max_block_size)** → subdivide, align sub-blocks independently
  *      and merge using overlap trimming
  *
  * This pre-alignment reduces load on heavier external aligners (e.g., MAFFT, HAlign)
@@ -448,16 +440,12 @@ std::vector<std::string> merge_subdivisions_simple(const std::vector<std::vector
  * @param pool Thread pool used to run SPOA tasks concurrently.
  * @return A list of aligned blocks (no external reprocessing required).
  *
- * @note Subdivision overlap is fixed to OVERLAP_SIZE to maintain block continuity.
+ * @note Subdivision overlap is fixed to global_args.overlap_size to maintain block continuity.
  * @note SPOA failures are caught, and original fragments are used as fallback.
  */
 std::vector<std::vector<std::string>> preprocess_parallel_blocks(const std::vector<std::string> &data,
                                                                  const std::vector<std::vector<std::pair<int, int>>> &parallel_align_range,
                                                                  ThreadPool &pool) {
-    // Thresholds for direct SPOA vs subdivision
-    const size_t MAX_BLOCK_SIZE = 15000;
-    const size_t OVERLAP_SIZE = 500;
-
     uint_t parallel_num = parallel_align_range.size();
     uint_t seq_num = data.size();
 
@@ -504,9 +492,9 @@ std::vector<std::vector<std::string>> preprocess_parallel_blocks(const std::vect
             }
 
             // ================================================================
-            // CASE 2: Small block (< MAX_BLOCK_SIZE) → direct SPOA alignment
+            // CASE 2: Small block (< global_args.max_block_size) → direct SPOA alignment
             // ================================================================
-            if (max_len <= MAX_BLOCK_SIZE) {
+            if (max_len <= global_args.max_block_size) {
                 result[block_idx] = run_spoa_local(fragments);
                 count_spoa_direct.fetch_add(1, std::memory_order_relaxed);
                 return;
@@ -517,7 +505,7 @@ std::vector<std::vector<std::string>> preprocess_parallel_blocks(const std::vect
             // ================================================================
             count_spoa_subdivided.fetch_add(1, std::memory_order_relaxed);
 
-            size_t stride = MAX_BLOCK_SIZE - OVERLAP_SIZE;
+            size_t stride = global_args.max_block_size - global_args.overlap_size;
             size_t num_subblocks = (max_len + stride - 1) / stride;
 
             // If something went wrong and no subdivisions computed → fallback
@@ -533,7 +521,7 @@ std::vector<std::vector<std::string>> preprocess_parallel_blocks(const std::vect
             // Process each subdivision in order
             for (size_t pos = 0; pos < max_len; pos += stride) {
 
-                size_t end = std::min(pos + MAX_BLOCK_SIZE + OVERLAP_SIZE, max_len);
+                size_t end = std::min(pos + global_args.max_block_size + global_args.overlap_size, max_len);
 
                 // Extract sub-fragments for this subdivision
                 std::vector<std::string> sub_frags(data_ref.size());
@@ -557,7 +545,7 @@ std::vector<std::vector<std::string>> preprocess_parallel_blocks(const std::vect
             }
 
             // Merge all aligned subdivisions into a single block
-            result[block_idx] = merge_subdivisions_simple(sub_results, fragments, OVERLAP_SIZE);
+            result[block_idx] = merge_subdivisions_simple(sub_results, fragments, global_args.overlap_size);
         });
     }
 

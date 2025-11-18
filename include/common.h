@@ -77,7 +77,8 @@ struct GlobalArgs {
     std::string filter_mode;
     int_t verbose;
     double avg_file_size;
-    bool extended = false;
+    size_t max_block_size;
+    size_t overlap_size;
 };
 extern GlobalArgs global_args;
 

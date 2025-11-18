@@ -61,6 +61,10 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
     parser.add_argument("f", false, "default");
     parser.add_argument_help(
         "f", "The filter MEMs mode. The default setting is that if sequence number less 100, local mode otherwise global mode.");
+    parser.add_argument("b", false, "15000");
+    parser.add_argument_help("b", "The maximum block size for parallel alignment, default is 15000.");
+    parser.add_argument("s", false, "500");
+    parser.add_argument_help("s", "The overlap size between blocks for parallel alignment, default is 500.");
     parser.add_argument("v", false, "1");
     parser.add_argument_help("v", "Verbose option, 0 or 1. You could ignore it.");
     parser.add_argument("h", false, "help");
@@ -101,6 +105,10 @@ setting is that if sequence number less 100, parameter is set to 1 otherwise 0.7
         if (global_args.degree > 2) {
             exit(1);
         }
+
+        global_args.max_block_size = std::stoul(parser.get("b"));
+
+        global_args.overlap_size = std::stoul(parser.get("s"));
 
         std::string tmp_c = parser.get("c");
         if (tmp_c == "default") {
