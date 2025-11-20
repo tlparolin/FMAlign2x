@@ -97,6 +97,10 @@ struct SubBlockInfo {
     size_t end;   // posição no fragmento
 };
 
+std::vector<std::string> align_smart(const std::vector<std::string> &sequences, size_t cluster_size = 500);
+
+bool will_use_clustering(size_t num_sequences, size_t cluster_size = 500);
+
 void concat_alignment_from_blocks(const std::vector<std::vector<std::string>> &blocks, const std::vector<std::string> &names);
 
 /**

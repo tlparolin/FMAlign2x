@@ -120,6 +120,110 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     }
 }
 
+static std::vector<std::string> merge_alignments(const std::vector<std::string> &msa1, const std::vector<std::string> &msa2) {
+    // Caso trivial: MSA1 vazio
+    if (msa1.empty() || msa1[0].empty()) {
+        return msa2;
+    }
+
+    // Caso trivial: MSA2 vazio
+    if (msa2.empty() || msa2[0].empty()) {
+        return msa1;
+    }
+
+    const size_t len1 = msa1[0].size();
+    const size_t len2 = msa2[0].size();
+
+    // Se os comprimentos já coincidem → concatena direto
+    if (len1 == len2) {
+        std::vector<std::string> result;
+        result.reserve(msa1.size() + msa2.size());
+        result.insert(result.end(), msa1.begin(), msa1.end());
+        result.insert(result.end(), msa2.begin(), msa2.end());
+        return result;
+    }
+
+    // Determinar qual é maior e pad no outro
+    const bool msa1_is_longer = (len1 > len2);
+    const size_t target_len = msa1_is_longer ? len1 : len2;
+
+    const std::vector<std::string> &base = msa1_is_longer ? msa1 : msa2;
+    const std::vector<std::string> &pad_src = msa1_is_longer ? msa2 : msa1;
+
+    std::vector<std::string> result;
+    result.reserve(base.size() + pad_src.size());
+
+    // Copia a MSA maior
+    result.insert(result.end(), base.begin(), base.end());
+
+    // Adiciona a menor com pad
+    for (const auto &seq : pad_src) {
+        std::string padded = seq;
+        padded.resize(target_len, '-');
+        result.push_back(std::move(padded));
+    }
+
+    return result;
+}
+
+bool will_use_clustering(size_t num_sequences, size_t cluster_size) {
+    return num_sequences > cluster_size * 2; // Se > 2x o tamanho do cluster
+}
+
+std::vector<std::string> align_smart(const std::vector<std::string> &sequences, size_t cluster_size) {
+
+    // Caso 1: Vazio
+    if (sequences.empty()) {
+        return {};
+    }
+
+    // Caso 2: Uma sequência
+    if (sequences.size() == 1) {
+        return sequences;
+    }
+
+    // Caso 3: Poucas sequências - usar SPOA direto
+    if (!will_use_clustering(sequences.size(), cluster_size)) {
+        std::cerr << "[align_smart] " << sequences.size() << " sequences - using SPOA directly\n";
+        return run_spoa_local(sequences);
+    }
+
+    // Caso 4: MUITAS sequências - usar clustering
+    size_t num_clusters = static_cast<size_t>(std::ceil(static_cast<double>(sequences.size()) / cluster_size));
+
+    std::cerr << "[align_smart] " << sequences.size() << " sequences - splitting into " << num_clusters << " clusters of ~" << cluster_size
+              << " each\n";
+
+    // Dividir sequências em clusters
+    std::vector<std::vector<std::string>> clusters;
+    for (size_t i = 0; i < sequences.size(); i += cluster_size) {
+        size_t end = std::min(i + cluster_size, sequences.size());
+        std::vector<std::string> cluster(sequences.begin() + i, sequences.begin() + end);
+        clusters.push_back(cluster);
+    }
+
+    // Alinhar cada cluster com SPOA
+    std::vector<std::vector<std::string>> aligned_clusters;
+    for (size_t i = 0; i < clusters.size(); ++i) {
+        std::cerr << "  Cluster " << (i + 1) << "/" << clusters.size() << " (" << clusters[i].size() << " seqs)...\n";
+
+        auto aligned = run_spoa_local(clusters[i]);
+        aligned_clusters.push_back(aligned);
+    }
+
+    // Merge: usar o primeiro cluster como base, adicionar os outros
+    std::vector<std::string> result = aligned_clusters[0];
+
+    for (size_t i = 1; i < aligned_clusters.size(); ++i) {
+        std::cerr << "  Merging cluster " << (i + 1) << "/" << aligned_clusters.size() << "...\n";
+        result = merge_alignments(result, aligned_clusters[i]);
+    }
+
+    std::cerr << "[align_smart] Done. Final alignment length: " << (result.empty() ? 0 : result[0].length()) << "\n";
+
+    return result;
+}
+
 /**
  * @brief Concatenate aligned blocks into a final FASTA-formatted alignment output.
  *
@@ -495,7 +599,7 @@ std::vector<std::vector<std::string>> preprocess_parallel_blocks(const std::vect
             // CASE 2: Small block (< global_args.max_block_size) → direct SPOA alignment
             // ================================================================
             if (max_len <= global_args.max_block_size) {
-                result[block_idx] = run_spoa_local(fragments);
+                result[block_idx] = align_smart(fragments, 500);
                 count_spoa_direct.fetch_add(1, std::memory_order_relaxed);
                 return;
             }
