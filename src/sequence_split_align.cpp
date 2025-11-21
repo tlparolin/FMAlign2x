@@ -188,8 +188,6 @@ std::vector<std::string> align_smart(const std::vector<std::string> &sequences, 
     }
 
     // Caso 4: MUITAS sequências - usar clustering
-    size_t num_clusters = static_cast<size_t>(std::ceil(static_cast<double>(sequences.size()) / cluster_size));
-
     // Dividir sequências em clusters
     std::vector<std::vector<std::string>> clusters;
     for (size_t i = 0; i < sequences.size(); i += cluster_size) {
