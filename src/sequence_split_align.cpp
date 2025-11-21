@@ -184,15 +184,11 @@ std::vector<std::string> align_smart(const std::vector<std::string> &sequences, 
 
     // Caso 3: Poucas sequências - usar SPOA direto
     if (!will_use_clustering(sequences.size(), cluster_size)) {
-        std::cerr << "[align_smart] " << sequences.size() << " sequences - using SPOA directly\n";
         return run_spoa_local(sequences);
     }
 
     // Caso 4: MUITAS sequências - usar clustering
     size_t num_clusters = static_cast<size_t>(std::ceil(static_cast<double>(sequences.size()) / cluster_size));
-
-    std::cerr << "[align_smart] " << sequences.size() << " sequences - splitting into " << num_clusters << " clusters of ~" << cluster_size
-              << " each\n";
 
     // Dividir sequências em clusters
     std::vector<std::vector<std::string>> clusters;
@@ -205,8 +201,6 @@ std::vector<std::string> align_smart(const std::vector<std::string> &sequences, 
     // Alinhar cada cluster com SPOA
     std::vector<std::vector<std::string>> aligned_clusters;
     for (size_t i = 0; i < clusters.size(); ++i) {
-        std::cerr << "  Cluster " << (i + 1) << "/" << clusters.size() << " (" << clusters[i].size() << " seqs)...\n";
-
         auto aligned = run_spoa_local(clusters[i]);
         aligned_clusters.push_back(aligned);
     }
@@ -215,12 +209,8 @@ std::vector<std::string> align_smart(const std::vector<std::string> &sequences, 
     std::vector<std::string> result = aligned_clusters[0];
 
     for (size_t i = 1; i < aligned_clusters.size(); ++i) {
-        std::cerr << "  Merging cluster " << (i + 1) << "/" << aligned_clusters.size() << "...\n";
         result = merge_alignments(result, aligned_clusters[i]);
     }
-
-    std::cerr << "[align_smart] Done. Final alignment length: " << (result.empty() ? 0 : result[0].length()) << "\n";
-
     return result;
 }
 
@@ -609,7 +599,7 @@ std::vector<std::vector<std::string>> preprocess_parallel_blocks(const std::vect
             // ================================================================
             count_spoa_subdivided.fetch_add(1, std::memory_order_relaxed);
 
-            size_t stride = global_args.max_block_size - global_args.overlap_size;
+            size_t stride = std::max(global_args.max_block_size - global_args.overlap_size, global_args.max_block_size / 2);
             size_t num_subblocks = (max_len + stride - 1) / stride;
 
             // If something went wrong and no subdivisions computed → fallback
@@ -635,7 +625,9 @@ std::vector<std::vector<std::string>> preprocess_parallel_blocks(const std::vect
 
                 // Try to align subdivision with SPOA
                 try {
-                    sub_results[sub_idx] = run_spoa_local(sub_frags);
+                    // sub_results[sub_idx] = run_spoa_local(sub_frags);
+                    size_t cluster_size = sub_frags.size() > 2000 ? 500 : 200;
+                    sub_results[sub_idx] = align_smart(sub_frags, cluster_size);
                 } catch (...) {
                     // SPOA failure → store raw (unaligned) fragments
                     sub_results[sub_idx] = sub_frags;
