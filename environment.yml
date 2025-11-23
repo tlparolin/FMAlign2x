@@ -19,5 +19,3 @@ dependencies:
   - wget
   - python
   - pip
-  - pip:
-      - pyMSA
