@@ -198,7 +198,9 @@ def fmt_int_br(x: int) -> str:
 
 def fmt_float_br(x: float, ndigits: int = 4) -> str:
     # round then replace decimal dot with comma and thousand separator with dot
-    fmt = f"{{:,.{ndigits}f}}".format(x)
+    #fmt = f"{{:,.{ndigits}f}}".format(x)
+    # without thousand separator
+    fmt = f"{x:.{ndigits}f}"
     # return fmt.replace(',', 'X').replace('.', ',').replace('X', '.')
     return fmt
 
