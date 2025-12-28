@@ -120,6 +120,26 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
     }
 }
 
+/**
+ * @brief Merges two multiple sequence alignments (MSAs) into a single alignment.
+ *
+ * This function takes two MSAs (each represented as a vector of strings) and merges them
+ * into one combined alignment. It handles cases where one or both MSAs are empty and
+ * automatically pads the shorter alignment with gap characters ('-') so that all sequences
+ * have the same length.
+ *
+ * The merge follows these rules:
+ * - If either MSA is empty, the non-empty MSA is returned.
+ * - If both MSAs have sequences of the same length, they are simply concatenated.
+ * - If the lengths differ, the shorter MSA is padded with '-' characters until the lengths match.
+ *
+ * @param msa1 The first multiple sequence alignment (vector of aligned sequences).
+ * @param msa2 The second multiple sequence alignment (vector of aligned sequences).
+ * @return A combined vector of strings representing the merged alignment.
+ *
+ * @note This function assumes that all sequences within each input MSA are of equal length.
+ * @warning Padding is done by appending '-' characters to the end of sequences in the shorter MSA.
+ */
 static std::vector<std::string> merge_alignments(const std::vector<std::string> &msa1, const std::vector<std::string> &msa2) {
     // trivial case: empty MSA1
     if (msa1.empty() || msa1[0].empty()) {
@@ -166,10 +186,49 @@ static std::vector<std::string> merge_alignments(const std::vector<std::string> 
     return result;
 }
 
+/**
+ * @brief Determines whether clustering should be applied based on sequence count.
+ *
+ * This function checks if the number of sequences is sufficiently large to justify
+ * the use of clustering. Specifically, clustering will be used only if the total
+ * number of sequences exceeds twice the cluster size threshold.
+ *
+ * @param num_sequences The total number of sequences available for processing.
+ * @param cluster_size The maximum number of sequences allowed per cluster.
+ * @return true if the number of sequences is greater than twice the cluster size; false otherwise.
+ *
+ * @note This heuristic helps avoid unnecessary clustering when the dataset is small.
+ */
 bool will_use_clustering(size_t num_sequences, size_t cluster_size) {
     return num_sequences > cluster_size * 2; // Se > 2x o tamanho do cluster
 }
 
+/**
+ * @brief Performs adaptive multiple sequence alignment using clustering when necessary.
+ *
+ * This function aligns a set of sequences intelligently based on their count.
+ * For small datasets, it performs a direct SPOA (partial order alignment). For
+ * larger datasets, it first divides the input sequences into clusters, aligns
+ * each cluster individually using SPOA, and then merges the partial alignments
+ * into a final combined alignment.
+ *
+ * The logic follows these steps:
+ * 1. **Empty input:** returns an empty result.
+ * 2. **Single sequence:** returns the same sequence (no alignment needed).
+ * 3. **Few sequences:** if the number of sequences is small (≤ 2× cluster_size),
+ *    runs `run_spoa_local()` directly.
+ * 4. **Many sequences:** if the dataset is large, splits it into clusters,
+ *    aligns each cluster separately, and merges results using `merge_alignments()`.
+ *
+ * @param sequences A vector of input sequences to be aligned.
+ * @param cluster_size The maximum number of sequences per cluster before triggering clustering.
+ * @return A vector of aligned sequences representing the merged multiple sequence alignment.
+ *
+ * @note This function automatically decides between direct and clustered alignment
+ *       using the heuristic implemented in `will_use_clustering()`.
+ * @warning The clustering approach assumes all input sequences are comparable
+ *          and that SPOA alignment is valid for the given dataset.
+ */
 std::vector<std::string> align_smart(const std::vector<std::string> &sequences, size_t cluster_size) {
 
     // Case 1: Empty
