@@ -18,7 +18,7 @@
 // Contact: zpl010720@gmail.com
 // Created: 2023-02-25
 
-// FMAlign2x - An extended version of FMAlign2 for aligning multiple ultra-long sequences
+// FMAlign2x - An extended version of FMAlign2 for aligning multiple ultralong sequences
 // Author: Thiago Luiz Parolin
 // Contact: thiago.parolin@unesp.br
 // July 2025
@@ -562,7 +562,7 @@ void compute_mem_avg_pos(mem &m) {
  *@param data The vector of sequences used to compute the MEMs.
  */
 void sort_mem(std::vector<mem> &mems, const std::vector<std::string> &data) {
-    // Remove MEMs inválidos e computa a posição média em uma única passagem
+    // Remove invalid MEMs and compute the average position in a single pass.
     auto it = std::remove_if(mems.begin(), mems.end(), [&](mem &m) {
         if (m.substrings[0].position + m.mem_length >= data[m.substrings[0].sequence_index].length()) {
             return true;
@@ -572,10 +572,10 @@ void sort_mem(std::vector<mem> &mems, const std::vector<std::string> &data) {
     });
     mems.erase(it, mems.end());
 
-    // Ordena os MEMs pela posição média
+    // Order the MEMs by their mid position.
     std::sort(std::execution::par, mems.begin(), mems.end(), [](const mem &m1, const mem &m2) { return m1.avg_pos < m2.avg_pos; });
 
-    // Atribui mem_index com base na posição no vetor ordenado
+    // The mem_index attribute is based on the position in the sorted vector.
     for (uint_t i = 0; i < mems.size(); i++) {
         *mems[i].mem_index = i;
     }

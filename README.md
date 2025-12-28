@@ -1,4 +1,4 @@
-# FMAlign2x - An extended version of FMAlign2 for aligning multiple ultra-long sequences
+# FMAlign2x - An extended version of FMAlign2 for aligning multiple ultralong sequences
 
 FMAlign2x is an extended version of [FMAlign2](https://academic.oup.com/bioinformatics/advance-article/doi/10.1093/bioinformatics/btae014/7515251?searchresult=1) that enables in-memory alignment of segments found between MEMs using the SPOA library (SIMD partial order alignment tool). This feature aims to reduce the computational load of the selected primary alignment method (MAFFT, HAlign2, or HAlign3).
 
@@ -61,31 +61,9 @@ This ensures that all dependencies are correctly isolated and reproducible.
 
    ./FMAlign2 [options]
 
-5. **Optional Features**
-
-   Use -x 0 to disable in-memory alignment of small blocks between MEMs.
-
 ---
 
-**Please note that if you choose halign2 and halign3 as your multiple sequence alignment methods, make sure you have Java environment installed.** To check the version of Java installed on your system, you can open a command prompt or terminal and execute the following command:
-
-```bash
-java -version
-```
-
-This will display the installed Java version information.
-
-If you don't have Java installed or if the installed version is not compatible, you can follow these steps to install Java on Linux:
-
-1. Update Package Lists: Run the command `sudo apt update` to update the package lists on your system.
-2. Install OpenJDK: Run the command `sudo apt install default-jdk` to install the default version of OpenJDK.
-3. Verify Installation: After the installation is complete, run `java -version` to verify that Java is installed and the correct version is displayed.
-
-Once you have Java installed and verified the version, you should be able to use halign2 and halign3 for multiple sequence alignment.
-
 ## Usage
-
-> Reminder: Please ensure that all external files (such as MAFFT, HALIGN, etc.) are properly copied to their corresponding directories. Pay close attention to the relative paths between FMAlign2 and the ext folder to avoid issues during execution.
 
 ```shell
 ./FMAlign2x -i /path/to/data [other options]
@@ -101,14 +79,14 @@ Parameters Details:
 
 - -i [file path] **[required]** The path to the input file.
 - -o [output path] [default: ouput.fmaligned2.fasta] The path to the output file.
-- -p [package] [default: mafft] The MSA method used in parallel align. for example, [**halign3**](https://github.com/malabz/HAlign-3), [**halign2**](https://github.com/ShixiangWan/HAlign2.0) and [**mafft**](https://mafft.cbrc.jp/alignment/software/).
 - -t [int] [default: cpu number] The maximum number of threads that the program runs, the recommended setting is the number of CPUs.
 - -l [int] [default: square root of mean length] The minimum length of MEMs, the default value is square root of mean length.
 - -c [float] [default: 1] A floating-point parameter that specifies the minimum coverage across all sequences, with values ranging from 0 to 1.
 - -f [mode] [default: global or local] The filter MEMs mode. The default setting is that if sequence number less 100, **accurate** mode otherwise **global** mode.
-- -x [int] [default:1] In-memory alignment of small blocks between MEMs with SPOA.
-- -d [int] [default:0] Depth of recursion, you could ignore it.
-- -v [int] [default:1] Verbose option, 0 or 1. You could ignore it.
+- -b [int] [default: 15000] The maximum block size for parallel alignment.
+- -s [int] [default: 500] The overlap size between blocks for parallel alignment
+- -d [int] [default: 0] Depth of recursion, you could ignore it.
+- -v [int] [default: 1] Verbose option, 0 or 1. You could ignore it.
 - -h [help] print help information
 
 ---

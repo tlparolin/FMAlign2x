@@ -9,13 +9,13 @@ ThreadPool::ThreadPool(size_t max_threads) : max_threads_(max_threads), task_que
 ThreadPool::~ThreadPool() { shutdown(); }
 
 void ThreadPool::add_task(std::function<void()> task) {
-    // Distribui tarefas para as filas das threads de forma round-robin simples
+    // Distributes tasks to thread queues in a simple round-robin fashion.
     static std::atomic<size_t> next_queue{0};
     size_t queue_index = next_queue++ % max_threads_;
 
     {
         std::lock_guard lock(queue_mutexes_[queue_index]);
-        task_queues_[queue_index].push_front(std::move(task)); // push na frente para melhorar stealing
+        task_queues_[queue_index].push_front(std::move(task)); // Push front to improve stealing
     }
     cv_.notify_all();
 }
@@ -23,7 +23,7 @@ void ThreadPool::add_task(std::function<void()> task) {
 void ThreadPool::wait_for_tasks() {
     std::unique_lock lock(wait_mutex_);
     cv_done_.wait(lock, [this] {
-        // Espera até não ter tarefas e não ter tarefas em execução
+        // Wait until no tasks and no tasks in progress.
         bool empty = true;
         for (size_t i = 0; i < max_threads_; ++i) {
             std::lock_guard qlock(queue_mutexes_[i]);
@@ -48,9 +48,9 @@ void ThreadPool::shutdown() {
 }
 
 std::optional<std::function<void()>> ThreadPool::steal_task(size_t thief_index) {
-    // Tenta roubar da fila de outras threads começando por next
+    // Try stealing from the queue of other threads starting with next.
     for (size_t i = 0; i < max_threads_; ++i) {
-        size_t victim = (thief_index + i + 1) % max_threads_; // evita roubar a própria fila
+        size_t victim = (thief_index + i + 1) % max_threads_; // avoids stealing from the queue itself
 
         std::lock_guard lock(queue_mutexes_[victim]);
         if (!task_queues_[victim].empty()) {
@@ -59,18 +59,18 @@ std::optional<std::function<void()>> ThreadPool::steal_task(size_t thief_index) 
             return task;
         }
     }
-    return {}; // Nada para roubar
+    return {}; // nothing to stealing
 }
 
 void ThreadPool::worker_thread(size_t index) {
     while (true) {
         std::function<void()> task;
 
-        // Primeiro tenta buscar da própria fila
+        // First, try searching within your own queue.
         {
             std::unique_lock lock(queue_mutexes_[index]);
             if (task_queues_[index].empty()) {
-                // Tenta roubar de outra fila
+                // Try to steal from another queue
                 lock.unlock();
 
                 auto stolen = steal_task(index);
@@ -84,11 +84,11 @@ void ThreadPool::worker_thread(size_t index) {
         }
 
         if (!task && quitting_) {
-            return; // Sair se está finalizando e não há tarefas
+            return; // Leave if it's almost finished and there are no tasks left.
         }
 
         if (!task) {
-            // Nada para fazer agora, espera por notificação
+            // Nothing to do now, wait for notification.
             std::unique_lock<std::mutex> wait_lock(wait_mutex_);
             cv_.wait_for(wait_lock, std::chrono::milliseconds(10));
             continue;

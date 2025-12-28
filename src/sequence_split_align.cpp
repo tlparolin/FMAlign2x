@@ -18,7 +18,7 @@
 // Contact: zpl010720@gmail.com
 // Created: 2023-02-25
 
-// FMAlign2x - An extended version of FMAlign2 for aligning multiple ultra-long sequences
+// FMAlign2x - An extended version of FMAlign2 for aligning multiple ultralong sequences
 // Author: Thiago Luiz Parolin
 // Contact: thiago.parolin@unesp.br
 // Nov 2025
@@ -121,12 +121,12 @@ void split_and_parallel_align(std::vector<std::string> data, std::vector<std::st
 }
 
 static std::vector<std::string> merge_alignments(const std::vector<std::string> &msa1, const std::vector<std::string> &msa2) {
-    // Caso trivial: MSA1 vazio
+    // trivial case: empty MSA1
     if (msa1.empty() || msa1[0].empty()) {
         return msa2;
     }
 
-    // Caso trivial: MSA2 vazio
+    // trivial case: empty MSA2
     if (msa2.empty() || msa2[0].empty()) {
         return msa1;
     }
@@ -134,7 +134,7 @@ static std::vector<std::string> merge_alignments(const std::vector<std::string> 
     const size_t len1 = msa1[0].size();
     const size_t len2 = msa2[0].size();
 
-    // Se os comprimentos já coincidem → concatena direto
+    // If the lengths already match → concatenate directly
     if (len1 == len2) {
         std::vector<std::string> result;
         result.reserve(msa1.size() + msa2.size());
@@ -143,7 +143,7 @@ static std::vector<std::string> merge_alignments(const std::vector<std::string> 
         return result;
     }
 
-    // Determinar qual é maior e pad no outro
+    // Determine which is larger and pad on the other.
     const bool msa1_is_longer = (len1 > len2);
     const size_t target_len = msa1_is_longer ? len1 : len2;
 
@@ -153,10 +153,10 @@ static std::vector<std::string> merge_alignments(const std::vector<std::string> 
     std::vector<std::string> result;
     result.reserve(base.size() + pad_src.size());
 
-    // Copia a MSA maior
+    // Copy the larger MSA
     result.insert(result.end(), base.begin(), base.end());
 
-    // Adiciona a menor com pad
+    // Add the smallest one with pad
     for (const auto &seq : pad_src) {
         std::string padded = seq;
         padded.resize(target_len, '-');
@@ -172,23 +172,23 @@ bool will_use_clustering(size_t num_sequences, size_t cluster_size) {
 
 std::vector<std::string> align_smart(const std::vector<std::string> &sequences, size_t cluster_size) {
 
-    // Caso 1: Vazio
+    // Case 1: Empty
     if (sequences.empty()) {
         return {};
     }
 
-    // Caso 2: Uma sequência
+    // Case 2: One Sequence
     if (sequences.size() == 1) {
         return sequences;
     }
 
-    // Caso 3: Poucas sequências - usar SPOA direto
+    // Case 3: Few sequences - apply SPOA directly
     if (!will_use_clustering(sequences.size(), cluster_size)) {
         return run_spoa_local(sequences);
     }
 
-    // Caso 4: MUITAS sequências - usar clustering
-    // Dividir sequências em clusters
+    // Case 4: Many sequences - apply clustering
+    // Splitting sequences into clusters
     std::vector<std::vector<std::string>> clusters;
     for (size_t i = 0; i < sequences.size(); i += cluster_size) {
         size_t end = std::min(i + cluster_size, sequences.size());
@@ -196,14 +196,14 @@ std::vector<std::string> align_smart(const std::vector<std::string> &sequences, 
         clusters.push_back(cluster);
     }
 
-    // Alinhar cada cluster com SPOA
+    // Align each cluster with SPOA.
     std::vector<std::vector<std::string>> aligned_clusters;
     for (size_t i = 0; i < clusters.size(); ++i) {
         auto aligned = run_spoa_local(clusters[i]);
         aligned_clusters.push_back(aligned);
     }
 
-    // Merge: usar o primeiro cluster como base, adicionar os outros
+    // Merge: Use the first cluster as a base, then add the others.
     std::vector<std::string> result = aligned_clusters[0];
 
     for (size_t i = 1; i < aligned_clusters.size(); ++i) {
